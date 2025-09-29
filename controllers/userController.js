@@ -34,6 +34,16 @@ const userController = {
       res.status(401).json({ message: 'Đăng nhập thất bại', error: error.message });
     }
   },
+  logout: async (req, res) => {
+    try {
+      // Nếu muốn invalidate token, có thể lưu token vào blacklist trong DB/Redis tại đây.
+      return res.status(200).json({ success: true, message: 'Đăng xuất thành công' });
+    } catch (error) {
+      console.error('Lỗi khi đăng xuất:', error);
+      res.status(500).json({ success: false, message: 'Lỗi khi đăng xuất', error: error.message });
+    }
+  },
+
 };
 
 module.exports = userController;
