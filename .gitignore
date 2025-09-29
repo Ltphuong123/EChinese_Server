@@ -1,0 +1,46 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json  # Nếu bạn dùng npm; bỏ qua nếu dùng yarn
+
+# Environment variables
+# .env
+# .env.local
+# .env.development
+# .env.test
+# .env.production
+
+# Logs
+logs/
+*.log
+error.log
+access.log
+
+# Build output
+dist/
+build/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+.DS_Store  # macOS
+Thumbs.db  # Windows
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Test coverage
+coverage/
+
+# Database dumps
+*.sql
+*.dump
+
+# Miscellaneous
+*.bak
+*.backup
