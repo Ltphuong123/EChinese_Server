@@ -25,25 +25,9 @@ const userService = {
     } else {
       data.password_hash = null;
     }
-
-    data.role = data.role || 'user';
-    data.is_active = data.is_active !== undefined ? data.is_active : true;
-    data.community_points = data.community_points !== undefined ? data.community_points : 0;
-    data.badge_level = data.badge_level !== undefined ? data.badge_level : 0;
-
-    if (!data.name || !data.level || !data.language || !data.subscription_id) {
-      throw new Error('Thiếu các trường bắt buộc: name, level, language, subscription_id');
-    }
-
     const newUser = await userModel.createUser(data);
 
-    const token = jwt.sign(
-      { id: newUser.id, role: newUser.role },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRATION }
-    );
-
-    return { ...newUser, token };
+    return { ...newUser};
   },
 
   // Đăng nhập bằng username và password
