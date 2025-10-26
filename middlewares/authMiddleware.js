@@ -18,10 +18,19 @@ const authMiddleware = {
   },
 
   isAdmin: (req, res, next) => {
-    if (req.user && req.user.role === 'admin') {
+    if (req.user && (req.user.role === 'admin' || req.user.role === 'super admin')) {
       next();
     } else {
       return res.status(403).json({ message: 'Truy cập bị từ chối, chỉ dành cho admin' });
+    }
+  },
+  
+  isSuperAdmin: (req, res, next) => {
+    // Middleware này cũng nên được dùng SAU khi verifyToken đã chạy
+    if (req.user && req.user.role === 'super admin') {
+      next();
+    } else {
+      return res.status(403).json({ message: 'Truy cập bị từ chối, chỉ dành cho Super Admin' });
     }
   },
 };
