@@ -9,6 +9,8 @@ const basePath = '/monetization/subscriptions';
 
 // router.get('/subscription/list', subscriptionController.getPublicList);
 // Áp dụng middleware cho tất cả các route trong file này
+router.get('/monetization/subscriptions/list',authMiddleware.verifyToken, subscriptionController.getAllSubscriptionsUser);
+
 router.use(basePath, [authMiddleware.verifyToken, authMiddleware.isAdmin]);
 
 // GET /api/monetization/subscriptions - Lấy danh sách

@@ -1,5 +1,7 @@
 const userService = require('../services/userService');
 const testAttemptService = require('../services/testAttemptService');
+const achievementService = require('../services/achievementService');
+
 
 const userController = {
   getAllUsers: async (req, res) => {
@@ -41,12 +43,12 @@ const userController = {
       });
     } catch (error) {
       if (error.message.includes('không tồn tại') || error.message.includes('không chính xác')) {
-        return res.status(401).json({ success: false, message: 'Đăng nhập thất bại: ' + error.message });
+        return res.status(401).json({ success: false, message: error.message });
       }
       if (error.message.includes('vô hiệu hóa')) {
         return res.status(403).json({ success: false, message: error.message });
       }
-      res.status(500).json({ success: false, message: 'Lỗi máy chủ', error: error.message });
+      res.status(500).json({ success: false, message: error.message });
     }
   },
 
@@ -318,14 +320,14 @@ const userController = {
       const { old_password, new_password } = req.body;
 
       const result = await userService.resetPassword(userId, old_password, new_password);
-      res.status(200).json(result);
+      res.status(200).json({ success: true, message: 'Thành công' });
     } catch (error) {
       // Trả về 400 Bad Request nếu lỗi là do người dùng (VD: sai mật khẩu cũ)
       if (error.message.includes('Mật khẩu') || error.message.includes('tồn tại')) {
-         return res.status(400).json({ message: error.message });
+         return res.status(400).json({success: false,  message: error.message });
       }
       // Trả về 500 cho các lỗi server khác
-      res.status(500).json({ message: 'Lỗi khi đặt lại mật khẩu', error: error.message });
+      res.status(500).json({success: false,  message: 'Lỗi khi đặt lại mật khẩu'+ error.message});
     }
   },
 
@@ -334,14 +336,14 @@ const userController = {
       const {username, old_password, new_password } = req.body;
 
       const result = await userService.changePassword(username, old_password, new_password);
-      res.status(200).json(result);
+      res.status(200).json({ success: true, message: 'Thành công' });
     } catch (error) {
       // Trả về 400 Bad Request nếu lỗi là do người dùng (VD: sai mật khẩu cũ)
       if (error.message.includes('Mật khẩu') || error.message.includes('tồn tại')) {
-         return res.status(400).json({ message: error.message });
+         return res.status(400).json({success: false, message: error.message });
       }
       // Trả về 500 cho các lỗi server khác
-      res.status(500).json({ message: 'Lỗi khi đặt lại mật khẩu', error: error.message });
+      res.status(500).json({success: false, message: 'Lỗi khi đặt lại mật khẩu '+ error.message });
     }
   },
 
@@ -409,6 +411,45 @@ const userController = {
         return res.status(409).json({ success: false, message: `Lỗi: ${error.detail}` });
       }
       res.status(500).json({ success: false, message: 'Lỗi khi cập nhật thông tin cá nhân', error: error.message });
+    }
+  },
+
+  getCurrentUserBadge: async (req, res) => {
+    try {
+      const userId = req.user.id; // Lấy từ token
+      const badgeDetails = await userService.getUserBadgeDetails(userId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Lấy thông tin huy hiệu thành công.',
+        data: badgeDetails
+      });
+    } catch (error) {
+      if (error.message.includes('không tồn tại')) {
+          return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy thông tin huy hiệu', error: error.message });
+    }
+  },
+
+   getUserAchievements: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const achievements = await achievementService.getAchievedByUser(userId);
+      res.status(200).json({ success: true, data: achievements });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy thành tích đã đạt', error: error.message });
+    }
+  },
+
+  // --- HÀM MỚI ---
+  getUserAchievementsProgress: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const progress = await achievementService.getProgressForUser(userId);
+      res.status(200).json({ success: true, data: progress });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy tiến độ thành tích', error: error.message });
     }
   },
 

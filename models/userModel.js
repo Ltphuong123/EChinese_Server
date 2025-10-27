@@ -442,6 +442,79 @@ const userModel = {
     await client.query(queryText, [userId]);
   },
 
+  findUserByUsernameForAuth: async (username) => {
+    const queryText = `SELECT id, username, password_hash FROM "Users" WHERE username = $1;`;
+    const result = await db.query(queryText, [username]);
+    return result.rows[0];
+  },
+
+  // Tìm user theo ID và trả về password_hash để xác thực
+  findUserByIdForAuth: async (id) => {
+    const queryText = `SELECT id, password_hash FROM "Users" WHERE id = $1;`;
+    const result = await db.query(queryText, [id]);
+    return result.rows[0];
+  },
+
+  // Cập nhật mật khẩu mới
+  updatePassword: async (userId, newPasswordHash) => {
+    // Có thể bạn muốn cập nhật thêm trường 'updated_at' hoặc 'last_password_change' nếu có
+    const queryText = `
+      UPDATE "Users"
+      SET password_hash = $1
+      WHERE id = $2;
+    `;
+    await db.query(queryText, [newPasswordHash, userId]);
+  },
+
+  getUserStats: async (userId) => {
+    // Sử dụng Promise.all để lấy các thông số song song
+    const [postCountRes, likesReceivedRes, streakRes] = await Promise.all([
+      db.query(`SELECT COUNT(*) FROM "Posts" WHERE user_id = $1 AND deleted_at IS NULL`, [userId]),
+      db.query(`SELECT COALESCE(SUM(likes), 0) as total FROM "Posts" WHERE user_id = $1 AND deleted_at IS NULL`, [userId]),
+      db.query(`SELECT current_streak FROM "UserStreaks" WHERE user_id = $1`, [userId])
+    ]);
+    
+    return {
+      post_count: parseInt(postCountRes.rows[0].count, 10),
+      likes_received_count: parseInt(likesReceivedRes.rows[0].total, 10),
+      current_streak: streakRes.rows[0] ? streakRes.rows[0].current_streak : 0,
+      // Thêm các stats khác ở đây...
+    };
+  },
+
+  findUserBadgeDetails: async (userId) => {
+    const queryText = `
+      SELECT 
+        bl.id,
+        bl.level,
+        bl.name,
+        bl.icon,
+        bl.min_points,
+        bl.rule_description,
+        bl.is_active,
+        bl.created_at,
+        bl.updated_at
+      FROM "Users" u
+      JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+      WHERE u.id = $1;
+    `;
+    
+    const result = await db.query(queryText, [userId]);
+    
+    // Trả về bản ghi đầu tiên, hoặc undefined nếu không tìm thấy (user không tồn tại hoặc badge_level không hợp lệ)
+    return result.rows[0];
+  },
+
+  addCommunityPoints: async (userId, points) => {
+        const queryText = `
+            UPDATE "Users" 
+            SET community_points = community_points + $1 
+            WHERE id = $2;
+        `;
+        await db.query(queryText, [points, userId]);
+    },
+
+
 
 
 };

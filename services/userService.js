@@ -406,6 +406,68 @@ const userService = {
     return updatedUser;
   },
 
+  changePassword: async (username, oldPassword, newPassword) => {
+    // 1. Tìm user để lấy password hash hiện tại
+    // Chúng ta cần một hàm model trả về cả password_hash
+    const user = await userModel.findUserByUsernameForAuth(username);
+
+    if (!user) {
+      throw new Error('Tên đăng nhập không tồn tại.');
+    }
+
+    // 2. So sánh mật khẩu cũ
+    const isMatch = await bcrypt.compare(oldPassword, user.password_hash);
+    if (!isMatch) {
+      throw new Error('Mật khẩu cũ không chính xác.');
+    }
+
+    // 3. Mã hóa mật khẩu mới
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // 4. Cập nhật vào database
+    await userModel.updatePassword(user.id, newPasswordHash);
+  },
+
+  // --- HÀM MỚI 2 ---
+  resetPassword: async (userId, oldPassword, newPassword) => {
+    // 1. Tìm user theo ID
+    const user = await userModel.findUserByIdForAuth(userId);
+    
+    if (!user) {
+       throw new Error('Người dùng không tồn tại.');
+    }
+
+    // 2. So sánh mật khẩu cũ
+    const isMatch = await bcrypt.compare(oldPassword, user.password_hash);
+    if (!isMatch) {
+      throw new Error('Mật khẩu cũ không chính xác.');
+    }
+
+    // 3. Mã hóa mật khẩu mới
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // 4. Cập nhật vào database
+    await userModel.updatePassword(userId, newPasswordHash);
+  },
+
+  getUserBadgeDetails: async (userId) => {
+    const badge = await userModel.findUserBadgeDetails(userId);
+
+    // Nếu không tìm thấy user hoặc user không có badge (badge_level=0 hoặc null) và không join được
+    if (!badge) {
+      // Bạn có thể quyết định trả về lỗi hoặc một huy hiệu mặc định.
+      // Ở đây chúng ta trả về lỗi để rõ ràng.
+      throw new Error('Không tìm thấy thông tin huy hiệu cho người dùng này.');
+      // Hoặc trả về một object mặc định:
+      // return { level: 0, name: "Chưa có huy hiệu", icon: null, min_points: 0 };
+    }
+    
+    return badge;
+  },
+
+
+
+
 
 
 
