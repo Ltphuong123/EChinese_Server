@@ -484,11 +484,7 @@ const notebookModel = {
     // Câu truy vấn lấy dữ liệu
     const dataQueryText = `
       SELECT 
-        v.id,
-        v.hanzi,
-        v.pinyin,
-        v.meaning,
-        v.level,
+        v.*,
         nvi.status,
         nvi.added_at
       FROM "NotebookVocabItems" AS nvi

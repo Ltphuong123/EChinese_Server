@@ -4,6 +4,15 @@ const achievementController = require('../controllers/achievementController');
 const authMiddleware = require('../middlewares/authMiddleware');
 const { post } = require('./userRoutes');
 
+
+router.get('/achievements', achievementController.getPublicAchievements);
+
+router.post(
+  '/admin/achievements/progress',
+  [authMiddleware.verifyToken],
+  achievementController.updateUserAchievementProgressAdmin
+);
+
 // POST /api/admin/settings/achievements
 router.post(
   '/admin/settings/achievements',
@@ -38,4 +47,3 @@ router.delete(
 
 
 module.exports = router;
-

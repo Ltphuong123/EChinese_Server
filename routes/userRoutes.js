@@ -24,6 +24,34 @@ router.get(
     userController.getUserProfile
 );
 
+// Lấy các thành tích đã đạt được của người dùng đang đăng nhập
+router.get(
+  '/users/me/achievements',
+  authMiddleware.verifyToken,
+  userController.getUserAchievements
+);
+
+// Lấy tiến độ các thành tích của người dùng đang đăng nhập
+router.get(
+  '/users/me/achievements/progress',
+  authMiddleware.verifyToken,
+  userController.getUserAchievementsProgress
+);
+
+router.get(
+  '/users/me/badge',
+  authMiddleware.verifyToken,
+  userController.getCurrentUserBadge
+);
+
+// --- ACHIEVEMENT ROUTES FOR ANY USER ---
+
+// GET /api/users/:userId/achievements (Xem thành tích của người dùng khác)
+router.get(
+  '/users/:userId/achievements',
+  achievementController.getPublicUserAchievements
+);
+
 // Cập nhật thông tin cá nhân của người dùng đang đăng nhập
 router.put(
     '/users/profile', 

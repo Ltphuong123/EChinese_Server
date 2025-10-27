@@ -20,6 +20,23 @@ const subscriptionController = {
     }
   },
 
+  getAllSubscriptionsUser: async (req, res) => {
+    try {
+      const options = {
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+        search: req.query.search || '',
+        status: req.query.status || 'active',
+        sortBy: req.query.sortBy || 'created_at',
+        sortOrder: req.query.sortOrder || 'desc',
+      };
+      const result = await subscriptionService.getAll(options);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách gói', error: error.message });
+    }
+  },
+
   getSubscriptionUsage: async (req, res) => {
     try {
       const { subscriptionId } = req.params;
