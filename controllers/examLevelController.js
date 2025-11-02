@@ -29,9 +29,27 @@ const examLevelController = {
     }
   },
 
-  getAllExamLevelsAdmin: async (req, res) => {
+  // getAllExamLevels: async (req, res) => {
+  //   try {
+  //     const examLevels = await examLevelService.getAllExamLevels();
+  //     res.status(200).json({
+  //       success: true,
+  //       message: 'Lấy danh sách cấp độ bài thi thành công.',
+  //       data: examLevels
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách cấp độ bài thi', error: error.message });
+  //   }
+  // },
+
+  getAllExamLevels: async (req, res) => { // Tên hàm cho người dùng
     try {
-      const examLevels = await examLevelService.getAllExamLevels();
+      // Lấy examTypeId từ query string
+      const { examTypeId } = req.query; 
+
+      // Truyền examTypeId xuống service
+      const examLevels = await examLevelService.getAllExamLevels(examTypeId);
+      
       res.status(200).json({
         success: true,
         message: 'Lấy danh sách cấp độ bài thi thành công.',
@@ -41,6 +59,7 @@ const examLevelController = {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách cấp độ bài thi', error: error.message });
     }
   },
+
 
   deleteExamLevelAdmin: async (req, res) => {
     try {

@@ -3,6 +3,24 @@
 const notificationService = require('../services/notificationService');
 
 const notificationController = {
+
+  getUnreadCount: async (req, res) => {
+    try {
+      const userId = req.user.id; // Lấy từ token
+      
+      const count = await notificationService.getUnreadNotificationCount(userId);
+
+      res.status(200).json({
+        success: true,
+        data: {
+          count: count
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy số lượng thông báo', error: error.message });
+    }
+  },
+  
   // GET /notifications
   getNotifications: async (req, res) => {
     try {

@@ -12,9 +12,9 @@ router.post(
 );
 
 router.get(
-  '/admin/exams/levels',
-  [authMiddleware.verifyToken, authMiddleware.isAdmin],
-  examLevelController.getAllExamLevelsAdmin
+  '/exams/levels',
+  [authMiddleware.verifyToken],
+  examLevelController.getAllExamLevels
 );
 
 router.delete(

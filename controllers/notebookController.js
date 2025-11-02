@@ -72,6 +72,51 @@ const notebookController = {
     }
   },
 
+  getMyNotebooks: async (req, res) => {
+    try {
+      const userId = req.user.id; // Lấy từ token
+      // Lấy các tham số phân trang nếu cần
+      const { page = 1, limit = 100 } = req.query; // Mặc định limit cao để lấy hết
+
+      const result = await notebookService.getUserNotebooks(userId, { 
+          page: parseInt(page, 10), 
+          limit: parseInt(limit, 10) 
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Lấy danh sách sổ tay cá nhân thành công.",
+        data: result.data,
+        meta: result.meta
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy sổ tay cá nhân', error: error.message });
+    }
+  },
+
+  // --- HÀM MỚI ---
+  getSystemNotebooks: async (req, res) => {
+    try {
+      // Lấy các tham số phân trang nếu cần
+      const { page = 1, limit = 100 } = req.query;
+
+      const result = await notebookService.getSystemNotebooks({
+          page: parseInt(page, 10), 
+          limit: parseInt(limit, 10)
+      });
+      
+      res.status(200).json({
+        success: true,
+        message: "Lấy danh sách sổ tay hệ thống thành công.",
+        data: result.data,
+        meta: result.meta
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy sổ tay hệ thống', error: error.message });
+    }
+  },
+
+
   getNotebookByIdAdmin: async (req, res) => {
     try {
       const { id } = req.params;

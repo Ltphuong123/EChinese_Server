@@ -14,9 +14,9 @@ router.post(
 );
 
 router.get(
-  '/admin/exams/types',
-  [authMiddleware.verifyToken, authMiddleware.isAdmin],
-  examTypeController.getAllExamTypesAdmin
+  '/exams/types',
+  [authMiddleware.verifyToken],
+  examTypeController.getAllExamTypes
 );
 
 // DELETE /api/admin/exams/types/:id

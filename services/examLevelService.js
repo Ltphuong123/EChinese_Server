@@ -7,8 +7,12 @@ const examLevelService = {
     return await examLevelModel.create(payload);
   },
 
-  getAllExamLevels: async () => {
-    return await examLevelModel.findAll();
+  // getAllExamLevels: async () => {
+  //   return await examLevelModel.findAll();
+  // },
+
+  getAllExamLevels: async (examTypeId) => { 
+    return await examLevelModel.findAll(examTypeId);
   },
 
   deleteExamLevel: async (id) => {
