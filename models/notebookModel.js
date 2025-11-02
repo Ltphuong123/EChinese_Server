@@ -32,6 +32,45 @@ const notebookModel = {
     return result.rows[0];
   },
 
+  findAllByOwner: async (userId, { limit, offset }) => {
+    // Điều kiện: user_id phải khớp
+    const where = `WHERE user_id = $1`;
+    
+    const countQuery = `SELECT COUNT(*) FROM "Notebooks" ${where};`;
+    const totalResult = await db.query(countQuery, [userId]);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+
+    const selectQuery = `
+      SELECT * 
+      FROM "Notebooks"
+      ${where}
+      ORDER BY created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    const notebooksResult = await db.query(selectQuery, [userId, limit, offset]);
+    return { notebooks: notebooksResult.rows, totalItems };
+  },
+
+  // --- HÀM MỚI 2: Lấy sổ tay của hệ thống ---
+  findAllSystemPublic: async ({ limit, offset }) => {
+    // Điều kiện: user_id phải là NULL VÀ status phải là 'published'
+    const where = `WHERE user_id IS NULL AND status = 'published'`;
+
+    const countQuery = `SELECT COUNT(*) FROM "Notebooks" ${where};`;
+    const totalResult = await db.query(countQuery);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+
+    const selectQuery = `
+      SELECT * 
+      FROM "Notebooks"
+      ${where}
+      ORDER BY created_at DESC
+      LIMIT $1 OFFSET $2;
+    `;
+    const notebooksResult = await db.query(selectQuery, [limit, offset]);
+    return { notebooks: notebooksResult.rows, totalItems };
+  },
+
   findAllPaginated: async (filters) => {
     const { limit, offset, search, status, premium } = filters;
     

@@ -80,6 +80,18 @@ router.get('/user/subscription',authMiddleware.verifyToken, userController.getCu
 
 router.get('/user/achievements',authMiddleware.verifyToken, achievementController.getUserAchievements);
 
+router.get(
+  '/users/me/posts',
+  authMiddleware.verifyToken,
+  userController.getMyPosts
+);
+
+// Lấy danh sách bài viết người dùng đã tương tác
+router.get(
+  '/users/me/interacted-posts',
+  authMiddleware.verifyToken,
+  userController.getMyInteractedPosts
+);
 
 
 // admin

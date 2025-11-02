@@ -37,6 +37,28 @@ const notebookService = {
     };
   },
 
+  getUserNotebooks: async (userId, filters) => {
+    const { page, limit } = filters;
+    const offset = (page - 1) * limit;
+
+    const { notebooks, totalItems } = await notebookModel.findAllByOwner(userId, { limit, offset });
+    
+    const totalPages = Math.ceil(totalItems / limit);
+    return { data: notebooks, meta: { total: totalItems, page, limit, totalPages } };
+  },
+
+  // --- HÀM MỚI ---
+  getSystemNotebooks: async (filters) => {
+    const { page, limit } = filters;
+    const offset = (page - 1) * limit;
+
+    const { notebooks, totalItems } = await notebookModel.findAllSystemPublic({ limit, offset });
+
+    const totalPages = Math.ceil(totalItems / limit);
+    return { data: notebooks, meta: { total: totalItems, page, limit, totalPages } };
+  },
+
+
   getNotebookById: async (id) => {
     const notebook = await notebookModel.findById(id);
 
@@ -47,6 +69,7 @@ const notebookService = {
 
     return notebook;
   },
+
 
   updateNotebook: async (id, updateData) => {
     // Loại bỏ trường 'id' khỏi dữ liệu cập nhật để tránh lỗi

@@ -11,7 +11,11 @@ const BASE_PATH = '/notifications';
 router.get(BASE_PATH, authMiddleware.verifyToken, notificationController.getNotifications);
 router.post(`${BASE_PATH}/mark-read`, authMiddleware.verifyToken, notificationController.markAsRead);
 
-
+router.get(
+  '/notifications/unread-count',
+  authMiddleware.verifyToken, // Yêu cầu phải đăng nhập
+  notificationController.getUnreadCount
+);
 // --- Admin Routes (yêu cầu quyền admin) ---
 router.post(
     BASE_PATH,

@@ -32,7 +32,7 @@ const examTypeController = {
     }
   },
 
-  getAllExamTypesAdmin: async (req, res) => {
+  getAllExamTypes: async (req, res) => {
     try {
       const examTypes = await examTypeService.getAllExamTypes();
       res.status(200).json({

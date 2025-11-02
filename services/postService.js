@@ -101,6 +101,28 @@ const postService = {
     }
   },
 
+  getPostsByUserId: async (userId, filters) => {
+    const { page, limit } = filters;
+    const offset = (page - 1) * limit;
+
+    const { posts, totalItems } = await postModel.findAllByUserId(userId, { limit, offset });
+    
+    const totalPages = Math.ceil(totalItems / limit);
+    return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
+  },
+
+  // --- HÀM MỚI ---
+  getInteractedPostsByUserId: async (userId, filters) => {
+    const { page, limit } = filters;
+    const offset = (page - 1) * limit;
+
+    const { posts, totalItems } = await postModel.findInteractedByUserId(userId, { limit, offset });
+
+    const totalPages = Math.ceil(totalItems / limit);
+    return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
+  },
+
+
 };
 
 module.exports = postService;

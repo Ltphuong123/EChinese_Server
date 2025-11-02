@@ -213,14 +213,67 @@ const userModel = {
     };
   },
 
+  // findUserDetailsById: async (id) => {
+  //   const queryText = `
+  //     SELECT id, username, name, avatar_url, email, provider, role, 
+  //            is_active, "isVerify", community_points, level, badge_level, 
+  //            language, created_at, last_login 
+  //     FROM "Users" WHERE id = $1;
+  //   `;
+  //   const result = await db.query(queryText, [id]);
+  //   return result.rows[0];
+  // },
   findUserDetailsById: async (id) => {
     const queryText = `
-      SELECT id, username, name, avatar_url, email, provider, role, 
-             is_active, "isVerify", community_points, level, badge_level, 
-             language, created_at, last_login 
-      FROM "Users" WHERE id = $1;
+      SELECT 
+        -- Chọn tất cả các cột từ bảng Users
+        u.id, u.username, u.name, u.avatar_url, u.email, u.provider, u.role, 
+        u.is_active, u."isVerify", u.community_points, u.level, u.badge_level, 
+        u.language, u.created_at, u.last_login,
+
+        -- Sử dụng json_build_object để nhóm thông tin huy hiệu vào một object
+        -- Dùng COALESCE để đảm bảo trả về NULL nếu không có huy hiệu, thay vì object rỗng
+        COALESCE(
+          json_build_object(
+            'level', bl.level,
+            'name', bl.name,
+            'icon', bl.icon,
+            'min_points', bl.min_points
+          ),
+          NULL
+        ) as badge,
+
+        -- Tương tự, nhóm thông tin gói đăng ký vào một object
+        COALESCE(
+          json_build_object(
+            'id', s.id,
+            'name', s.name,
+            'description', s.description,
+            'start_date', us.start_date,
+            'expiry_date', us.expiry_date,
+            'auto_renew', us.auto_renew,
+            'daily_quota_ai_lesson', s.daily_quota_ai_lesson,
+            'daily_quota_translate', s.daily_quota_translate
+          ),
+          NULL
+        ) as subscription
+
+      FROM "Users" u
+
+      -- Join với BadgeLevels dựa trên level
+      LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+
+      -- Join với UserSubscriptions để tìm gói đang hoạt động của người dùng
+      LEFT JOIN "UserSubscriptions" us ON u.id = us.user_id AND us.is_active = true
+      
+      -- Từ UserSubscriptions, join tiếp với Subscriptions để lấy chi tiết gói
+      LEFT JOIN "Subscriptions" s ON us.subscription_id = s.id
+
+      WHERE u.id = $1;
     `;
     const result = await db.query(queryText, [id]);
+    
+    // Vẫn trả về result.rows[0], nhưng object này giờ đã chứa thêm 2 trường 'badge' và 'subscription'
     return result.rows[0];
   },
 

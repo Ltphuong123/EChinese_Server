@@ -3,6 +3,12 @@
 const notificationModel = require('../models/notificationModel');
 
 const notificationService = {
+  
+  getUnreadNotificationCount: async (userId) => {
+    const count = await notificationModel.countUnread(userId);
+    return count;
+  },
+
   createNotification: async (payload) => {
     // TODO: Add validation for payload
     return await notificationModel.create(payload);

@@ -1,6 +1,7 @@
 const userService = require('../services/userService');
 const testAttemptService = require('../services/testAttemptService');
 const achievementService = require('../services/achievementService');
+const postService = require('../services/postService');
 
 
 const userController = {
@@ -450,6 +451,52 @@ const userController = {
       res.status(200).json({ success: true, data: progress });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy tiến độ thành tích', error: error.message });
+    }
+  },
+
+
+
+
+
+
+  getMyPosts: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const filters = {
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+      };
+
+      const result = await postService.getPostsByUserId(userId, filters);
+
+      res.status(200).json({
+        success: true,
+        data: result.data,
+        meta: result.meta,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy bài viết của bạn', error: error.message });
+    }
+  },
+
+  // --- HÀM MỚI ---
+  getMyInteractedPosts: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const filters = {
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+      };
+
+      const result = await postService.getInteractedPostsByUserId(userId, filters);
+
+      res.status(200).json({
+        success: true,
+        data: result.data,
+        meta: result.meta,
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy bài viết đã tương tác', error: error.message });
     }
   },
 

@@ -3,6 +3,28 @@
 const db = require('../config/db');
 
 const notificationModel = {
+  countUnread: async (userId) => {
+    // Truy vấn này sẽ đếm các thông báo thỏa mãn:
+    // 1. Dành riêng cho người dùng này (recipient_id = userId).
+    // 2. Dành cho tất cả mọi người (audience = 'all').
+    // VÀ
+    // 3. Chưa được đọc (read_at IS NULL).
+    // 4. Chưa hết hạn (expires_at IS NULL OR expires_at > NOW()).
+    const queryText = `
+      SELECT COUNT(*) 
+      FROM "Notifications"
+      WHERE 
+        (recipient_id = $1 OR audience = 'all') 
+        AND read_at IS NULL
+        AND (expires_at IS NULL OR expires_at > NOW());
+    `;
+    
+    const result = await db.query(queryText, [userId]);
+    
+    // parseInt để đảm bảo kết quả trả về là một số
+    return parseInt(result.rows[0].count, 10);
+  },
+  
   // CREATE
   create: async (data) => {
     const {

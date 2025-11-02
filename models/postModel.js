@@ -177,7 +177,73 @@ const postModel = {
       const queryText = `UPDATE "Posts" SET deleted_at = NULL, deleted_reason = NULL, deleted_by = NULL WHERE id = $1;`;
       const result = await db.query(queryText, [postId]);
       return result.rowCount;
-  }
+  },
+
+  findAllByUserId: async (userId, { limit, offset }) => {
+    const where = `WHERE p.user_id = $1 AND p.deleted_at IS NULL`;
+    
+    const countQuery = `SELECT COUNT(*) FROM "Posts" p ${where};`;
+    const totalResult = await db.query(countQuery, [userId]);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+
+    const selectQuery = `
+      SELECT 
+        p.id, p.title, p.topic, p.likes, p.views, p.created_at, p.is_pinned,
+        -- Lấy một đoạn ngắn của content để preview
+        LEFT(p.content->>'text', 150) as content_preview 
+      FROM "Posts" p
+      ${where}
+      ORDER BY p.created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    const postsResult = await db.query(selectQuery, [userId, limit, offset]);
+    return { posts: postsResult.rows, totalItems };
+  },
+
+  // --- HÀM MỚI 2: Lấy bài viết đã tương tác ---
+  findInteractedByUserId: async (userId, { limit, offset }) => {
+    // --- BƯỚC 1: Lấy danh sách ID các bài viết đã tương tác ---
+    // Sử dụng UNION để lấy các post_id duy nhất từ cả hai bảng
+    const getInteractedIdsQuery = `
+      (SELECT post_id FROM "PostLikes" WHERE user_id = $1)
+      UNION 
+      (SELECT post_id FROM "Comments" WHERE user_id = $1)
+    `;
+    const idsResult = await db.query(getInteractedIdsQuery, [userId]);
+    const interactedPostIds = idsResult.rows.map(row => row.post_id);
+
+    // Nếu người dùng chưa tương tác với bài nào, trả về kết quả rỗng ngay lập-tức
+    if (interactedPostIds.length === 0) {
+      return { posts: [], totalItems: 0 };
+    }
+    
+    const totalItems = interactedPostIds.length;
+
+    // --- BƯỚC 2: Lấy thông tin chi tiết của các bài viết đó ---
+    // Sử dụng `WHERE id = ANY($1::uuid[])` để truy vấn hiệu quả với một mảng ID.
+    const selectQuery = `
+      SELECT
+        p.id, p.title, p.topic, p.likes, p.views, p.created_at, p.is_pinned,
+        LEFT(p.content->>'text', 150) as content_preview,
+        json_build_object(
+          'id', u.id,
+          'name', u.name,
+          'avatar_url', u.avatar_url
+        ) as author
+      FROM "Posts" p
+      JOIN "Users" u ON p.user_id = u.id
+      WHERE p.id = ANY($1::uuid[])
+        AND p.deleted_at IS NULL
+        AND p.status = 'published'
+      ORDER BY p.created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    
+    // Truyền mảng ID, limit, và offset vào câu lệnh
+    const postsResult = await db.query(selectQuery, [interactedPostIds, limit, offset]);
+
+    return { posts: postsResult.rows, totalItems };
+  },
 };
 
 module.exports = postModel;

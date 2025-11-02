@@ -10,6 +10,20 @@ router.post(
   notebookController.createUserNotebook
 );
 
+// GET /api/notebooks/my-notebooks (Lấy sổ tay cá nhân)
+router.get(
+  '/notebooks/my-notebooks',
+  authMiddleware.verifyToken,
+  notebookController.getMyNotebooks
+);
+
+// GET /api/notebooks/system-notebooks (Lấy sổ tay hệ thống)
+router.get(
+  '/notebooks/system-notebooks',
+  authMiddleware.verifyToken,
+  notebookController.getSystemNotebooks
+);
+
 router.get(
     '/notebooks/list',
     authMiddleware.verifyToken,
