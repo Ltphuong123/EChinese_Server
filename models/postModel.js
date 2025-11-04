@@ -36,7 +36,7 @@ const postModel = {
 
   findAllPublic: async (filters) => {
     const { limit, offset, topic, userId } = filters;
-    console.log('Filters in findAllPublic:', filters);
+    console.log("Filters in findAllPublic:", filters);
 
     const queryParams = [];
     // Chỉ lấy các bài viết đã được công bố, phê duyệt và chưa bị xóa
@@ -173,6 +173,80 @@ const postModel = {
     // userId có thể là null nếu là khách
     const queryText = `INSERT INTO "PostViews" (post_id, user_id) VALUES ($1, $2);`;
     await db.query(queryText, [postId, userId]);
+  },
+
+  getPostViews: async (postId, filters, offset) => {
+    const sql = `
+      WITH user_views AS (
+        SELECT
+          user_id,
+          COUNT(*) AS view_count,
+          MAX(viewed_at) AS last_viewed_at
+        FROM "PostViews"
+        WHERE post_id = $1 AND user_id IS NOT NULL
+        GROUP BY user_id
+      )
+      SELECT
+        u.id                    AS user_id,
+        u.name                  AS name,
+        u.avatar_url            AS avatar_url,
+        u.level                 AS level,
+        u.badge_level           AS badge_level_id,
+        bl.name                 AS badge_name,
+        bl.icon                 AS badge_icon,
+        uv.view_count           AS views_count,
+        uv.last_viewed_at       AS last_viewed_at
+      FROM user_views uv
+      JOIN "Users" u ON u.id = uv.user_id
+      LEFT JOIN "BadgeLevels" bl ON bl.level = u.badge_level
+      ORDER BY uv.last_viewed_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    const viewer = await db.query(sql, [postId, filters.limit, offset]);
+    const totalSql = `
+      SELECT COUNT(DISTINCT user_id) AS total
+      FROM "PostViews"
+      WHERE post_id = $1 AND user_id IS NOT NULL;
+    `;
+    const totalResult = await db.query(totalSql, [postId]);
+    const totalItems = parseInt(totalResult.rows[0].total, 10);
+
+    return {
+      viewer: viewer.rows,
+      totalItems,
+    };
+  },
+
+  getPostLikes: async (postId, filters = {}, offset = 0) => {
+    const sql = `
+      SELECT  
+        u.id                    AS user_id,
+        u.name                  AS name,
+        u.avatar_url            AS avatar_url,
+        u.level                 AS level,
+        u.badge_level           AS badge_level_id,
+        bl.name                 AS badge_name,
+        bl.icon                 AS badge_icon
+      FROM "PostLikes" pl
+      JOIN  
+        "Users" u ON u.id = pl.user_id
+      LEFT JOIN "BadgeLevels" bl ON bl.level = u.badge_level
+      WHERE pl.post_id = $1 
+      ORDER BY pl.created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    const likers = await db.query(sql, [postId, filters.limit, offset]);
+    const totalSql = `
+      SELECT COUNT(*) AS total
+      FROM "PostLikes"
+      WHERE post_id = $1;
+    `;
+    const totalResult = await db.query(totalSql, [postId]);
+    const totalItems = parseInt(totalResult.rows[0].total, 10);
+    return {
+      likers: likers.rows,
+      totalItems,
+    };
   },
 
   updateViewsCount: async (postId) => {
