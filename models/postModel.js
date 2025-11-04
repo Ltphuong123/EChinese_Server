@@ -1,19 +1,18 @@
 // file: models/postModel.js
 
-const db = require('../config/db');
+const db = require("../config/db");
 
 const postModel = {
- 
   create: async (postData) => {
     const {
       user_id,
       title,
       content,
       topic,
-      status = 'published',
+      status = "published",
       is_approved = true,
       auto_flagged = false,
-      is_pinned = false
+      is_pinned = false,
     } = postData;
 
     const queryText = `
@@ -21,14 +20,24 @@ const postModel = {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *;
     `;
-    const values = [user_id, title, content, topic, status, is_approved, auto_flagged, is_pinned];
+    const values = [
+      user_id,
+      title,
+      content,
+      topic,
+      status,
+      is_approved,
+      auto_flagged,
+      is_pinned,
+    ];
     const result = await db.query(queryText, values);
     return result.rows[0];
   },
 
   findAllPublic: async (filters) => {
-    const { limit, offset, topic } = filters;
-    
+    const { limit, offset, topic, userId } = filters;
+    console.log('Filters in findAllPublic:', filters);
+
     const queryParams = [];
     // Chỉ lấy các bài viết đã được công bố, phê duyệt và chưa bị xóa
     let whereClauses = `WHERE p.status = 'published' AND p.is_approved = true AND p.deleted_at IS NULL`;
@@ -51,20 +60,43 @@ const postModel = {
 
     // Truy vấn lấy dữ liệu
     const selectQuery = `
-      SELECT 
-        p.id, p.title, p.content, p.topic, p.likes, p.views, p.created_at, p.is_pinned,
-        json_build_object(
-          'id', u.id,
-          'name', u.name,
-          'avatar_url', u.avatar_url
-        ) as author
-      ${baseQuery}
-      ORDER BY p.is_pinned DESC, p.created_at DESC
-      LIMIT $${queryParams.length + 1}
-      OFFSET $${queryParams.length + 2};
-    `;
-    
-    const postsResult = await db.query(selectQuery, [...queryParams, limit, offset]);
+    SELECT
+      p.id,
+      p.title,
+      p.content,
+      p.topic,
+      p.likes,
+      p.views,
+      p.created_at,
+      p.is_pinned,
+      json_build_object(
+        'id', u.id,
+        'name', u.name,
+        'avatar_url', u.avatar_url
+      ) AS author,
+      EXISTS(
+        SELECT 1 FROM "PostLikes" pl
+        WHERE pl.post_id = p.id
+          AND pl.user_id = $${queryParams.length + 1}
+      ) AS "isLiked",
+      EXISTS(
+        SELECT 1 FROM "Comments" c
+        WHERE c.post_id = p.id
+          AND c.user_id = $${queryParams.length + 1}
+          AND c.deleted_at IS NULL
+      ) AS "isCommented"
+    ${baseQuery}
+    ORDER BY p.is_pinned DESC, p.created_at DESC
+    LIMIT $${queryParams.length + 2}
+    OFFSET $${queryParams.length + 3};
+  `;
+
+    const postsResult = await db.query(selectQuery, [
+      ...queryParams,
+      userId,
+      limit,
+      offset,
+    ]);
     return { posts: postsResult.rows, totalItems };
   },
 
@@ -89,13 +121,17 @@ const postModel = {
     const fieldsToUpdate = Object.keys(updateData);
     if (fieldsToUpdate.length === 0) return null;
 
-    const setClause = fieldsToUpdate.map((field, index) => `"${field}" = $${index + 1}`).join(', ');
+    const setClause = fieldsToUpdate
+      .map((field, index) => `"${field}" = $${index + 1}`)
+      .join(", ");
     const values = Object.values(updateData);
 
     const queryText = `
       UPDATE "Posts"
       SET ${setClause}
-      WHERE id = $${fieldsToUpdate.length + 1} AND user_id = $${fieldsToUpdate.length + 2}
+      WHERE id = $${fieldsToUpdate.length + 1} AND user_id = $${
+      fieldsToUpdate.length + 2
+    }
       RETURNING *;
     `;
     const result = await db.query(queryText, [...values, postId, userId]);
@@ -107,7 +143,7 @@ const postModel = {
     const result = await db.query(queryText, [postId, userId]);
     return result.rows[0];
   },
-  
+
   addLike: async (postId, userId) => {
     const queryText = `INSERT INTO "PostLikes" (post_id, user_id) VALUES ($1, $2);`;
     await db.query(queryText, [postId, userId]);
@@ -117,7 +153,7 @@ const postModel = {
     const queryText = `DELETE FROM "PostLikes" WHERE post_id = $1 AND user_id = $2;`;
     await db.query(queryText, [postId, userId]);
   },
-  
+
   updateLikesCount: async (postId) => {
     const queryText = `
       WITH like_count AS (
@@ -154,34 +190,34 @@ const postModel = {
     return result.rows[0].views;
   },
 
-
-
   softDelete: async (postId, userId, reason, adminId = null) => {
     let queryText;
     const params = [reason, adminId || userId, postId];
-    
-    if (userId) { // User tự xóa
+
+    if (userId) {
+      // User tự xóa
       queryText = `UPDATE "Posts" SET deleted_at = CURRENT_TIMESTAMP, deleted_reason = $1, deleted_by = $2 WHERE id = $3 AND user_id = $2;`;
       params.pop(); // Bỏ postId ra
       params.push(postId, userId); // Thêm postId và userId cho điều kiện WHERE
       queryText = `UPDATE "Posts" SET deleted_at = CURRENT_TIMESTAMP, deleted_reason = $1, deleted_by = $2 WHERE id = $3 AND user_id = $4;`;
-    } else { // Admin xóa
+    } else {
+      // Admin xóa
       queryText = `UPDATE "Posts" SET deleted_at = CURRENT_TIMESTAMP, deleted_reason = $1, deleted_by = $2 WHERE id = $3;`;
     }
-    
+
     const result = await db.query(queryText, params);
     return result.rowCount;
   },
 
   restore: async (postId) => {
-      const queryText = `UPDATE "Posts" SET deleted_at = NULL, deleted_reason = NULL, deleted_by = NULL WHERE id = $1;`;
-      const result = await db.query(queryText, [postId]);
-      return result.rowCount;
+    const queryText = `UPDATE "Posts" SET deleted_at = NULL, deleted_reason = NULL, deleted_by = NULL WHERE id = $1;`;
+    const result = await db.query(queryText, [postId]);
+    return result.rowCount;
   },
 
   findAllByUserId: async (userId, { limit, offset }) => {
     const where = `WHERE p.user_id = $1 AND p.deleted_at IS NULL`;
-    
+
     const countQuery = `SELECT COUNT(*) FROM "Posts" p ${where};`;
     const totalResult = await db.query(countQuery, [userId]);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
@@ -210,13 +246,13 @@ const postModel = {
       (SELECT post_id FROM "Comments" WHERE user_id = $1)
     `;
     const idsResult = await db.query(getInteractedIdsQuery, [userId]);
-    const interactedPostIds = idsResult.rows.map(row => row.post_id);
+    const interactedPostIds = idsResult.rows.map((row) => row.post_id);
 
     // Nếu người dùng chưa tương tác với bài nào, trả về kết quả rỗng ngay lập-tức
     if (interactedPostIds.length === 0) {
       return { posts: [], totalItems: 0 };
     }
-    
+
     const totalItems = interactedPostIds.length;
 
     // --- BƯỚC 2: Lấy thông tin chi tiết của các bài viết đó ---
@@ -238,14 +274,16 @@ const postModel = {
       ORDER BY p.created_at DESC
       LIMIT $2 OFFSET $3;
     `;
-    
+
     // Truyền mảng ID, limit, và offset vào câu lệnh
-    const postsResult = await db.query(selectQuery, [interactedPostIds, limit, offset]);
+    const postsResult = await db.query(selectQuery, [
+      interactedPostIds,
+      limit,
+      offset,
+    ]);
 
     return { posts: postsResult.rows, totalItems };
   },
 };
 
 module.exports = postModel;
-
-

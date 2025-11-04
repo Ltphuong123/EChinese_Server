@@ -27,6 +27,7 @@ const postController = {
         page: parseInt(req.query.page, 10) || 1,
         limit: parseInt(req.query.limit, 10) || 10,
         topic: req.query.topic || '',
+        userId: req.user.id || '',
       };
       const result = await postService.getPublicPosts(filters);
       res.status(200).json({ success: true, ...result });
