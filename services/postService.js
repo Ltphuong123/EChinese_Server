@@ -1,6 +1,6 @@
 // file: services/postService.js
 
-const postModel = require('../models/postModel');
+const postModel = require("../models/postModel");
 
 const postService = {
   createPost: async (postData, userId) => {
@@ -10,14 +10,20 @@ const postService = {
     return await postModel.create(dataToCreate);
   },
 
-  getPublicPosts: async (filters) => {
+  getPublicPosts: async (filters = { page: 1, limit: 10 }) => {
     const { page, limit } = filters;
     const offset = (page - 1) * limit;
 
-    const { posts, totalItems } = await postModel.findAllPublic({ ...filters, offset });
-    
+    const { posts, totalItems } = await postModel.findAllPublic({
+      ...filters,
+      offset,
+    });
+
     const totalPages = Math.ceil(totalItems / limit);
-    return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
+    return {
+      data: posts,
+      meta: { total: totalItems, page, limit, totalPages },
+    };
   },
 
   getPostById: async (postId) => {
@@ -26,28 +32,30 @@ const postService = {
     // await postModel.incrementViews(postId);
     const post = await postModel.findById(postId);
     if (!post) {
-      throw new Error('Bài viết không tồn tại hoặc đã bị xóa.');
+      throw new Error("Bài viết không tồn tại hoặc đã bị xóa.");
     }
     return post;
   },
 
   updatePost: async (postId, userId, updateData) => {
     // Chỉ cho phép cập nhật các trường nhất định
-    const allowedUpdates = ['title', 'content', 'topic'];
+    const allowedUpdates = ["title", "content", "topic"];
     const safeUpdateData = {};
     for (const key of allowedUpdates) {
-        if (updateData[key] !== undefined) {
-            safeUpdateData[key] = updateData[key];
-        }
+      if (updateData[key] !== undefined) {
+        safeUpdateData[key] = updateData[key];
+      }
     }
-    
+
     if (Object.keys(safeUpdateData).length === 0) {
-        throw new Error("Không có dữ liệu hợp lệ để cập nhật.");
+      throw new Error("Không có dữ liệu hợp lệ để cập nhật.");
     }
-    
+
     const updatedPost = await postModel.update(postId, userId, safeUpdateData);
     if (!updatedPost) {
-      throw new Error('Cập nhật thất bại. Bài viết không tồn tại hoặc bạn không có quyền chỉnh sửa.');
+      throw new Error(
+        "Cập nhật thất bại. Bài viết không tồn tại hoặc bạn không có quyền chỉnh sửa."
+      );
     }
     return updatedPost;
   },
@@ -56,7 +64,7 @@ const postService = {
     // Kiểm tra xem bài viết có tồn tại không
     const postExists = await postModel.findById(postId);
     if (!postExists) {
-      throw new Error('Bài viết không tồn tại.');
+      throw new Error("Bài viết không tồn tại.");
     }
 
     // Kiểm tra xem người dùng đã like bài viết này chưa
@@ -66,17 +74,55 @@ const postService = {
     if (existingLike) {
       // Nếu đã like -> Xóa like (unlike)
       await postModel.removeLike(postId, userId);
-      action = 'unliked';
+      action = "unliked";
     } else {
       // Nếu chưa like -> Thêm like
       await postModel.addLike(postId, userId);
-      action = 'liked';
+      action = "liked";
     }
-    
+
     // Cập nhật lại số lượng like trong bảng Posts
     const newLikesCount = await postModel.updateLikesCount(postId);
 
     return { action, likes: newLikesCount };
+  },
+
+  getPostViews: async (postId, filters = { page: 1, limit: 10 }) => {
+    const post = await postModel.findById(postId);
+    if (!post) {
+      throw new Error("Bài viết không tồn tại.");
+    }
+    const { page, limit } = filters;
+    const offset = (page - 1) * limit;
+    const { viewer, totalItems } = await postModel.getPostViews(
+      postId,
+      filters,
+      offset
+    );
+    const totalPages = Math.ceil(totalItems / limit);
+    return {
+      data: viewer,
+      meta: { total: totalItems, page, limit, totalPages },
+    };
+  },
+
+  getPostLikes: async (postId, filters = { page: 1, limit: 10 }) => {
+    const post = await postModel.findById(postId);
+    if (!post) {
+      throw new Error("Bài viết không tồn tại.");
+    }
+    const { page, limit } = filters;
+    const offset = (page - 1) * limit;
+    const { likers, totalItems } = await postModel.getPostLikes(
+      postId,
+      filters,
+      offset
+    );
+    const totalPages = Math.ceil(totalItems / limit);
+    return {
+      data: likers,
+      meta: { total: totalItems, page, limit, totalPages },
+    };
   },
 
   recordView: async (postId, userId) => {
@@ -89,40 +135,57 @@ const postService = {
 
     // Cập nhật lại số lượng view trong bảng Posts
     const newViewsCount = await postModel.updateViewsCount(postId);
-    
+
     return newViewsCount;
   },
 
   softDeletePost: async (postId, userId) => {
     // Gọi model với `userId` để đảm bảo chỉ chủ sở hữu mới xóa được
-    const deletedCount = await postModel.softDelete(postId, userId, 'Người dùng tự xóa');
+    const deletedCount = await postModel.softDelete(
+      postId,
+      userId,
+      "Người dùng tự xóa"
+    );
     if (deletedCount === 0) {
-      throw new Error('Bài viết không tồn tại hoặc bạn không có quyền xóa.');
+      throw new Error("Bài viết không tồn tại hoặc bạn không có quyền xóa.");
     }
   },
 
-  getPostsByUserId: async (userId, filters) => {
+  getPostsByUserId: async (userId, filters = { page: 1, limit: 10 }) => {
     const { page, limit } = filters;
     const offset = (page - 1) * limit;
 
-    const { posts, totalItems } = await postModel.findAllByUserId(userId, { limit, offset });
-    
+    const { posts, totalItems } = await postModel.findAllByUserId(userId, {
+      limit,
+      offset,
+    });
+
     const totalPages = Math.ceil(totalItems / limit);
-    return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
+    return {
+      data: posts,
+      meta: { total: totalItems, page, limit, totalPages },
+    };
   },
 
   // --- HÀM MỚI ---
-  getInteractedPostsByUserId: async (userId, filters) => {
+  getInteractedPostsByUserId: async (
+    userId,
+    filters = { page: 1, limit: 10 }
+  ) => {
     const { page, limit } = filters;
     const offset = (page - 1) * limit;
 
-    const { posts, totalItems } = await postModel.findInteractedByUserId(userId, { limit, offset });
+    const { posts, totalItems } = await postModel.findInteractedByUserId(
+      userId,
+      { limit, offset }
+    );
 
     const totalPages = Math.ceil(totalItems / limit);
-    return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
+    return {
+      data: posts,
+      meta: { total: totalItems, page, limit, totalPages },
+    };
   },
-
-
 };
 
 module.exports = postService;

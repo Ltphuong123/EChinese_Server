@@ -1,6 +1,6 @@
 // file: controllers/postController.js
 
-const postService = require('../services/postService');
+const postService = require("../services/postService");
 
 const postController = {
   // CREATE
@@ -10,13 +10,24 @@ const postController = {
       const userId = req.user.id; // Lấy từ token
 
       if (!postData.title || !postData.content || !postData.topic) {
-        return res.status(400).json({ success: false, message: 'Tiêu đề, nội dung và chủ đề là bắt buộc.' });
+        return res.status(400).json({
+          success: false,
+          message: "Tiêu đề, nội dung và chủ đề là bắt buộc.",
+        });
       }
 
       const newPost = await postService.createPost(postData, userId);
-      res.status(201).json({ success: true, message: 'Tạo bài viết thành công.', data: newPost });
+      res.status(201).json({
+        success: true,
+        message: "Tạo bài viết thành công.",
+        data: newPost,
+      });
     } catch (error) {
-      res.status(500).json({ success: false, message: 'Lỗi khi tạo bài viết', error: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi tạo bài viết",
+        error: error.message,
+      });
     }
   },
 
@@ -26,12 +37,17 @@ const postController = {
       const filters = {
         page: parseInt(req.query.page, 10) || 1,
         limit: parseInt(req.query.limit, 10) || 10,
-        topic: req.query.topic || '',
+        topic: req.query.topic || "",
+        userId: req.user.id || "",
       };
       const result = await postService.getPublicPosts(filters);
       res.status(200).json({ success: true, ...result });
     } catch (error) {
-      res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách bài viết', error: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách bài viết",
+        error: error.message,
+      });
     }
   },
 
@@ -42,10 +58,14 @@ const postController = {
       const post = await postService.getPostById(postId);
       res.status(200).json({ success: true, data: post });
     } catch (error) {
-      if (error.message.includes('không tồn tại')) {
+      if (error.message.includes("không tồn tại")) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      res.status(500).json({ success: false, message: 'Lỗi khi lấy bài viết', error: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy bài viết",
+        error: error.message,
+      });
     }
   },
 
@@ -56,16 +76,31 @@ const postController = {
       const postData = req.body;
       const userId = req.user.id;
 
-      const updatedPost = await postService.updatePost(postId, userId, postData);
-      res.status(200).json({ success: true, message: 'Cập nhật bài viết thành công.', data: updatedPost });
+      const updatedPost = await postService.updatePost(
+        postId,
+        userId,
+        postData
+      );
+      res.status(200).json({
+        success: true,
+        message: "Cập nhật bài viết thành công.",
+        data: updatedPost,
+      });
     } catch (error) {
-      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
+      if (
+        error.message.includes("không tồn tại") ||
+        error.message.includes("không có quyền")
+      ) {
         return res.status(404).json({ success: false, message: error.message });
       }
-       if (error.message.includes('Không có dữ liệu')) {
+      if (error.message.includes("Không có dữ liệu")) {
         return res.status(400).json({ success: false, message: error.message });
       }
-      res.status(500).json({ success: false, message: 'Lỗi khi cập nhật bài viết', error: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi cập nhật bài viết",
+        error: error.message,
+      });
     }
   },
 
@@ -75,20 +110,78 @@ const postController = {
       const userId = req.user.id; // Lấy từ token
 
       const result = await postService.toggleLike(postId, userId);
-      
+
       res.status(200).json({
         success: true,
-        message: result.action === 'liked' ? 'Đã thích bài viết.' : 'Đã bỏ thích bài viết.',
+        message:
+          result.action === "liked"
+            ? "Đã thích bài viết."
+            : "Đã bỏ thích bài viết.",
         data: {
           action: result.action,
           likes: result.likes,
-        }
+        },
       });
     } catch (error) {
-       if (error.message.includes('không tồn tại')) {
+      if (error.message.includes("không tồn tại")) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      res.status(500).json({ success: false, message: 'Lỗi khi thực hiện thao tác', error: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi thực hiện thao tác",
+        error: error.message,
+      });
+    }
+  },
+
+  getPostViews: async (req, res) => {
+    try {
+      const { postId } = req.params;
+      const filters = {
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+      };
+      const views = await postService.getPostViews(postId, filters);
+
+      res.status(200).json({
+        success: true,
+        data: views,
+        message: "Lấy danh sách người xem thành công.",
+      });
+    } catch (error) {
+      if (error.message.includes("không tồn tại")) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy số lượt xem",
+        error: error.message,
+      });
+    }
+  },
+
+  getPostLikes: async (req, res) => {
+    try {
+      const { postId } = req.params;
+      const filters = {
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+      };
+      const likes = await postService.getPostLikes(postId, filters);
+      res.status(200).json({
+        success: true,
+        data: likes,
+        message: "Lấy danh sách người thích thành công.",
+      });
+    } catch (error) {
+      if (error.message.includes("không tồn tại")) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách người thích",
+        error: error.message,
+      });
     }
   },
 
@@ -102,19 +195,22 @@ const postController = {
 
       res.status(200).json({
         success: true,
-        message: 'Ghi nhận lượt xem thành công.',
+        message: "Ghi nhận lượt xem thành công.",
         data: {
           views: newViewCount,
-        }
+        },
       });
     } catch (error) {
-       if (error.message.includes('không tồn tại')) {
+      if (error.message.includes("không tồn tại")) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      res.status(500).json({ success: false, message: 'Lỗi khi ghi nhận lượt xem', error: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi ghi nhận lượt xem",
+        error: error.message,
+      });
     }
   },
-
 
   softDeletePostByUser: async (req, res) => {
     try {
@@ -122,17 +218,22 @@ const postController = {
       const userId = req.user.id; // Lấy từ token
 
       await postService.softDeletePost(postId, userId);
-      
+
       res.status(204).send();
     } catch (error) {
-      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
+      if (
+        error.message.includes("không tồn tại") ||
+        error.message.includes("không có quyền")
+      ) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      res.status(500).json({ success: false, message: 'Lỗi khi xóa bài viết', error: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi xóa bài viết",
+        error: error.message,
+      });
     }
   },
-
-
 };
 
 module.exports = postController;

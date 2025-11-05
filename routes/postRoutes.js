@@ -1,26 +1,46 @@
 // file: routes/postRoutes.js
 
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const postController = require('../controllers/postController');
-const authMiddleware = require('../middlewares/authMiddleware');
-const moderationController = require('../controllers/moderationController');
+const postController = require("../controllers/postController");
+const authMiddleware = require("../middlewares/authMiddleware");
+const moderationController = require("../controllers/moderationController");
 
-const BASE_PATH = '/community/posts';
+const BASE_PATH = "/community/posts";
 
-router.get('/community/posts', authMiddleware.verifyToken, postController.getPosts);
+router.get(
+  "/community/posts",
+  authMiddleware.verifyToken,
+  postController.getPosts
+);
 
-router.get(`/community/posts/:postId`, authMiddleware.verifyToken, postController.getPostById);
+router.get(
+  `/community/posts/:postId`,
+  authMiddleware.verifyToken,
+  postController.getPostById
+);
 
-router.post('/community/posts', authMiddleware.verifyToken, postController.createPost);
+router.post(
+  "/community/posts",
+  authMiddleware.verifyToken,
+  postController.createPost
+);
 
-router.put(`/community/posts/:postId`, authMiddleware.verifyToken, postController.updatePost);
+router.put(
+  `/community/posts/:postId`,
+  authMiddleware.verifyToken,
+  postController.updatePost
+);
 
 router.post(
   `/community/posts/:postId/like`,
   authMiddleware.verifyToken,
   postController.toggleLikePost
 );
+
+router.get(`/community/posts/:postId/views`, postController.getPostViews);
+
+router.get(`/community/posts/:postId/likes`, postController.getPostLikes);
 
 // Ghi nhận một lượt xem bài viết
 // router.delete(
@@ -48,7 +68,5 @@ router.post(
 //   [authMiddleware.verifyToken, authMiddleware.isAdmin],
 //   moderationController.restorePostByAdmin // Đặt trong moderationController
 // );
-
-
 
 module.exports = router;
