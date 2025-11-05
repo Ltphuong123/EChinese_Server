@@ -8,16 +8,27 @@ const authMiddleware = require('../middlewares/authMiddleware');
 // Áp dụng middleware xác thực cho tất cả các route này
 router.use(authMiddleware.verifyToken);
 
-// Bắt đầu một lượt làm bài mới
-router.post('/exams/:id/attempts', attemptController.startNewAttempt);
+// API Bắt đầu làm bài (thuộc về exam, nhưng trả về attempt)
+router.post('/exams/:id/start-attempt', authMiddleware.verifyToken, attemptController.startAttempt);
 
-// Lưu một câu trả lời
-router.post('/attempts/:attemptId/answers', attemptController.saveUserAnswer);
+// API Lưu câu trả lời
+router.post('/attempts/:attemptId/answers', attemptController.saveAnswers);
 
-// Nộp bài
+// API Nộp bài
 router.post('/attempts/:attemptId/submit', attemptController.submitAttempt);
 
-// Xem kết quả
-router.get('/attempts/:attemptId/results', attemptController.getAttemptResults);
+// API Lấy kết quả
+router.get('/attempts/:attemptId/result', attemptController.getAttemptResult);
+
+// // Bắt đầu một lượt làm bài mới
+// router.post('/exams/:id/start-attempt', authMiddleware.verifyToken, attemptController.startAttempt);
+// // Lưu một câu trả lời
+// router.post('/attempts/:attemptId/answers', attemptController.saveUserAnswer);
+
+// // Nộp bài
+// router.post('/attempts/:attemptId/submit', attemptController.submitAttempt);
+
+// // Xem kết quả
+// router.get('/attempts/:attemptId/results', attemptController.getAttemptResults);
 
 module.exports = router;

@@ -3,256 +3,318 @@
 const db = require('../config/db');
 
 const examModel = {
-  createCompleteExam: async (examData, createdByUserId) => {
+  createFullExam: async (examData, createdById) => {
     const client = await db.pool.connect();
+    const promptIdMap = new Map();
 
-    // Ánh xạ để theo dõi ID mới được tạo, so với ID cũ từ frontend
-    const idMap = new Map();
+    // --- THAY ĐỔI: Khởi tạo object để xây dựng lại cấu trúc bài thi ---
+    let finalExamStructure = {};
 
     try {
       await client.query('BEGIN');
 
-      // --- 1. Tạo Exam ---
+      // --- 1. Tạo bản ghi Exam chính ---
       const examQuery = `
-        INSERT INTO "Exams" (exam_type_id, exam_level_id, name, description, instructions, total_time_minutes, is_published, created_by)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id;
+        INSERT INTO "Exams" (name, description, instructions, total_time_minutes, exam_type_id, exam_level_id, created_by, is_published)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *;
       `;
       const examResult = await client.query(examQuery, [
-        examData.exam_type_id, examData.exam_level_id, examData.name,
-        examData.description, examData.instructions, examData.total_time_minutes,
-        examData.is_published || false, createdByUserId
+        examData.name, examData.description, examData.instructions, examData.total_time_minutes,
+        examData.exam_type_id, examData.exam_level_id, createdById, examData.is_published || false
       ]);
-      const newExamId = examResult.rows[0].id;
-      idMap.set(examData.id, newExamId);
+      const newExam = examResult.rows[0];
+      
+      // Bắt đầu xây dựng lại cấu trúc
+      finalExamStructure = { ...newExam, sections: [] };
 
-      // --- 2. Lặp qua các Sections ---
-      for (const section of examData.sections || []) {
+      // --- 2. Lặp qua và tạo các Sections ---
+      for (const [sectionIndex, section] of examData.sections.entries()) {
         const sectionQuery = `
-          INSERT INTO "Sections" (exam_id, name, "order", time_minutes, description, audio_url)
-          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id;
+          INSERT INTO "Sections" (exam_id, name, description, time_minutes, "order")
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING *;
         `;
         const sectionResult = await client.query(sectionQuery, [
-          newExamId, section.name, section.order, section.time_minutes,
-          section.description, section.audio_url
+          newExam.id, section.name, section.description, section.time_minutes, sectionIndex
         ]);
-        const newSectionId = sectionResult.rows[0].id;
-        idMap.set(section.id, newSectionId);
+        const newSection = sectionResult.rows[0];
+        
+        // Thêm section mới vào cấu trúc trả về
+        finalExamStructure.sections.push({ ...newSection, subsections: [] });
 
-        // --- 3. Lặp qua các Subsections ---
-        for (const subsection of section.subsections || []) {
+        // --- 3. Lặp qua và tạo các Subsections ---
+        for (const [subsectionIndex, subsection] of section.subsections.entries()) {
           const subsectionQuery = `
-            INSERT INTO "Subsections" (section_id, name, "order", audio_url, description)
-            VALUES ($1, $2, $3, $4, $5) RETURNING id;
+            INSERT INTO "Subsections" (section_id, name, description, audio_url, "order")
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING *;
           `;
           const subsectionResult = await client.query(subsectionQuery, [
-            newSectionId, subsection.name, subsection.order,
-            subsection.audio_url, subsection.description
+            newSection.id, subsection.name, subsection.description, subsection.audio_url, subsectionIndex
           ]);
-          const newSubsectionId = subsectionResult.rows[0].id;
-          idMap.set(subsection.id, newSubsectionId);
+          const newSubsection = subsectionResult.rows[0];
 
-          // --- 4. Lặp qua các Prompts ---
-          for (const prompt of subsection.prompts || []) {
-            const promptQuery = `
-              INSERT INTO "Prompts" (subsection_id, content, image, audio_url, "order")
-              VALUES ($1, $2, $3, $4, $5) RETURNING id;
-            `;
-            const promptResult = await client.query(promptQuery, [
-              newSubsectionId, prompt.content, prompt.image, // Giả sử image là JSON
-              prompt.audio_url, prompt.order
-            ]);
-            const newPromptId = promptResult.rows[0].id;
-            idMap.set(prompt.id, newPromptId);
+          // Thêm subsection mới vào cấu trúc trả về
+          finalExamStructure.sections[sectionIndex].subsections.push({ ...newSubsection, prompts: [], questions: [] });
+
+          // --- 4. Lặp qua và tạo các Prompts (nếu có) ---
+          if (subsection.prompts && subsection.prompts.length > 0) {
+            for (const [promptIndex, prompt] of subsection.prompts.entries()) {
+              const promptQuery = `
+                INSERT INTO "Prompts" (subsection_id, content, image, audio_url, "order")
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING *;
+              `;
+              const promptResult = await client.query(promptQuery, [
+                newSubsection.id, prompt.content, prompt.image_url || null, prompt.audio_url, promptIndex
+              ]);
+              const newPrompt = promptResult.rows[0];
+              promptIdMap.set(prompt.id, newPrompt.id);
+              
+              // Thêm prompt mới vào cấu trúc trả về
+              finalExamStructure.sections[sectionIndex].subsections[subsectionIndex].prompts.push(newPrompt);
+            }
           }
           
-          // --- 5. Lặp qua các Questions ---
-          for (const question of subsection.questions || []) {
-            // Xác định prompt_id thực tế (nếu có)
-            const actualPromptId = question.prompt_id ? idMap.get(question.prompt_id) : null;
-              
+          // --- 5. Lặp qua và tạo các Questions ---
+          for (const [questionIndex, question] of subsection.questions.entries()) {
             const questionQuery = `
-              INSERT INTO "Questions" (subsection_id, question_type_id, "order", content, image_url, audio_url, points)
-              VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id;
+              INSERT INTO "Questions" (subsection_id, question_type_id, content, points, image_url, audio_url, "order", correct_answer)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              RETURNING *;
             `;
             const questionResult = await client.query(questionQuery, [
-              newSubsectionId, question.question_type_id, question.order,
-              question.content, question.image_url, question.audio_url, question.points
+              newSubsection.id, question.question_type_id, question.content,
+              question.points, question.image_url, question.audio_url, questionIndex, question.correct_answer
             ]);
-            const newQuestionId = questionResult.rows[0].id;
-            idMap.set(question.id, newQuestionId);
-
-            // 5.1. Liên kết Question với Prompt (nếu có)
-            if (actualPromptId) {
-                await client.query(
-                    `INSERT INTO "Prompt_Questions" (prompt_id, question_id) VALUES ($1, $2)`,
-                    [actualPromptId, newQuestionId]
-                );
+            const newQuestion = questionResult.rows[0];
+            
+            // Khởi tạo cấu trúc cho câu hỏi mới
+            const newQuestionStructure = { ...newQuestion, options: [], explanation: null, correct_answers: [] };
+            
+            // --- 5.1 Tạo liên kết trong Prompt_Questions ---
+            if (question.prompt_id) {
+              const newPromptId = promptIdMap.get(question.prompt_id);
+              if (newPromptId) {
+                await client.query(`INSERT INTO "Prompt_Questions" (prompt_id, question_id) VALUES ($1, $2);`, [newPromptId, newQuestion.id]);
+                // Gán lại prompt_id thật vào cấu trúc trả về
+                newQuestionStructure.prompt_id = newPromptId;
+              }
             }
 
-            // 5.2. Lặp qua các Options
-            for (const option of question.options || []) {
-              const optionQuery = `
-                INSERT INTO "Options" (question_id, label, content, image_url, audio_url, is_correct, "order")
-                VALUES ($1, $2, $3, $4, $5, $6, $7);
-              `;
-              await client.query(optionQuery, [
-                newQuestionId, option.label, option.content, option.image_url,
-                option.audio_url, option.is_correct, option.order
-              ]);
-            }
-
-            // 5.3. Lặp qua các Correct Answers (cho dạng điền từ, ghi âm)
-            for (const answer of question.correct_answers || []) {
-                await client.query(
-                    `INSERT INTO "Correct_Answers" (question_id, answer) VALUES ($1, $2)`,
-                    [newQuestionId, answer.answer]
-                );
+            // --- 6. Tạo và lấy các Options (nếu có) ---
+            if (question.options && question.options.length > 0) {
+                for (const [optionIndex, option] of question.options.entries()) {
+                    const optionQuery = `
+                        INSERT INTO "Options" (question_id, label, content, is_correct, image_url, "order")
+                        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
+                    `;
+                    const optionResult = await client.query(optionQuery, [
+                        newQuestion.id, option.label, option.content, option.is_correct, option.image_url, optionIndex
+                    ]);
+                    newQuestionStructure.options.push(optionResult.rows[0]);
+                }
             }
             
-            // 5.4. Thêm Explanation
+            // --- 7. Tạo và lấy Explanation (nếu có) ---
             if (question.explanation && question.explanation.content) {
-                await client.query(
-                    `INSERT INTO "Explanations" (question_id, content) VALUES ($1, $2)`,
-                    [newQuestionId, question.explanation.content]
-                );
+              const explanationQuery = `INSERT INTO "Explanations" (question_id, content) VALUES ($1, $2) RETURNING *;`;
+              const explanationResult = await client.query(explanationQuery, [newQuestion.id, question.explanation.content]);
+              newQuestionStructure.explanation = explanationResult.rows[0];
             }
+
+            // --- 8. Tạo và lấy Correct_Answers (nếu có) ---
+            if (question.correct_answers && question.correct_answers.length > 0) {
+                for (const answer of question.correct_answers) {
+                    const answerQuery = `INSERT INTO "Correct_Answers" (question_id, answer) VALUES ($1, $2) RETURNING *;`;
+                    const answerResult = await client.query(answerQuery, [newQuestion.id, answer.answer]);
+                    newQuestionStructure.correct_answers.push(answerResult.rows[0]);
+                }
+            }
+            
+            // Thêm cấu trúc câu hỏi hoàn chỉnh vào subsection tương ứng
+            finalExamStructure.sections[sectionIndex].subsections[subsectionIndex].questions.push(newQuestionStructure);
           }
         }
       }
 
       await client.query('COMMIT');
-      return { id: newExamId, ...examData };
+      
+      // --- THAY ĐỔI: Trả về cấu trúc đã được xây dựng lại ---
+      return finalExamStructure;
 
     } catch (error) {
       await client.query('ROLLBACK');
-      console.error('Lỗi transaction khi tạo bài thi:', error);
+      console.error('Lỗi trong transaction tạo bài thi, tất cả thay đổi đã được hoàn tác:', error);
       throw error;
     } finally {
       client.release();
     }
   },
 
-  findExamById: async (examId) => {
-    const queryText = `SELECT * FROM "Exams" WHERE id = $1 AND is_deleted = false;`;
-    const result = await db.query(queryText, [examId]);
-    return result.rows[0];
-  },
-
-  findAllComponentsByExamId: async (examId) => {
-    // Sử dụng Promise.all để chạy tất cả các truy vấn con song song
-    const [
-      sectionsRes,
-      subsectionsRes,
-      promptsRes,
-      questionsRes,
-      optionsRes,
-      explanationsRes,
-      correctAnswersRes,
-      promptQuestionsRes
-    ] = await Promise.all([
-      db.query(`SELECT * FROM "Sections" WHERE exam_id = $1 AND is_deleted = false ORDER BY "order" ASC`, [examId]),
-      db.query(`SELECT ss.* FROM "Subsections" ss JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1 AND ss.is_deleted = false ORDER BY ss."order" ASC`, [examId]),
-      db.query(`SELECT p.* FROM "Prompts" p JOIN "Subsections" ss ON p.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1 AND p.is_deleted = false ORDER BY p."order" ASC`, [examId]),
-      db.query(`SELECT q.* FROM "Questions" q JOIN "Subsections" ss ON q.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1 AND q.is_deleted = false ORDER BY q."order" ASC`, [examId]),
-      db.query(`SELECT o.* FROM "Options" o JOIN "Questions" q ON o.question_id = q.id JOIN "Subsections" ss ON q.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1 AND o.is_deleted = false ORDER BY o."order" ASC`, [examId]),
-      db.query(`SELECT e.* FROM "Explanations" e JOIN "Questions" q ON e.question_id = q.id JOIN "Subsections" ss ON q.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1 AND e.is_deleted = false`, [examId]),
-      db.query(`SELECT ca.* FROM "Correct_Answers" ca JOIN "Questions" q ON ca.question_id = q.id JOIN "Subsections" ss ON q.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1`, [examId]),
-      db.query(`SELECT pq.* FROM "Prompt_Questions" pq JOIN "Prompts" p ON pq.prompt_id = p.id JOIN "Subsections" ss ON p.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1`, [examId]),
-    ]);
-
-    return {
-      sections: sectionsRes.rows,
-      subsections: subsectionsRes.rows,
-      prompts: promptsRes.rows,
-      questions: questionsRes.rows,
-      options: optionsRes.rows,
-      explanations: explanationsRes.rows,
-      correctAnswers: correctAnswersRes.rows,
-      promptQuestions: promptQuestionsRes.rows
-    };
+  findById: async (id) => {
+    // Câu truy vấn này gần như giống hệt với truy vấn trong `findAllPaginated`,
+    // chỉ khác ở điều kiện WHERE và không có LIMIT/OFFSET.
+    const queryText = `
+      SELECT
+        e.*,
+        (
+          SELECT jsonb_agg(sections_agg ORDER BY sections_agg."order" ASC)
+          FROM (
+            SELECT
+              s.*,
+              (
+                SELECT jsonb_agg(subsections_agg ORDER BY subsections_agg."order" ASC)
+                FROM (
+                  SELECT
+                    ss.*,
+                    (
+                      SELECT jsonb_agg(p.* ORDER BY p."order" ASC)
+                      FROM "Prompts" p
+                      WHERE p.subsection_id = ss.id
+                    ) AS prompts,
+                    (
+                      SELECT jsonb_agg(questions_agg ORDER BY questions_agg."order" ASC)
+                      FROM (
+                        SELECT
+                          q.*,
+                          -- Lấy prompt_id từ bảng liên kết Prompt_Questions
+                          (SELECT pq.prompt_id FROM "Prompt_Questions" pq WHERE pq.question_id = q.id LIMIT 1) as prompt_id,
+                          (
+                            SELECT jsonb_agg(o.* ORDER BY o."order" ASC)
+                            FROM "Options" o
+                            WHERE o.question_id = q.id
+                          ) AS options,
+                          (
+                            SELECT jsonb_agg(ca.*)
+                            FROM "Correct_Answers" ca
+                            WHERE ca.question_id = q.id
+                          ) AS correct_answers,
+                          (
+                            SELECT jsonb_build_object('id', ex.id, 'content', ex.content, 'question_id', ex.question_id)
+                            FROM "Explanations" ex
+                            WHERE ex.question_id = q.id
+                            LIMIT 1
+                          ) AS explanation
+                        FROM "Questions" q
+                        WHERE q.subsection_id = ss.id
+                      ) AS questions_agg
+                    ) AS questions
+                  FROM "Subsections" ss
+                  WHERE ss.section_id = s.id
+                ) AS subsections_agg
+              ) AS subsections
+            FROM "Sections" s
+            WHERE s.exam_id = e.id
+          ) AS sections_agg
+        ) AS sections
+      FROM "Exams" e
+      WHERE e.id = $1 AND e.is_deleted = false
+      GROUP BY e.id;
+    `;
+    
+    const result = await db.query(queryText, [id]);
+    
+    return result.rows[0] || null;
   },
 
   findAllPaginated: async (filters) => {
-    // Trích xuất tất cả các tham số cần thiết từ object filters
-    const {
-      limit,
-      offset,
-      search,
-      examTypeId,
-      examLevelId,
-      is_published,
-      is_deleted
-    } = filters;
+    const { limit, offset, search, examTypeId, examLevelId, is_published } = filters;
     
     const queryParams = [];
-    let whereClauses = 'WHERE 1=1'; // Bắt đầu với một điều kiện luôn đúng để dễ dàng nối các điều kiện `AND`
+    let whereClauses = 'WHERE e.is_deleted = false';
 
-    // Xử lý logic lọc is_deleted cho trang quản trị
-    if (is_deleted === 'true') {
-        whereClauses += ' AND e.is_deleted = true';
-    } else if (is_deleted === 'false') {
-        whereClauses += ' AND e.is_deleted = false';
-    } else if (is_deleted === 'all') {
-        // Không thêm điều kiện lọc is_deleted, lấy tất cả
-    } else {
-        // Mặc định cho trang quản trị nếu không có param: chỉ lấy các bài chưa bị xóa
-        whereClauses += ' AND e.is_deleted = false';
-    }
-
-    // Lọc theo trạng thái công bố (dành cho cả trang người dùng và admin)
-    if (is_published !== undefined) {
-        queryParams.push(is_published);
-        whereClauses += ` AND e.is_published = $${queryParams.length}`;
-    }
-
-    // Lọc theo từ khóa tìm kiếm (tên bài thi)
     if (search) {
       queryParams.push(`%${search}%`);
       whereClauses += ` AND e.name ILIKE $${queryParams.length}`;
     }
-
-    // Lọc theo loại bài thi
     if (examTypeId) {
       queryParams.push(examTypeId);
       whereClauses += ` AND e.exam_type_id = $${queryParams.length}`;
     }
-
-    // Lọc theo cấp độ bài thi
     if (examLevelId) {
       queryParams.push(examLevelId);
       whereClauses += ` AND e.exam_level_id = $${queryParams.length}`;
     }
+    if (is_published !== undefined && is_published !== null ) {
+      if(String(is_published).toLowerCase() !== 'all'){
+        const isPublishedValue = String(is_published).toLowerCase() === 'true';
+        queryParams.push(isPublishedValue);
+        whereClauses += ` AND e.is_published = $${queryParams.length}`;
+      }
+    }
     
-    const baseQuery = `
-      FROM "Exams" e
-      LEFT JOIN "Exam_Types" et ON e.exam_type_id = et.id
-      LEFT JOIN "Exam_Levels" el ON e.exam_level_id = el.id
-      ${whereClauses}
-    `;
-
-    // --- Truy vấn 1: Đếm tổng số bản ghi khớp với tất cả các điều kiện lọc ---
-    const countQuery = `SELECT COUNT(e.id) ${baseQuery}`;
+    // --- Truy vấn 1: Đếm tổng số bài thi ---
+    const countQuery = `SELECT COUNT(*) FROM "Exams" e ${whereClauses}`;
     const totalResult = await db.query(countQuery, queryParams);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
     
-    // --- Truy vấn 2: Lấy dữ liệu thực tế đã phân trang và sắp xếp ---
-    let selectQuery = `
-      SELECT 
+    // --- Truy vấn 2: Tái tạo cấu trúc JSON (PHIÊN BẢN SỬA LỖI) ---
+    // Sử dụng subquery lồng nhau thay vì CTE để tránh lỗi DISTINCT
+    const selectQuery = `
+      SELECT
         e.*,
-        et.name as exam_type_name,
-        el.name as exam_level_name
-      ${baseQuery}
+        (
+          SELECT jsonb_agg(sections_agg)
+          FROM (
+            SELECT
+              s.*,
+              (
+                SELECT jsonb_agg(subsections_agg)
+                FROM (
+                  SELECT
+                    ss.*,
+                    (
+                      SELECT jsonb_agg(p.* ORDER BY p."order" ASC)
+                      FROM "Prompts" p
+                      WHERE p.subsection_id = ss.id
+                    ) AS prompts,
+                    (
+                      SELECT jsonb_agg(questions_agg)
+                      FROM (
+                        SELECT
+                          q.*,
+                          (
+                            SELECT jsonb_agg(o.* ORDER BY o."order" ASC)
+                            FROM "Options" o
+                            WHERE o.question_id = q.id
+                          ) AS options,
+                          (
+                            SELECT jsonb_agg(ca.*)
+                            FROM "Correct_Answers" ca
+                            WHERE ca.question_id = q.id
+                          ) AS correct_answers,
+                          (
+                            -- Sử dụng jsonb_build_object để lấy ra 1 object thay vì mảng
+                            SELECT jsonb_build_object('id', ex.id, 'content', ex.content)
+                            FROM "Explanations" ex
+                            WHERE ex.question_id = q.id
+                            LIMIT 1
+                          ) AS explanation
+                        FROM "Questions" q
+                        WHERE q.subsection_id = ss.id
+                        ORDER BY q."order" ASC
+                      ) AS questions_agg
+                    ) AS questions
+                  FROM "Subsections" ss
+                  WHERE ss.section_id = s.id
+                  ORDER BY ss."order" ASC
+                ) AS subsections_agg
+              ) AS subsections
+            FROM "Sections" s
+            WHERE s.exam_id = e.id
+            ORDER BY s."order" ASC
+          ) AS sections_agg
+        ) AS sections
+      FROM "Exams" e
+      ${whereClauses}
       ORDER BY e.created_at DESC
+      LIMIT $${queryParams.length + 1}
+      OFFSET $${queryParams.length + 2};
     `;
-
-    // Thêm LIMIT và OFFSET vào câu truy vấn và mảng tham số
-    queryParams.push(limit);
-    selectQuery += ` LIMIT $${queryParams.length}`;
     
-    queryParams.push(offset);
-    selectQuery += ` OFFSET $${queryParams.length}`;
-    
-    const examsResult = await db.query(selectQuery, queryParams);
+    const examsResult = await db.query(selectQuery, [...queryParams, limit, offset]);
 
     return {
       exams: examsResult.rows,
@@ -260,6 +322,326 @@ const examModel = {
     };
   },
 
+  updateFullExam: async (examId, examData, updatedById) => {
+    const client = await db.pool.connect();
+    const promptIdMap = new Map();
+    let finalExamStructure = {};
+
+    try {
+      await client.query('BEGIN');
+
+      // --- Bước 1: Tìm tất cả các ID con cần xóa ---
+      // Lấy tất cả các question_id và prompt_id thuộc về bài thi này.
+      const getChildIdsQuery = `
+        SELECT DISTINCT
+          q.id AS question_id,
+          p.id AS prompt_id
+        FROM "Exams" e
+        JOIN "Sections" s ON e.id = s.exam_id
+        JOIN "Subsections" ss ON s.id = ss.section_id
+        LEFT JOIN "Questions" q ON ss.id = q.subsection_id
+        LEFT JOIN "Prompts" p ON ss.id = p.subsection_id
+        WHERE e.id = $1;
+      `;
+      const childIdsResult = await client.query(getChildIdsQuery, [examId]);
+      
+      const questionIds = childIdsResult.rows
+        .map(row => row.question_id)
+        .filter(Boolean); // Lọc ra các giá trị null (nếu subsection không có question)
+      
+      const promptIds = childIdsResult.rows
+        .map(row => row.prompt_id)
+        .filter(Boolean); // Lọc ra các giá trị null
+
+      // --- Bước 2: Xóa thủ công các bản ghi con có ràng buộc RESTRICT ---
+      // Chỉ thực hiện xóa nếu có question_id để tránh truy vấn thừa
+      if (questionIds.length > 0) {
+        // Xóa các liên kết trong bảng Prompt_Questions trước
+        await client.query(`DELETE FROM "Prompt_Questions" WHERE question_id = ANY($1::uuid[])`, [questionIds]);
+        
+        // Xóa các đáp án của người dùng (rất quan trọng)
+        // Lưu ý: Bảng User_Answers có thể không liên kết trực tiếp với Question, mà qua User_Exam_Attempts.
+        // Giả định User_Answers có question_id trực tiếp. Nếu không, truy vấn này cần phức tạp hơn.
+        await client.query(`DELETE FROM "User_Answers" WHERE question_id = ANY($1::uuid[])`, [questionIds]);
+        
+        // Xóa các đáp án đúng
+        await client.query(`DELETE FROM "Correct_Answers" WHERE question_id = ANY($1::uuid[])`, [questionIds]);
+
+        // Xóa các giải thích
+        await client.query(`DELETE FROM "Explanations" WHERE question_id = ANY($1::uuid[])`, [questionIds]);
+        
+        // Lưu ý: Bảng Options có ON DELETE CASCADE trỏ đến Questions, nên không cần xóa thủ công.
+      }
+      
+      // Xóa các liên kết trong bảng Prompt_Questions từ prompt_id
+      if (promptIds.length > 0) {
+          await client.query(`DELETE FROM "Prompt_Questions" WHERE prompt_id = ANY($1::uuid[])`, [promptIds]);
+      }
+      
+      // --- Bước 3: Bây giờ mới xóa Sections, và để CASCADE lo phần còn lại ---
+      // Sau khi gỡ các ràng buộc RESTRICT, lệnh DELETE CASCADE này sẽ hoạt động
+      // Nó sẽ xóa Sections -> Subsections -> Prompts & Questions -> Options
+      await client.query(`DELETE FROM "Sections" WHERE exam_id = $1`, [examId]);
+
+
+      // --- Bước 4: Cập nhật thông tin chính của Exam ---
+      const examQuery = `
+        UPDATE "Exams"
+        SET 
+          name = $1, description = $2, instructions = $3, total_time_minutes = $4,
+          exam_type_id = $5, exam_level_id = $6, is_published = $7, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $8
+        RETURNING *;
+      `;
+      const examResult = await client.query(examQuery, [
+        examData.name, examData.description, examData.instructions, examData.total_time_minutes,
+        examData.exam_type_id, examData.exam_level_id, examData.is_published || false, examId
+      ]);
+
+      if (examResult.rowCount === 0) {
+        throw new Error('Bài thi không tồn tại.');
+      }
+      const updatedExam = examResult.rows[0];
+      finalExamStructure = { ...updatedExam, sections: [] };
+
+      // --- Bước 5: Tạo lại toàn bộ cấu trúc mới (logic giống hệt hàm createFullExam) ---
+      for (const [sectionIndex, section] of examData.sections.entries()) {
+        const sectionQuery = `INSERT INTO "Sections" (exam_id, name, description, time_minutes, "order") VALUES ($1, $2, $3, $4, $5) RETURNING *;`;
+        const sectionResult = await client.query(sectionQuery, [examId, section.name, section.description, section.time_minutes, sectionIndex]);
+        const newSection = sectionResult.rows[0];
+        finalExamStructure.sections.push({ ...newSection, subsections: [] });
+
+        for (const [subsectionIndex, subsection] of section.subsections.entries()) {
+          const subsectionQuery = `INSERT INTO "Subsections" (section_id, name, description, audio_url, "order") VALUES ($1, $2, $3, $4, $5) RETURNING *;`;
+          const subsectionResult = await client.query(subsectionQuery, [newSection.id, subsection.name, subsection.description, subsection.audio_url, subsectionIndex]);
+          const newSubsection = subsectionResult.rows[0];
+          finalExamStructure.sections[sectionIndex].subsections.push({ ...newSubsection, prompts: [], questions: [] });
+
+          if (subsection.prompts && subsection.prompts.length > 0) {
+            for (const [promptIndex, prompt] of subsection.prompts.entries()) {
+              const promptQuery = `INSERT INTO "Prompts" (subsection_id, content, image, audio_url, "order") VALUES ($1, $2, $3, $4, $5) RETURNING *;`;
+              const promptResult = await client.query(promptQuery, [newSubsection.id, prompt.content, prompt.image_url || null, prompt.audio_url, promptIndex]);
+              const newPrompt = promptResult.rows[0];
+              promptIdMap.set(prompt.id, newPrompt.id);
+              finalExamStructure.sections[sectionIndex].subsections[subsectionIndex].prompts.push(newPrompt);
+            }
+          }
+          
+          for (const [questionIndex, question] of subsection.questions.entries()) {
+            const questionQuery = `INSERT INTO "Questions" (subsection_id, question_type_id, content, points, image_url, audio_url, "order", correct_answer) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;`;
+            const questionResult = await client.query(questionQuery, [newSubsection.id, question.question_type_id, question.content, question.points, question.image_url, question.audio_url, questionIndex, question.correct_answer]);
+            const newQuestion = questionResult.rows[0];
+            const newQuestionStructure = { ...newQuestion, options: [], explanation: null, correct_answers: [] };
+            
+            if (question.prompt_id) {
+              const newPromptId = promptIdMap.get(question.prompt_id);
+              if (newPromptId) {
+                await client.query(`INSERT INTO "Prompt_Questions" (prompt_id, question_id) VALUES ($1, $2);`, [newPromptId, newQuestion.id]);
+                newQuestionStructure.prompt_id = newPromptId;
+              }
+            }
+            if (question.options && question.options.length > 0) {
+                for (const [optionIndex, option] of question.options.entries()) {
+                    const optionQuery = `INSERT INTO "Options" (question_id, label, content, is_correct, image_url, "order") VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;`;
+                    const optionResult = await client.query(optionQuery, [newQuestion.id, option.label, option.content, option.is_correct, option.image_url, optionIndex]);
+                    newQuestionStructure.options.push(optionResult.rows[0]);
+                }
+            }
+            if (question.explanation && question.explanation.content) {
+              const explanationQuery = `INSERT INTO "Explanations" (question_id, content) VALUES ($1, $2) RETURNING *;`;
+              const explanationResult = await client.query(explanationQuery, [newQuestion.id, question.explanation.content]);
+              newQuestionStructure.explanation = explanationResult.rows[0];
+            }
+            if (question.correct_answers && question.correct_answers.length > 0) {
+                for (const answer of question.correct_answers) {
+                    const answerQuery = `INSERT INTO "Correct_Answers" (question_id, answer) VALUES ($1, $2) RETURNING *;`;
+                    const answerResult = await client.query(answerQuery, [newQuestion.id, answer.answer]);
+                    newQuestionStructure.correct_answers.push(answerResult.rows[0]);
+                }
+            }
+            finalExamStructure.sections[sectionIndex].subsections[subsectionIndex].questions.push(newQuestionStructure);
+          }
+        }
+      }
+
+      await client.query('COMMIT');
+      return finalExamStructure;
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Lỗi trong transaction cập nhật bài thi:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  ////////user///////
+  findPublishedExams: async (filters) => {
+    const { limit, offset, search, examTypeId, examLevelId } = filters;
+    
+    const queryParams = [];
+    // Điều kiện cứng: Chỉ lấy bài thi đã công bố và chưa bị xóa
+    let whereClauses = 'WHERE e.is_published = true AND e.is_deleted = false'; 
+
+    // Xây dựng các điều kiện lọc động
+    if (search) {
+      queryParams.push(`%${search}%`);
+      whereClauses += ` AND e.name ILIKE $${queryParams.length}`;
+    }
+    if (examTypeId) {
+      queryParams.push(examTypeId);
+      whereClauses += ` AND e.exam_type_id = $${queryParams.length}`;
+    }
+    if (examLevelId) {
+      queryParams.push(examLevelId);
+      whereClauses += ` AND e.exam_level_id = $${queryParams.length}`;
+    }
+    
+    // --- Truy vấn 1: Đếm tổng số bài thi khớp điều kiện ---
+    const countQuery = `SELECT COUNT(*) FROM "Exams" e ${whereClauses}`;
+    const totalResult = await db.query(countQuery, queryParams);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+    
+    // --- Truy vấn 2: Lấy dữ liệu cơ bản, có phân trang ---
+    // Chỉ SELECT các cột cần thiết, không lấy toàn bộ cấu trúc
+    const selectQuery = `
+      SELECT 
+        e.id,
+        e.name,
+        e.description,
+        e.total_time_minutes,
+        e.total_questions,
+        e.exam_type_id,
+        et.name as exam_type_name,
+        e.exam_level_id,
+        el.name as exam_level_name
+      FROM "Exams" e
+      JOIN "Exam_Types" et ON e.exam_type_id = et.id
+      JOIN "Exam_Levels" el ON e.exam_level_id = el.id
+      ${whereClauses}
+      ORDER BY e.created_at DESC
+      LIMIT $${queryParams.length + 1}
+      OFFSET $${queryParams.length + 2};
+    `;
+    
+    const examsResult = await db.query(selectQuery, [...queryParams, limit, offset]);
+
+    return {
+      exams: examsResult.rows,
+      totalItems,
+    };
+  },
+
+  findDetailsById: async (id) => {
+    const queryText = `
+      SELECT
+        e.id, e.name, e.description, e.instructions, e.total_time_minutes, e.total_questions,
+        (
+          SELECT jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name, 'order', s."order") ORDER BY s."order" ASC)
+          FROM "Sections" s
+          WHERE s.exam_id = e.id
+        ) as sections
+      FROM "Exams" e
+      WHERE e.id = $1 AND e.is_published = true AND e.is_deleted = false;
+    `;
+    const result = await db.query(queryText, [id]);
+    return result.rows[0];
+  },
+
+  findFullStructureForAttempt: async (id) => {
+    // Tái sử dụng và sửa đổi hàm findById
+    // BỎ các trường đáp án: correct_answer, is_correct, explanation
+    const queryText = `
+      SELECT
+        e.id, e.name, e.description, e.instructions, e.total_time_minutes, e.total_questions,
+        (
+          SELECT jsonb_agg(sections_agg ORDER BY sections_agg."order" ASC)
+          FROM (
+            SELECT
+              s.id, s.name, s.description, s.time_minutes, s."order",
+              (
+                SELECT jsonb_agg(subsections_agg ORDER BY subsections_agg."order" ASC)
+                FROM (
+                  SELECT
+                    ss.id, ss.name, ss.description, ss.audio_url, ss."order",
+                    (
+                      SELECT jsonb_agg(p.* ORDER BY p."order" ASC) FROM "Prompts" p WHERE p.subsection_id = ss.id
+                    ) AS prompts,
+                    (
+                      SELECT jsonb_agg(questions_agg ORDER BY questions_agg."order" ASC)
+                      FROM (
+                        SELECT
+                          q.id, q.subsection_id, q.content, q.points, q.image_url, q.audio_url, q."order",
+                          (SELECT pq.prompt_id FROM "Prompt_Questions" pq WHERE pq.question_id = q.id LIMIT 1) as prompt_id,
+                          (
+                            SELECT jsonb_agg(jsonb_build_object('id', o.id, 'label', o.label, 'content', o.content, 'image_url', o.image_url) ORDER BY o."order" ASC)
+                            FROM "Options" o
+                            WHERE o.question_id = q.id
+                          ) AS options
+                        FROM "Questions" q
+                        WHERE q.subsection_id = ss.id
+                      ) AS questions_agg
+                    ) AS questions
+                  FROM "Subsections" ss
+                  WHERE ss.section_id = s.id
+                ) AS subsections_agg
+              ) AS subsections
+            FROM "Sections" s
+            WHERE s.exam_id = e.id
+          ) AS sections_agg
+        ) AS sections
+      FROM "Exams" e
+      WHERE e.id = $1 AND e.is_published = true AND e.is_deleted = false
+      GROUP BY e.id;
+    `;
+    const result = await db.query(queryText, [id]);
+    return result.rows[0];
+  },
+
+  findAllQuestionIdsByExamId: async (examId) => {
+    const queryText = `
+      SELECT q.id
+      FROM "Questions" q
+      JOIN "Subsections" ss ON q.subsection_id = ss.id
+      JOIN "Sections" s ON ss.section_id = s.id
+      WHERE s.exam_id = $1;
+    `;
+    const result = await db.query(queryText, [examId]);
+    // .map(row => row.id) để chuyển từ [{id: '...'}, {id: '...'}] thành ['...', '...']
+    return result.rows.map(row => row.id);
+  },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+    findExamById: async (examId) => {
+    const queryText = `SELECT * FROM "Exams" WHERE id = $1 AND is_deleted = false;`;
+    const result = await db.query(queryText, [examId]);
+    return result.rows[0];
+  },
   updateCompleteExam: async (examId, examData, updatedByUserId) => {
     const client = await db.pool.connect();
     const idMap = new Map();
@@ -498,39 +880,7 @@ const examModel = {
       return result.rows[0];
   },
 
-  findAllComponentsByExamId: async (examId) => {
-    // Sử dụng Promise.all để chạy tất cả các truy vấn con song song
-    const [
-      sectionsRes,
-      subsectionsRes,
-      promptsRes,
-      questionsRes,
-      optionsRes,
-      explanationsRes,
-      correctAnswersRes,
-      promptQuestionsRes
-    ] = await Promise.all([
-      db.query(`SELECT * FROM "Sections" WHERE exam_id = $1 AND is_deleted = false ORDER BY "order" ASC`, [examId]),
-      db.query(`SELECT ss.* FROM "Subsections" ss JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1 AND ss.is_deleted = false ORDER BY ss."order" ASC`, [examId]),
-      db.query(`SELECT p.* FROM "Prompts" p JOIN "Subsections" ss ON p.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1 AND p.is_deleted = false ORDER BY p."order" ASC`, [examId]),
-      db.query(`SELECT q.* FROM "Questions" q JOIN "Subsections" ss ON q.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1 AND q.is_deleted = false ORDER BY q."order" ASC`, [examId]),
-      db.query(`SELECT o.* FROM "Options" o JOIN "Questions" q ON o.question_id = q.id JOIN "Subsections" ss ON q.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1 AND o.is_deleted = false ORDER BY o."order" ASC`, [examId]),
-      db.query(`SELECT e.* FROM "Explanations" e JOIN "Questions" q ON e.question_id = q.id JOIN "Subsections" ss ON q.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1 AND e.is_deleted = false`, [examId]),
-      db.query(`SELECT ca.* FROM "Correct_Answers" ca JOIN "Questions" q ON ca.question_id = q.id JOIN "Subsections" ss ON q.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1`, [examId]),
-      db.query(`SELECT pq.* FROM "Prompt_Questions" pq JOIN "Prompts" p ON pq.prompt_id = p.id JOIN "Subsections" ss ON p.subsection_id = ss.id JOIN "Sections" s ON ss.section_id = s.id WHERE s.exam_id = $1`, [examId]),
-    ]);
-
-    return {
-      sections: sectionsRes.rows,
-      subsections: subsectionsRes.rows,
-      prompts: promptsRes.rows,
-      questions: questionsRes.rows,
-      options: optionsRes.rows,
-      explanations: explanationsRes.rows,
-      correctAnswers: correctAnswersRes.rows,
-      promptQuestions: promptQuestionsRes.rows
-    };
-  },
+  
 
   getCompleteExamById: async (examId, includeAnswers = true) => {
     // 1. Lấy thông tin cơ bản của bài thi

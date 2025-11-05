@@ -21,4 +21,5 @@ router.put(`/admin/exams/question-types/:id`, [authMiddleware.verifyToken, authM
 // DELETE /api/admin/exams/question-types/:id
 router.delete(`/admin/exams/question-types/:id`, [authMiddleware.verifyToken, authMiddleware.isAdmin], questionTypeController.deleteQuestionTypeAdmin);
 
+
 module.exports = router;
