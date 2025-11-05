@@ -9,14 +9,14 @@ const authMiddleware = require('../middlewares/authMiddleware');
 router.get(
   '/exams',
   authMiddleware.verifyToken,
-  examController.getPublishedExams
+  examController.getPublishedExamsForUser
 );
 
 // Lấy thông tin chi tiết (không có câu hỏi) của một bài thi
 router.get(
   '/exams/:id/details',
-  authMiddleware.verifyToken,
-  examController.getExamPublicDetails
+  authMiddleware.verifyToken, // Yêu cầu đăng nhập để xem chi tiết và lịch sử
+  examController.getExamDetailsForUser
 );
 
 // Lấy toàn bộ nội dung bài thi để bắt đầu làm
@@ -38,25 +38,25 @@ router.get(
 router.post(
   '/admin/exams',
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
-  examController.createExamAdmin
+  examController.createFullExamAdmin
 );
 
 router.get(
   '/admin/exams',
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
-  examController.getExamsAdmin
+  examController.getAllExamsAdmin
 );
 
 router.get(
   '/admin/exams/:id',
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
-  examController.getExamDetailsAdmin
+  examController.getExamByIdAdmin
 );
 
 router.put(
   '/admin/exams/:id',
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
-  examController.updateExamAdmin
+  examController.updateFullExamAdmin
 );
 
 router.delete(

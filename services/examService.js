@@ -1,17 +1,188 @@
 // file: services/examService.js
 
 const examModel = require('../models/examModel');
+const attemptModel = require('../models/attemptModel');
+
 const { v4: uuidv4 } = require('uuid'); 
 
 const examService = {
-  createExam: async (payload, userId) => {
-    // Service có thể thực hiện validation ở đây
-    // Ví dụ: kiểm tra xem exam_type_id và exam_level_id có tồn tại không.
-    // (Để đơn giản, ví dụ này bỏ qua bước đó)
-    
-    const newExam = await examModel.createCompleteExam(payload, userId);
+  createFullExam: async (examData, userId) => {
+    // Service này có thể thêm các logic validation phức tạp trước khi gọi model
+    // Ví dụ: kiểm tra xem exam_type_id có tồn tại không, v.v.
+    // Hiện tại, chúng ta chỉ cần truyền dữ liệu xuống.
+    const newExam = await examModel.createFullExam(examData, userId);
     return newExam;
   },
+
+  getExamById: async (id) => {
+    const exam = await examModel.findById(id);
+    if (!exam) {
+      throw new Error('Bài thi không tồn tại.');
+    }
+    return exam;
+  },
+  
+  getPaginatedExams: async (filters) => {
+    const { page, limit } = filters;
+    const offset = (page - 1) * limit;
+
+    // Sử dụng toán tử spread (...) để truyền TẤT CẢ các bộ lọc xuống model,
+    // đồng thời thêm/ghi đè thuộc tính `offset` đã được tính toán.
+    const { exams, totalItems } = await examModel.findAllPaginated({
+      ...filters,
+      offset,
+    });
+    
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: exams,
+      meta: {
+        page,
+        limit,
+        total: totalItems,
+        totalPages,
+      }
+    };
+  },
+
+  updateFullExam: async (examId, examData, userId) => {
+    // Logic được xử lý hoàn toàn trong model bằng transaction
+    // Service có thể kiểm tra xem examId có tồn tại không trước nếu muốn
+    const updatedExam = await examModel.updateFullExam(examId, examData, userId);
+    if (!updatedExam) {
+        throw new Error('Bài thi không tồn tại.');
+    }
+    return updatedExam;
+  },
+
+  duplicateExam: async (examIdToCopy, userId) => {
+    // --- Bước 1: Đọc toàn bộ cấu trúc của bài thi gốc ---
+    // Tái sử dụng hàm findById đã viết, nó trả về đúng cấu trúc JSON chúng ta cần
+    const originalExam = await examModel.findById(examIdToCopy);
+
+    if (!originalExam) {
+      throw new Error('Bài thi gốc không tồn tại.');
+    }
+
+    // --- Bước 2: Chuẩn bị dữ liệu cho bài thi mới ---
+    const newExamData = { ...originalExam };
+
+    // Chỉnh sửa các thông tin cần thiết
+    newExamData.name = `${originalExam.name} (Bản sao)`;
+    newExamData.is_published = false; // Mặc định bản sao là bản nháp
+
+    // Xóa các ID và timestamp cũ để database tự tạo mới
+    delete newExamData.id;
+    delete newExamData.created_at;
+    delete newExamData.updated_at;
+
+    // Cần xóa ID của tất cả các thành phần con để chúng được tạo mới
+    // Hàm này sẽ đệ quy qua toàn bộ cấu trúc
+    const cleanIds = (obj) => {
+      if (Array.isArray(obj)) {
+        obj.forEach(cleanIds);
+      } else if (obj && typeof obj === 'object') {
+        // Giữ lại ID của prompt để mapping, nhưng xóa ID của các thực thể khác
+        if (!obj.hasOwnProperty('content')) { // Giả định prompt luôn có 'content'
+             delete obj.id;
+        }
+        delete obj.created_at;
+        delete obj.updated_at;
+        // Các trường khóa ngoại trỏ đến ID cha cũng sẽ được tạo lại, không cần xóa
+        // Ví dụ: section_id, subsection_id, question_id...
+
+        Object.values(obj).forEach(cleanIds);
+      }
+    };
+    
+    // Tạo ID tạm thời mới cho các prompt để logic mapping trong createFullExam hoạt động
+    const remapPromptIds = (sections) => {
+        if (!sections) return;
+        sections.forEach(section => {
+            if (!section.subsections) return;
+            section.subsections.forEach(subsection => {
+                const oldToNewPromptIdMap = new Map();
+                if (subsection.prompts) {
+                    subsection.prompts.forEach(prompt => {
+                        const oldId = prompt.id;
+                        const newTempId = `temp_prompt_${Date.now()}_${Math.random()}`;
+                        prompt.id = newTempId;
+                        oldToNewPromptIdMap.set(oldId, newTempId);
+                    });
+                }
+                if (subsection.questions) {
+                    subsection.questions.forEach(question => {
+                        if (question.prompt_id && oldToNewPromptIdMap.has(question.prompt_id)) {
+                            question.prompt_id = oldToNewPromptIdMap.get(question.prompt_id);
+                        }
+                    });
+                }
+            });
+        });
+    };
+
+    remapPromptIds(newExamData.sections);
+    cleanIds(newExamData.sections);
+    
+    // --- Bước 3: Tạo bài thi mới từ dữ liệu đã chuẩn bị ---
+    // Tái sử dụng hàm createFullExam một cách hoàn hảo
+    const duplicatedExam = await examModel.createFullExam(newExamData, userId);
+
+    return duplicatedExam;
+  },
+
+  /////////////user
+  getPublishedExams: async (filters) => {
+    const { page, limit } = filters;
+    const offset = (page - 1) * limit;
+
+    const { exams, totalItems } = await examModel.findPublishedExams({
+      ...filters,
+      limit,
+      offset,
+    });
+    
+    const totalPages = Math.ceil(totalItems / limit);
+    
+    return {
+      data: exams,
+      meta: {
+        page,
+        limit,
+        total: totalItems,
+        totalPages,
+      }
+    };
+  },
+
+  getExamDetails: async (examId, userId) => {
+    // Chạy song song để tăng hiệu suất
+    const [examInfo, userHistory] = await Promise.all([
+      examModel.findDetailsById(examId),
+      attemptModel.findHistoryByExamAndUser(examId, userId)
+    ]);
+
+    if (!examInfo) {
+      throw new Error('Bài thi không tồn tại hoặc chưa được công bố.');
+    }
+    return { ...examInfo, userHistory };
+  },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   getCompleteExamById: async (examId) => {
     // 1. Lấy thông tin cơ bản của bài thi
@@ -113,29 +284,6 @@ const examService = {
     return exam;
   },
 
-  getPaginatedExams: async (filters) => {
-    const { page, limit } = filters;
-    const offset = (page - 1) * limit;
-
-    // Sử dụng toán tử spread (...) để truyền TẤT CẢ các bộ lọc xuống model,
-    // đồng thời thêm/ghi đè thuộc tính `offset` đã được tính toán.
-    const { exams, totalItems } = await examModel.findAllPaginated({
-      ...filters,
-      offset,
-    });
-    
-    const totalPages = Math.ceil(totalItems / limit);
-
-    return {
-      data: exams,
-      meta: {
-        page,
-        limit,
-        total: totalItems,
-        totalPages,
-      }
-    };
-  },
 
   updateExam: async (examId, payload, userId) => {
     // Logic cập nhật sẽ được xử lý hoàn toàn trong model bằng transaction
@@ -158,85 +306,97 @@ const examService = {
     }
   },
 
-  duplicateExam: async (examIdToCopy, newName, userId) => {
-    // 1. Lấy toàn bộ dữ liệu của bài thi gốc
-    const originalExam = await examService.getCompleteExamById(examIdToCopy);
-    if (!originalExam) {
-      throw new Error('Bài thi gốc không tồn tại.');
-    }
+  // duplicateExam: async (examIdToCopy, newName, userId) => {
+  //   // 1. Lấy toàn bộ dữ liệu của bài thi gốc
+  //   const originalExam = await examService.getCompleteExamById(examIdToCopy);
+  //   if (!originalExam) {
+  //     throw new Error('Bài thi gốc không tồn tại.');
+  //   }
 
-    // 2. Chuẩn bị payload mới để tạo bài thi sao chép
+  //   // 2. Chuẩn bị payload mới để tạo bài thi sao chép
     
-    // Tạo một hàm đệ quy để xóa các ID cũ và tạo ID mới cho tất cả các cấp
-    const preparePayload = (data) => {
-        // Ánh xạ ID cũ -> ID mới
-        const idMap = new Map();
+  //   // Tạo một hàm đệ quy để xóa các ID cũ và tạo ID mới cho tất cả các cấp
+  //   const preparePayload = (data) => {
+  //       // Ánh xạ ID cũ -> ID mới
+  //       const idMap = new Map();
 
-        const generateNewIds = (obj) => {
-            if (obj && typeof obj === 'object') {
-                if (obj.id) {
-                    const oldId = obj.id;
-                    const newId = uuidv4();
-                    obj.id = newId;
-                    idMap.set(oldId, newId);
-                }
+  //       const generateNewIds = (obj) => {
+  //           if (obj && typeof obj === 'object') {
+  //               if (obj.id) {
+  //                   const oldId = obj.id;
+  //                   const newId = uuidv4();
+  //                   obj.id = newId;
+  //                   idMap.set(oldId, newId);
+  //               }
 
-                // Xử lý các khóa ngoại
-                if (obj.section_id) obj.section_id = idMap.get(obj.section_id);
-                if (obj.subsection_id) obj.subsection_id = idMap.get(obj.subsection_id);
-                if (obj.question_id) obj.question_id = idMap.get(obj.question_id);
-                if (obj.prompt_id) obj.prompt_id = idMap.get(obj.prompt_id);
-
-
-                // Lặp qua tất cả các khóa của object
-                for (const key in obj) {
-                    if (Array.isArray(obj[key])) {
-                        // Nếu là mảng, lặp qua các phần tử
-                        obj[key].forEach(item => generateNewIds(item));
-                    } else if (obj[key] && typeof obj[key] === 'object') {
-                        // Nếu là object, gọi đệ quy
-                        generateNewIds(obj[key]);
-                    }
-                }
-            }
-        };
-
-        generateNewIds(data);
-        return data;
-    }
-
-    // Xóa các thông tin không cần thiết và cập nhật thông tin mới
-    delete originalExam.id;
-    delete originalExam.created_at;
-    delete originalExam.updated_at;
-    delete originalExam.created_by; // Sẽ được gán lại bởi hàm create
-    originalExam.name = newName;
-    originalExam.is_published = false; // Bản sao chép mặc định là bản nháp
-
-    const newPayload = preparePayload(originalExam);
+  //               // Xử lý các khóa ngoại
+  //               if (obj.section_id) obj.section_id = idMap.get(obj.section_id);
+  //               if (obj.subsection_id) obj.subsection_id = idMap.get(obj.subsection_id);
+  //               if (obj.question_id) obj.question_id = idMap.get(obj.question_id);
+  //               if (obj.prompt_id) obj.prompt_id = idMap.get(obj.prompt_id);
 
 
-    // 3. Gọi hàm tạo bài thi mới với payload đã được chuẩn bị
-    // Hàm createExam sẽ sử dụng model `createCompleteExam` để tạo trong một transaction
-    const newExam = await examService.createExam(newPayload, userId);
+  //               // Lặp qua tất cả các khóa của object
+  //               for (const key in obj) {
+  //                   if (Array.isArray(obj[key])) {
+  //                       // Nếu là mảng, lặp qua các phần tử
+  //                       obj[key].forEach(item => generateNewIds(item));
+  //                   } else if (obj[key] && typeof obj[key] === 'object') {
+  //                       // Nếu là object, gọi đệ quy
+  //                       generateNewIds(obj[key]);
+  //                   }
+  //               }
+  //           }
+  //       };
 
-    return newExam;
-  },
+  //       generateNewIds(data);
+  //       return data;
+  //   }
+
+  //   // Xóa các thông tin không cần thiết và cập nhật thông tin mới
+  //   delete originalExam.id;
+  //   delete originalExam.created_at;
+  //   delete originalExam.updated_at;
+  //   delete originalExam.created_by; // Sẽ được gán lại bởi hàm create
+  //   originalExam.name = newName;
+  //   originalExam.is_published = false; // Bản sao chép mặc định là bản nháp
+
+  //   const newPayload = preparePayload(originalExam);
+
+
+  //   // 3. Gọi hàm tạo bài thi mới với payload đã được chuẩn bị
+  //   // Hàm createExam sẽ sử dụng model `createCompleteExam` để tạo trong một transaction
+  //   const newExam = await examService.createExam(newPayload, userId);
+
+  //   return newExam;
+  // },
 
 
 
 
-    getPaginatedExams: async (filters) => {
-        // ... (Hàm này đã có, chỉ cần đảm bảo nó có thể nhận `is_published`)
-        const { page, limit } = filters;
-        const offset = (page - 1) * limit;
+  // getPaginatedExams: async (filters) => {
+  //   const { page, limit } = filters;
+  //   const offset = (page - 1) * limit;
 
-        const { exams, totalItems } = await examModel.findAllPaginated({ ...filters, offset });
-        
-        const totalPages = Math.ceil(totalItems / limit);
+  //   const { exams, totalItems } = await examModel.findAllPaginated({
+  //     ...filters,
+  //     limit,
+  //     offset,
+  //   });
+    
+  //   const totalPages = Math.ceil(totalItems / limit);
+    
+  //   return {
+  //     data: exams,
+  //     meta: {
+  //       page,
+  //       limit,
+  //       total: totalItems,
+  //       totalPages,
+  //     }
+  //   };
+  // },
 
-        return { data: exams, meta: { page, limit, total: totalItems, totalPages } };
-    },
 
     getPublicDetailsById: async (examId) => {
         const details = await examModel.findPublicDetailsById(examId);
@@ -246,145 +406,7 @@ const examService = {
         return details;
     },
     
-    // Sửa đổi hàm này để có tùy chọn không lấy đáp án
-  getCompleteExamById: async (examId, includeAnswers = true) => {
-    // 1. Lấy thông tin cơ bản của bài thi
-    const exam = await examModel.findExamById(examId);
-    if (!exam) {
-      throw new Error('Bài thi không tồn tại.');
-    }
-
-    // 2. Lấy tất cả các thành phần con của bài thi
-    const components = await examModel.findAllComponentsByExamId(examId);
-    const { sections, subsections, prompts, questions, options, explanations, correctAnswers, promptQuestions } = components;
-    
-    // 3. Tái cấu trúc dữ liệu (phiên bản an toàn)
-
-    const questionsMap = new Map();
-    if (Array.isArray(questions)) {
-      for (const q of questions) {
-        q.options = [];
-        q.correct_answers = [];
-        q.explanation = null;
-        questionsMap.set(q.id, q);
-      }
-    }
-
-    if (Array.isArray(options)) {
-      for (const opt of options) {
-        if (questionsMap.has(opt.question_id)) {
-          questionsMap.get(opt.question_id).options.push(opt);
-        }
-      }
-    }
-
-    if (Array.isArray(explanations)) {
-      for (const exp of explanations) {
-        if (questionsMap.has(exp.question_id)) {
-          questionsMap.get(exp.question_id).explanation = exp;
-        }
-      }
-    }
-    
-    if (Array.isArray(correctAnswers)) {
-      for (const ca of correctAnswers) {
-        if (questionsMap.has(ca.question_id)) {
-          questionsMap.get(ca.question_id).correct_answers.push(ca);
-        }
-      }
-    }
-
-    const promptsMap = new Map();
-    if (Array.isArray(prompts)) {
-      for (const p of prompts) {
-        p.questions = [];
-        promptsMap.set(p.id, p);
-      }
-    }
-    
-    const promptQuestionLinks = new Map();
-    if (Array.isArray(promptQuestions)) {
-      for(const pq of promptQuestions) {
-        if (!promptQuestionLinks.has(pq.prompt_id)) {
-          promptQuestionLinks.set(pq.prompt_id, []);
-        }
-        promptQuestionLinks.get(pq.prompt_id).push(pq.question_id);
-      }
-    }
-
-    const subsectionsMap = new Map();
-    if (Array.isArray(subsections)) {
-      for (const sub of subsections) {
-        sub.prompts = [];
-        sub.questions = [];
-        subsectionsMap.set(sub.id, sub);
-      }
-    }
-    
-    for (const [questionId, question] of questionsMap.entries()) {
-      const promptId = [...promptQuestionLinks.entries()].find(([key, val]) => val.includes(questionId))?.[0];
-      if (promptId && promptsMap.has(promptId)) {
-        // Câu hỏi này thuộc về một prompt, sẽ được xử lý ở bước sau
-      } else if (subsectionsMap.has(question.subsection_id)) {
-        const subsection = subsectionsMap.get(question.subsection_id);
-        if (subsection) {
-            subsection.questions.push(question);
-        }
-      }
-    }
-
-    for (const [promptId, questionIds] of promptQuestionLinks.entries()) {
-      if(promptsMap.has(promptId)){
-        const prompt = promptsMap.get(promptId);
-        if (prompt) {
-            for(const qid of questionIds) {
-                if(questionsMap.has(qid)){
-                    prompt.questions.push(questionsMap.get(qid));
-                }
-            }
-            if (subsectionsMap.has(prompt.subsection_id)) {
-              const subsection = subsectionsMap.get(prompt.subsection_id);
-              if (subsection) {
-                  subsection.prompts.push(prompt);
-              }
-            }
-        }
-      }
-    }
-
-    const sectionsMap = new Map();
-    if (Array.isArray(sections)) {
-      for (const sec of sections) {
-        sec.subsections = [];
-        sectionsMap.set(sec.id, sec);
-      }
-
-      for (const [subId, sub] of subsectionsMap.entries()) {
-        if (sectionsMap.has(sub.section_id)) {
-          const section = sectionsMap.get(sub.section_id);
-          if (section) {
-              section.subsections.push(sub);
-          }
-        }
-      }
-    }
-
-    // Gán kết quả cuối cùng
-    exam.sections = Array.isArray(sections) ? sections : [];
-
-    // 4. Lọc bỏ đáp án nếu không được yêu cầu (sau khi đã tái cấu trúc xong)
-    if (!includeAnswers) {
-      questionsMap.forEach(q => {
-        delete q.correct_answers;
-        delete q.explanation;
-        if (Array.isArray(q.options)) {
-          q.options.forEach(opt => delete opt.is_correct);
-        }
-      });
-    }
-    
-    return exam;
-  },     
+  
   
   getLeaderboardForExam: async (examId) => {
     // 1. Kiểm tra xem bài thi có tồn tại không

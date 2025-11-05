@@ -3,36 +3,180 @@
 const examService = require('../services/examService');
 
 const examController = {
-  createExamAdmin: async (req, res) => {
-    const payload = req.body;
-    const userId = req.user.id; // Lấy từ token đã xác thực
+
+  ////////admin///////////////
+  createFullExamAdmin: async (req, res) => {
+    const examData = req.body;
+    const userId = req.user.id; // Lấy từ authMiddleware
 
     try {
-      if (!payload.name || !payload.exam_type_id || !payload.exam_level_id) {
+      // Validation cơ bản
+      if (!examData.name || !examData.exam_type_id || !examData.sections) {
         return res.status(400).json({
           success: false,
-          message: "Các trường 'name', 'exam_type_id', 'exam_level_id' là bắt buộc."
+          message: "Thiếu thông tin bắt buộc: name, exam_type_id, hoặc sections."
         });
       }
 
-      const newExam = await examService.createExam(payload, userId);
+      const newExam = await examService.createFullExam(examData, userId);
 
       res.status(201).json({
         success: true,
-        message: 'Tạo bài thi thành công.',
-        data: { id: newExam.id } // Chỉ trả về ID của bài thi mới
+        message: 'Tạo bài thi hoàn chỉnh thành công.',
+        data: newExam
       });
 
     } catch (error) {
-       if (error.code === '23503') { // Foreign key constraint
-        return res.status(404).json({ success: false, message: `Lỗi ràng buộc khóa ngoại: ${error.detail}` });
-      }
-       if (error.code === '23505') { // Unique constraint
-        return res.status(409).json({ success: false, message: `Lỗi trùng lặp: ${error.detail}` });
-      }
-      res.status(500).json({ success: false, message: 'Lỗi khi tạo bài thi', error: error.message });
+      res.status(500).json({ success: false, message: 'Lỗi máy chủ khi tạo bài thi', error: error.message });
     }
   },
+
+  getExamByIdAdmin: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const exam = await examService.getExamById(id);
+
+      res.status(200).json({
+        success: true,
+        message: 'Lấy chi tiết bài thi thành công.',
+        data: exam
+      });
+      
+    } catch (error) {
+      if (error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy chi tiết bài thi', error: error.message });
+    }
+  },
+
+  getAllExamsAdmin: async (req, res) => {
+    try {
+      const filters = {
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+        search: req.query.search || '',
+        examTypeId: req.query.examTypeId || '',
+        examLevelId: req.query.examLevelId || '',
+        is_published: req.query.is_published, // Sẽ là 'true', 'false', hoặc undefined
+      };
+
+      const result = await examService.getPaginatedExams(filters);
+      
+      res.status(200).json({
+        success: true,
+        message: 'Lấy danh sách bài thi thành công.',
+        data: result.data,
+        meta: result.meta
+      });
+
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách bài thi', error: error.message });
+    }
+  },
+
+  updateFullExamAdmin: async (req, res) => {
+    const { id } = req.params;
+    const examData = req.body;
+    const userId = req.user.id; // Người thực hiện cập nhật
+
+    try {
+      if (!examData.name || !examData.exam_type_id || !examData.sections) {
+        return res.status(400).json({
+          success: false,
+          message: "Thiếu thông tin bắt buộc: name, exam_type_id, hoặc sections."
+        });
+      }
+
+      const updatedExam = await examService.updateFullExam(id, examData, userId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Cập nhật bài thi hoàn chỉnh thành công.',
+        data: updatedExam
+      });
+
+    } catch (error) {
+       if (error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi máy chủ khi cập nhật bài thi', error: error.message });
+    }
+  },
+
+  duplicateExamAdmin: async (req, res) => {
+    try {
+      const { examIdToCopy } = req.params;
+      const userId = req.user.id; // Người thực hiện hành động sao chép
+
+      const duplicatedExam = await examService.duplicateExam(examIdToCopy, userId);
+
+      res.status(201).json({
+        success: true,
+        message: 'Sao chép bài thi thành công.',
+        data: duplicatedExam
+      });
+
+    } catch (error) {
+      if (error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi sao chép bài thi', error: error.message });
+    }
+  },
+
+  ////////////////user////////////
+  getPublishedExamsForUser: async (req, res) => {
+    try {
+      const filters = {
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+        search: req.query.search || '',
+        examTypeId: req.query.examTypeId || '',
+        examLevelId: req.query.examLevelId || '',
+      };
+
+      const result = await examService.getPublishedExams(filters);
+      
+      res.status(200).json({
+        success: true,
+        message: 'Lấy danh sách bài thi thành công.',
+        data: result.data,
+        meta: result.meta
+      });
+
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách bài thi', error: error.message });
+    }
+  },
+
+  getExamDetailsForUser: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id; // Lấy từ token
+      const examDetails = await examService.getExamDetails(id, userId);
+      res.status(200).json({ success: true, message: 'Lấy chi tiết bài thi thành công.', data: examDetails });
+    } catch (error) {
+      if (error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy chi tiết bài thi', error: error.message });
+    }
+  },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   getExamDetailsAdmin: async (req, res) => {
     try {
@@ -53,31 +197,7 @@ const examController = {
     }
   },
 
-  getExamsAdmin: async (req, res) => {
-    try {
-      // Thu thập tất cả các tham số lọc từ query string
-      const filters = {
-        page: parseInt(req.query.page, 10) || 1,
-        limit: parseInt(req.query.limit, 10) || 10,
-        search: req.query.search || '',
-        examTypeId: req.query.examTypeId || '',
-        examLevelId: req.query.examLevelId || '',
-        is_deleted: req.query.is_deleted, // Sẽ là 'true', 'false', 'all' hoặc undefined
-      };
-
-      // Truyền toàn bộ object filters xuống service
-      const result = await examService.getPaginatedExams(filters);
-
-      res.status(200).json({
-        success: true,
-        message: 'Lấy danh sách bài thi thành công.',
-        data: result.data,
-        meta: result.meta
-      });
-    } catch (error) {
-      res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách bài thi', error: error.message });
-    }
-  },
+  
 
   updateExamAdmin: async (req, res) => {
     const { id } = req.params;
@@ -156,31 +276,31 @@ const examController = {
     }
   },
 
-  duplicateExamAdmin: async (req, res) => {
-    try {
-      const { examIdToCopy } = req.params;
-      const { newName } = req.body;
-      const userId = req.user.id; // Người thực hiện hành động sao chép
+  // duplicateExamAdmin: async (req, res) => {
+  //   try {
+  //     const { examIdToCopy } = req.params;
+  //     const { newName } = req.body;
+  //     const userId = req.user.id; // Người thực hiện hành động sao chép
 
-      if (!newName || newName.trim() === '') {
-        return res.status(400).json({ success: false, message: 'Tên mới (newName) là bắt buộc.' });
-      }
+  //     if (!newName || newName.trim() === '') {
+  //       return res.status(400).json({ success: false, message: 'Tên mới (newName) là bắt buộc.' });
+  //     }
 
-      const newExam = await examService.duplicateExam(examIdToCopy, newName, userId);
+  //     const newExam = await examService.duplicateExam(examIdToCopy, newName, userId);
 
-      res.status(201).json({
-        success: true,
-        message: 'Sao chép bài thi thành công.',
-        data: newExam // Trả về bài thi mới đã được sao chép
-      });
+  //     res.status(201).json({
+  //       success: true,
+  //       message: 'Sao chép bài thi thành công.',
+  //       data: newExam // Trả về bài thi mới đã được sao chép
+  //     });
 
-    } catch (error) {
-      if (error.message.includes('không tồn tại')) {
-        return res.status(404).json({ success: false, message: error.message });
-      }
-      res.status(500).json({ success: false, message: 'Lỗi khi sao chép bài thi', error: error.message });
-    }
-  },
+  //   } catch (error) {
+  //     if (error.message.includes('không tồn tại')) {
+  //       return res.status(404).json({ success: false, message: error.message });
+  //     }
+  //     res.status(500).json({ success: false, message: 'Lỗi khi sao chép bài thi', error: error.message });
+  //   }
+  // },
 
 
 

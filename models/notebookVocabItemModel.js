@@ -23,6 +23,7 @@ const notebookVocabItemModel = {
       ON CONFLICT (notebook_id, vocab_id) DO NOTHING;
     `;
     
+    
     // Thực thi câu lệnh và trả về số lượng dòng đã được thêm vào.
     const result = await db.query(queryText, queryValues);
     return result.rowCount;
