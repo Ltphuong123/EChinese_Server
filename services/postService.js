@@ -135,17 +135,17 @@ const postService = {
     return newViewsCount;
   },
 
-  softDeletePost: async (postId, userId) => {
-    // Gọi model với `userId` để đảm bảo chỉ chủ sở hữu mới xóa được
-    const deletedCount = await postModel.softDelete(
-      postId,
-      userId,
-      "Người dùng tự xóa"
-    );
-    if (deletedCount === 0) {
-      throw new Error("Bài viết không tồn tại hoặc bạn không có quyền xóa.");
-    }
-  },
+  // softDeletePost: async (postId, userId) => {
+  //   // Gọi model với `userId` để đảm bảo chỉ chủ sở hữu mới xóa được
+  //   const deletedCount = await postModel.softDelete(
+  //     postId,
+  //     userId,
+  //     "Người dùng tự xóa"
+  //   );
+  //   if (deletedCount === 0) {
+  //     throw new Error("Bài viết không tồn tại hoặc bạn không có quyền xóa.");
+  //   }
+  // },
 
   getUserPosts: async (userId, currentUserId, filters) => {
     const { page, limit } = filters;
@@ -168,6 +168,57 @@ const postService = {
     const totalPages = Math.ceil(totalItems / limit);
     return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
   },
+
+
+  removePost: async (postId, user, reason) => {
+    // 1. Lấy thông tin bài viết để kiểm tra
+    const post = await postModel.findRawById(postId); // Cần 1 hàm lấy dữ liệu thô, không cần join
+    
+    if (!post) {
+      throw new Error("Bài viết không tồn tại.");
+    }
+
+    if (post.deleted_at) {
+        throw new Error("Bài viết này đã bị gỡ trước đó.");
+    }
+
+    // 2. Logic phân quyền
+    const isAdmin = user.role === 'admin' || user.role === 'super admin';
+    const isOwner = post.user_id === user.id;
+
+    if (!isAdmin && !isOwner) {
+      // Nếu không phải admin và cũng không phải chủ bài viết -> Từ chối
+      throw new Error("Bạn không có quyền gỡ bài viết này.");
+    }
+    
+    // 3. Chuẩn bị dữ liệu để cập nhật (xóa mềm)
+    const dataToRemove = {
+      deleted_at: new Date(),
+      deleted_by: user.id,
+      deleted_reason: reason || (isAdmin ? "Gỡ bởi quản trị viên" : "Gỡ bởi người dùng"),
+      // Khi gỡ, nên đổi status để nó không còn là 'published'
+      status: 'removed' 
+    };
+
+    // 4. Gọi model để cập nhật
+    await postModel.softDelete(postId, dataToRemove);
+    
+    // 5. (Tùy chọn) Ghi log hành động của admin
+    if (isAdmin && !isOwner) {
+        // TODO: Gọi service để tạo một bản ghi trong ModerationLogs
+        // moderationService.createLog({
+        //     target_type: 'post',
+        //     target_id: postId,
+        //     action: 'gỡ',
+        //     reason: reason,
+        //     performed_by: user.id
+        // });
+    }
+  },
+
+
+
+
 
 };
 

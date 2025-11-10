@@ -23,31 +23,29 @@ const commentService = {
   },
 
   getCommentsForPost: async (postId) => {
+    // 1. Lấy danh sách comment phẳng từ DB (đã bao gồm user và badge)
     const allComments = await commentModel.findAllByPostId(postId);
     
-    // Logic xây dựng cây bình luận
+    // 2. Logic xây dựng cây (giữ nguyên)
     const commentMap = new Map();
     const rootComments = [];
 
-    // Đưa tất cả comment vào map và thêm mảng replies rỗng
     allComments.forEach(comment => {
       comment.replies = [];
       commentMap.set(comment.id, comment);
     });
 
-    // Lặp lại để xây dựng cây
     allComments.forEach(comment => {
       if (comment.parent_comment_id && commentMap.has(comment.parent_comment_id)) {
-        // Đây là một reply, thêm nó vào replies của comment cha
         commentMap.get(comment.parent_comment_id).replies.push(comment);
       } else {
-        // Đây là một comment gốc
         rootComments.push(comment);
       }
     });
 
     return rootComments;
   },
+
 
   updateComment: async (commentId, userId, payload) => {
     // Chỉ cho phép cập nhật content

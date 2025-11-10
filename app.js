@@ -6,6 +6,9 @@ const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 5000;
 
+const { generalLimiter } = require('./middlewares/rateLimitMiddleware');
+
+
 // app.use(cors());
 const corsOptions = {
   origin: "*", // Chỉ cho phép yêu cầu từ địa chỉ này
@@ -13,6 +16,7 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use('/api', generalLimiter);
 
 const userRoutes = require("./routes/userRoutes");
 const notebookRoutes = require("./routes/notebookRoutes");
@@ -41,6 +45,8 @@ const moderationRoutes = require("./routes/moderationRoutes");
 const userSubscriptionRoutes = require("./routes/userSubscriptionRoutes");
 const refundRoutes = require("./routes/refundRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const adminLogRoutes = require('./routes/adminLogRoutes');
+
 
 app.use("/api", userRoutes);
 
@@ -69,6 +75,8 @@ app.use("/api", moderationRoutes);
 app.use("/api", userSubscriptionRoutes);
 app.use("/api", refundRoutes);
 app.use("/api", dashboardRoutes);
+app.use('/api', adminLogRoutes);
+
 
 
 app.listen(port, () => {

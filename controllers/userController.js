@@ -3,7 +3,6 @@ const testAttemptService = require('../services/testAttemptService');
 const achievementService = require('../services/achievementService');
 const postService = require('../services/postService');
 
-
 const userController = {
   getAllUsers: async (req, res) => {
     try {
@@ -35,7 +34,7 @@ const userController = {
       // const device = req.headers['user-agent'];
       const ip_address = null;
       const device = null;
-
+      
       const data = await userService.login({ username, password, ip_address, device });
       res.status(200).json({ 
         token: data.token,

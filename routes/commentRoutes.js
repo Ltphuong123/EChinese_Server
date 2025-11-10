@@ -32,25 +32,6 @@ router.put(
 
 
 
-// router.delete(
-//   '/community/comments/:commentId',
-//   authMiddleware.verifyToken,
-//   commentController.softDeleteCommentByUser
-// );
-
-// // ADMIN: Gỡ bình luận của bất kỳ ai
-// router.delete(
-//   '/admin/community/comments/:commentId',
-//   [authMiddleware.verifyToken, authMiddleware.isAdmin],
-//   moderationController.removeCommentByAdmin // Tạo hàm mới trong moderationController
-// );
-
-// // ADMIN: Khôi phục một bình luận đã gỡ
-// router.post(
-//   '/admin/community/comments/:commentId/restore',
-//   [authMiddleware.verifyToken, authMiddleware.isAdmin],
-//   moderationController.restoreCommentByAdmin // Tạo hàm mới trong moderationController
-// );
 
 
 
