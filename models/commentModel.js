@@ -24,26 +24,52 @@ const commentModel = {
   findAllByPostId: async (postId) => {
     const queryText = `
       SELECT 
-        c.*,
-        json_build_object(
+        c.id,
+        c.post_id,
+        c.user_id,
+        
+        -- Xây dựng lại object content với key là 'text'
+        jsonb_build_object(
+          'text', c.content->>'html' -- Lấy giá trị của key 'html' và gán cho key mới 'text'
+        ) as content,
+        
+        c.parent_comment_id,
+        c.created_at,
+        c.deleted_at,
+        c.deleted_by,
+        c.deleted_reason,
+        
+        -- Xây dựng object 'user'
+        jsonb_build_object(
           'id', u.id,
           'name', u.name,
-          'avatar_url', u.avatar_url
+          'avatar_url', u.avatar_url,
+          'level', u.level,
+          'badge_level', u.badge_level,
+          'community_points', u.community_points
         ) as user,
-        json_build_object(
+        
+        -- Xây dựng object 'badge'
+        jsonb_build_object(
             'level', bl.level,
             'name', bl.name,
-            'icon', bl.icon
+            'icon', bl.icon,
+            'min_points', bl.min_points,
+            'rule_description', bl.rule_description,
+            'is_active', bl.is_active
         ) as badge
+        
       FROM "Comments" c
       JOIN "Users" u ON c.user_id = u.id
       LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+      
       WHERE c.post_id = $1 AND c.deleted_at IS NULL
       ORDER BY c.created_at ASC;
     `;
     const result = await db.query(queryText, [postId]);
     return result.rows;
   },
+
 
   /**
    * Cập nhật nội dung của một bình luận.

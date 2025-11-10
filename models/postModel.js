@@ -273,30 +273,6 @@ const postModel = {
     return result.rows[0].views;
   },
 
-  softDelete: async (postId, userId, reason, adminId = null) => {
-    let queryText;
-    const params = [reason, adminId || userId, postId];
-
-    if (userId) {
-      // User tự xóa
-      queryText = `UPDATE "Posts" SET deleted_at = CURRENT_TIMESTAMP, deleted_reason = $1, deleted_by = $2 WHERE id = $3 AND user_id = $2;`;
-      params.pop(); // Bỏ postId ra
-      params.push(postId, userId); // Thêm postId và userId cho điều kiện WHERE
-      queryText = `UPDATE "Posts" SET deleted_at = CURRENT_TIMESTAMP, deleted_reason = $1, deleted_by = $2 WHERE id = $3 AND user_id = $4;`;
-    } else {
-      // Admin xóa
-      queryText = `UPDATE "Posts" SET deleted_at = CURRENT_TIMESTAMP, deleted_reason = $1, deleted_by = $2 WHERE id = $3;`;
-    }
-
-    const result = await db.query(queryText, params);
-    return result.rowCount;
-  },
-
-  restore: async (postId) => {
-    const queryText = `UPDATE "Posts" SET deleted_at = NULL, deleted_reason = NULL, deleted_by = NULL WHERE id = $1;`;
-    const result = await db.query(queryText, [postId]);
-    return result.rowCount;
-  },
 
   findAllByUserId: async (userId, currentUserId, { limit, offset }) => {
     const where = `WHERE p.user_id = $1 AND p.deleted_at IS NULL`;
@@ -360,6 +336,41 @@ const postModel = {
     const postsResult = await db.query(selectQuery, params);
     return { posts: postsResult.rows, totalItems };
   },
+
+
+
+
+
+
+
+
+  findRawById: async (postId) => {
+    const queryText = `SELECT * FROM "Posts" WHERE id = $1;`;
+    const result = await db.query(queryText, [postId]);
+    return result.rows[0];
+  },
+
+  /**
+   * --- HÀM MỚI ---
+   * Thực hiện xóa mềm một bài viết.
+   */
+  softDelete: async (postId, data) => {
+    const { deleted_at, deleted_by, deleted_reason, status } = data;
+    const queryText = `
+      UPDATE "Posts"
+      SET 
+        deleted_at = $1,
+        deleted_by = $2,
+        deleted_reason = $3,
+        status = $4
+      WHERE id = $5;
+    `;
+    await db.query(queryText, [deleted_at, deleted_by, deleted_reason, status, postId]);
+  },
+
+
+
+
 };
 
 module.exports = postModel;
