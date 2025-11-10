@@ -39,9 +39,10 @@ const postController = {
         limit: parseInt(req.query.limit, 10) || 10,
         topic: req.query.topic || "",
         userId: req.user.id || "",
+        status: req.query.status,
       };
       const result = await postService.getPublicPosts(filters);
-      res.status(200).json({ success: true, ...result });
+      res.status(200).json({ success: true, data:result });
     } catch (error) {
       res.status(500).json({
         success: false,
@@ -50,6 +51,7 @@ const postController = {
       });
     }
   },
+
 
   // READ (One)
   getPostById: async (req, res) => {

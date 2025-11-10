@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const userSubscriptionService = require('../services/userSubscriptionService');
 
 const userModel = {
   getAllUsers: async () => {
@@ -32,13 +33,24 @@ const userModel = {
       provider,
       provider_id
     ];
+    
     const result = await db.query(queryText, values);
+
+    await userSubscriptionService.addSubscription(result.rows[0].id,'750ac898-82aa-4327-a589-9f98fabecb2d');
+
     return result.rows[0];
   },
+  
+  findUserById1: async (id, client = db) => {
+        const result = await client.query('SELECT * FROM "Users" WHERE id = $1', [id]);
+        return result.rows[0];
+    },
+
 
   findUserByUsername: async (username) => {
     const queryText = `SELECT * FROM  "Users" WHERE username = $1;`;
     const result = await db.query(queryText, [username]);
+
     return result.rows[0];
   },
 
@@ -336,27 +348,37 @@ const userModel = {
   },
 
   updateUser: async (userId, updateData) => {
-    // Lấy danh sách các trường cần cập nhật từ keys của object
-    const fieldsToUpdate = Object.keys(updateData);
+    // --- BƯỚC 1: ĐỊNH NGHĨA CÁC TRƯỜNG ĐƯỢC PHÉP CẬP NHẬT ---
+    const allowedFields = ['name', 'email', 'avatar_url', 'level', 'language', 'is_active'];
 
-    // Nếu không có trường nào để cập nhật, trả về null
+    // --- BƯỚC 2: LỌC DỮ LIỆU ĐẦU VÀO ĐỂ CHỈ GIỮ LẠI CÁC TRƯỜNG HỢP LỆ ---
+    const filteredUpdateData = Object.keys(updateData)
+      .filter(key => allowedFields.includes(key)) // Giữ lại các key có trong mảng allowedFields
+      .reduce((obj, key) => {
+        obj[key] = updateData[key]; // Tạo một object mới chỉ chứa dữ liệu hợp lệ
+        return obj;
+      }, {});
+
+    // Lấy danh sách các trường sẽ thực sự được cập nhật từ object đã lọc
+    const fieldsToUpdate = Object.keys(filteredUpdateData);
+
+    // Nếu không có trường hợp lệ nào để cập nhật, trả về null
     if (fieldsToUpdate.length === 0) {
+      console.log('Không có trường hợp lệ nào được cung cấp để cập nhật.');
       return null;
     }
 
+    // --- CÁC BƯỚC CÒN LẠI GIỮ NGUYÊN LOGIC CỦA BẠN, NHƯNG SỬ DỤNG DỮ LIỆU ĐÃ LỌC ---
+
     // Xây dựng phần SET của câu truy vấn động
-    // Ví dụ: "name" = $1, "role" = $2, "is_active" = $3
     const setClause = fieldsToUpdate
       .map((field, index) => `"${field}" = $${index + 1}`)
       .join(', ');
 
-    // Lấy danh sách các giá trị tương ứng với các trường
-    const values = Object.values(updateData);
+    // Lấy danh sách các giá trị tương ứng từ object đã lọc
+    const values = Object.values(filteredUpdateData);
 
-    // return setClause
     // Xây dựng toàn bộ câu truy vấn
-    // Sử dụng RETURNING để trả về dữ liệu đã cập nhật ngay lập tức,
-    // giúp tiết kiệm một câu lệnh SELECT.
     const queryText = `
       UPDATE "Users"
       SET ${setClause}
@@ -375,6 +397,8 @@ const userModel = {
     // Trả về bản ghi đã được cập nhật
     return result.rows[0];
   },
+
+
   getAllUsers2: async () => {
     const queryText = `SELECT id, community_points, badge_level FROM "Users";`;
     const result = await db.query(queryText);
@@ -566,6 +590,8 @@ const userModel = {
         `;
         await db.query(queryText, [points, userId]);
     },
+
+    
 
 
 

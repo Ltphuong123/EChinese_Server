@@ -5,34 +5,53 @@ const userSubscriptionService = require('../services/userSubscriptionService');
 const userSubscriptionController = {
   getAll: async (req, res) => {
     try {
+      const page = parseInt(req.query.page, 10) || 1;
+      const limit = parseInt(req.query.limit, 10) || 10;
+      
       const options = {
-        page: parseInt(req.query.page, 10) || 1,
-        limit: parseInt(req.query.limit, 10) || 10,
+        page,
+        limit,
+        offset: (page - 1) * limit,
         search: req.query.search || '',
       };
+
       const result = await userSubscriptionService.getAllEnriched(options);
-      res.status(200).json({ success: true, ...result });
+      
+      // API sẽ trả về cấu trúc { data, meta } trực tiếp từ service
+      res.status(200).json({ success: true, data: result });
+
     } catch (error) {
-      res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách đăng ký của người dùng.', error: error.message });
+      res.status(500).json({ 
+        success: false, 
+        message: 'Lỗi khi lấy danh sách đăng ký của người dùng.', 
+        error: error.message 
+      });
     }
   },
 
-  update: async (req, res) => {
-    try {
-      const { userSubId } = req.params;
-      const payload = req.body;
-      const result = await userSubscriptionService.update(userSubId, payload);
-      res.status(200).json({ success: true, message: 'Cập nhật thành công.', data: result });
-    } catch (error) {
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ success: false, message: error.message });
-      }
-      if (error.message.includes('required') || error.message.includes('Invalid') || error.message.includes('Cannot')) {
-        return res.status(400).json({ success: false, message: error.message });
-      }
-      res.status(500).json({ success: false, message: 'Lỗi khi cập nhật.', error: error.message });
-    }
-  },
+
+updateDetails: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const payload = req.body;
+            const result = await userSubscriptionService.updateSubscriptionDetails(id, payload);
+
+            res.status(200).json({
+                success: true,
+                message: 'Cập nhật gói đăng ký thành công.',
+                data: result,
+            });
+        } catch (error) {
+            // ... xử lý lỗi không đổi ...
+            if (error.message.includes('không tồn tại')) return res.status(404).json({ success: false, message: error.message });
+            if (error.name === 'ValidationError') return res.status(400).json({ success: false, message: error.message });
+            if (error.name === 'BusinessLogicError') return res.status(409).json({ success: false, message: error.message });
+            console.error('API Error in updateDetails:', error);
+            res.status(500).json({ success: false, message: 'Đã xảy ra lỗi ở phía máy chủ.' });
+        }
+    },
+
+
 
   getHistory: async (req, res) => {
     try {

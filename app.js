@@ -1,6 +1,8 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+
+
 const app = express();
 const port = process.env.PORT || 5000;
 
@@ -41,6 +43,7 @@ const refundRoutes = require("./routes/refundRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 
 app.use("/api", userRoutes);
+
 app.use("/api", notebookRoutes);
 app.use("/api", vocabularyRoutes);
 app.use("/api", usageRoutes);
@@ -66,6 +69,7 @@ app.use("/api", moderationRoutes);
 app.use("/api", userSubscriptionRoutes);
 app.use("/api", refundRoutes);
 app.use("/api", dashboardRoutes);
+
 
 app.listen(port, () => {
   console.log(`Server chạy tại http://localhost:${port}`);
