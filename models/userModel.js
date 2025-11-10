@@ -1,5 +1,5 @@
-const db = require('../config/db');
-const userSubscriptionService = require('../services/userSubscriptionService');
+const db = require("../config/db");
+const userSubscriptionService = require("../services/userSubscriptionService");
 
 const userModel = {
   getAllUsers: async () => {
@@ -16,12 +16,13 @@ const userModel = {
       password_hash,
       name,
       email,
-      provider ,
-      provider_id
+      provider,
+      provider_id,
+      avatar_url,
     } = userData;
     const queryText = `
-      INSERT INTO "Users" (username, password_hash, name, email, provider, provider_id)
-      VALUES  ($1, $2, $3, $4, $5, $6)
+      INSERT INTO "Users" (username, password_hash, name, email, provider, provider_id, avatar_url)
+      VALUES  ($1, $2, $3, $4, $5, $6, $7)
       
       RETURNING id, username, name, email;
     `;
@@ -31,21 +32,32 @@ const userModel = {
       name,
       email,
       provider,
-      provider_id
+      provider_id,
+      avatar_url,
     ];
-    
+
     const result = await db.query(queryText, values);
 
-    await userSubscriptionService.addSubscription(result.rows[0].id,'750ac898-82aa-4327-a589-9f98fabecb2d');
+    await userSubscriptionService.addSubscription(
+      result.rows[0].id,
+      "750ac898-82aa-4327-a589-9f98fabecb2d"
+    );
 
     return result.rows[0];
   },
-  
-  findUserById1: async (id, client = db) => {
-        const result = await client.query('SELECT * FROM "Users" WHERE id = $1', [id]);
-        return result.rows[0];
-    },
 
+  findUserById1: async (id, client = db) => {
+    const result = await client.query('SELECT * FROM "Users" WHERE id = $1', [
+      id,
+    ]);
+    return result.rows[0];
+  },
+
+  findUserByEmail: async (email) => {
+    const queryText = `SELECT * FROM  "Users" WHERE email = $1;`;
+    const result = await db.query(queryText, [email]);
+    return result.rows[0];
+  },
 
   findUserByUsername: async (username) => {
     const queryText = `SELECT * FROM  "Users" WHERE username = $1;`;
@@ -83,21 +95,41 @@ const userModel = {
     return result.rows[0];
   },
 
-  createUserStreak: async (userId, currentStreak, longestStreak, lastLoginDate) => {
+  createUserStreak: async (
+    userId,
+    currentStreak,
+    longestStreak,
+    lastLoginDate
+  ) => {
     const queryText = `
       INSERT INTO "UserStreaks" (user_id, current_streak, longest_streak, last_login_date)
       VALUES ($1, $2, $3, $4);
     `;
-    await db.query(queryText, [userId, currentStreak, longestStreak, lastLoginDate]);
+    await db.query(queryText, [
+      userId,
+      currentStreak,
+      longestStreak,
+      lastLoginDate,
+    ]);
   },
 
-  updateUserStreak: async (userId, currentStreak, longestStreak, lastLoginDate) => {
+  updateUserStreak: async (
+    userId,
+    currentStreak,
+    longestStreak,
+    lastLoginDate
+  ) => {
     const queryText = `
       UPDATE "UserStreaks"
       SET current_streak = $1, longest_streak = $2, last_login_date = $3
       WHERE user_id = $4;
     `;
-    await db.query(queryText, [currentStreak, longestStreak, lastLoginDate, userId]);
+    await db.query(queryText, [
+      currentStreak,
+      longestStreak,
+      lastLoginDate,
+      userId,
+    ]);
   },
 
   findUserById: async (id) => {
@@ -107,74 +139,81 @@ const userModel = {
   },
 
   endUserSessionAndClearToken: async (userId, refreshToken) => {
-        // Lấy một client từ connection pool để quản lý transaction
-        // const client = await db.connect();
-         const client = await db.pool.connect();
+    // Lấy một client từ connection pool để quản lý transaction
+    // const client = await db.connect();
+    const client = await db.pool.connect();
 
-        try {
-            // Bắt đầu transaction
-            await client.query('BEGIN');
+    try {
+      // Bắt đầu transaction
+      await client.query("BEGIN");
 
-            // --- Thao tác 1: Tìm session hiện tại và tính toán thời gian online ---
-            const findSessionQuery = `
+      // --- Thao tác 1: Tìm session hiện tại và tính toán thời gian online ---
+      const findSessionQuery = `
                 SELECT id, login_at 
                 FROM "UserSessions" 
                 WHERE user_id = $1 AND logout_at IS NULL 
                 ORDER BY login_at DESC 
                 LIMIT 1;
             `;
-            const sessionResult = await client.query(findSessionQuery, [userId]);
-            const currentSession = sessionResult.rows[0];
+      const sessionResult = await client.query(findSessionQuery, [userId]);
+      const currentSession = sessionResult.rows[0];
 
-            if (currentSession) {
-                // Tính toán số phút online của phiên này
-                const loginAt = new Date(currentSession.login_at);
-                const now = new Date();
-                const durationMinutes = Math.round((now - loginAt) / (1000 * 60));
+      if (currentSession) {
+        // Tính toán số phút online của phiên này
+        const loginAt = new Date(currentSession.login_at);
+        const now = new Date();
+        const durationMinutes = Math.round((now - loginAt) / (1000 * 60));
 
-                // --- Thao tác 2: Cập nhật bản ghi session với thời gian logout ---
-                const updateSessionQuery = `
+        // --- Thao tác 2: Cập nhật bản ghi session với thời gian logout ---
+        const updateSessionQuery = `
                     UPDATE "UserSessions" SET logout_at = $1 WHERE id = $2;
                 `;
-                await client.query(updateSessionQuery, [now, currentSession.id]);
+        await client.query(updateSessionQuery, [now, currentSession.id]);
 
-                // --- Thao tác 3: Cập nhật số phút online trong ngày ---
-                if (durationMinutes > 0) {
-                    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const updateActivityQuery = `
+        // --- Thao tác 3: Cập nhật số phút online trong ngày ---
+        if (durationMinutes > 0) {
+          const today = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate()
+          );
+          const updateActivityQuery = `
                         UPDATE "UserDailyActivity" 
                         SET minutes_online = minutes_online + $1 
                         WHERE user_id = $2 AND date = $3;
                     `;
-                    await client.query(updateActivityQuery, [durationMinutes, userId, today]);
-                }
-            }
-
-            // --- Thao tác 4: Xóa refresh token khỏi DB ---
-            const deleteTokenQuery = `DELETE FROM "RefreshTokens" WHERE token = $1;`;
-            await client.query(deleteTokenQuery, [refreshToken]);
-
-            // Nếu tất cả thành công, commit transaction
-            await client.query('COMMIT');
-
-        } catch (error) {
-            // Nếu có bất kỳ lỗi nào, rollback tất cả các thay đổi
-            await client.query('ROLLBACK');
-            console.error('Lỗi trong transaction khi logout:', error);
-            throw new Error('Không thể hoàn tất quá trình đăng xuất.');
-        } finally {
-            // Luôn luôn giải phóng client trở lại pool
-            client.release();
+          await client.query(updateActivityQuery, [
+            durationMinutes,
+            userId,
+            today,
+          ]);
         }
+      }
+
+      // --- Thao tác 4: Xóa refresh token khỏi DB ---
+      const deleteTokenQuery = `DELETE FROM "RefreshTokens" WHERE token = $1;`;
+      await client.query(deleteTokenQuery, [refreshToken]);
+
+      // Nếu tất cả thành công, commit transaction
+      await client.query("COMMIT");
+    } catch (error) {
+      // Nếu có bất kỳ lỗi nào, rollback tất cả các thay đổi
+      await client.query("ROLLBACK");
+      console.error("Lỗi trong transaction khi logout:", error);
+      throw new Error("Không thể hoàn tất quá trình đăng xuất.");
+    } finally {
+      // Luôn luôn giải phóng client trở lại pool
+      client.release();
+    }
   },
 
   findAllPaginated: async ({ limit, offset, searchTerm, roleFilter }) => {
     // Mảng để chứa các giá trị cho câu truy vấn có tham số, chống SQL Injection
     const queryParams = [];
-    
+
     // --- Xây dựng câu truy vấn COUNT ---
     let countQuery = `SELECT COUNT(*) FROM "Users" WHERE 1=1`;
-    
+
     // --- Xây dựng câu truy vấn SELECT ---
     // Luôn chỉ định rõ các cột để tránh lấy password_hash
     let selectQuery = `
@@ -184,11 +223,11 @@ const userModel = {
         created_at, last_login 
       FROM "Users" WHERE 1=1
     `;
-    
+
     // --- Thêm điều kiện LỌC và TÌM KIẾM động ---
-    
+
     // Lọc theo vai trò (roleFilter)
-    if (roleFilter && roleFilter !== 'all') {
+    if (roleFilter && roleFilter !== "all") {
       queryParams.push(roleFilter);
       const roleCondition = ` AND role = $${queryParams.length}`;
       countQuery += roleCondition;
@@ -206,16 +245,16 @@ const userModel = {
     // --- Thực thi câu truy vấn COUNT để lấy tổng số bản ghi ---
     const totalResult = await db.query(countQuery, queryParams);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
-    
+
     // --- Thêm SẮP XẾP và PHÂN TRANG vào câu truy vấn SELECT ---
     selectQuery += ` ORDER BY created_at DESC`;
-    
+
     queryParams.push(limit);
     selectQuery += ` LIMIT $${queryParams.length}`;
-    
+
     queryParams.push(offset);
     selectQuery += ` OFFSET $${queryParams.length}`;
-    
+
     // --- Thực thi câu truy vấn SELECT để lấy danh sách người dùng ---
     const usersResult = await db.query(selectQuery, queryParams);
 
@@ -227,9 +266,9 @@ const userModel = {
 
   // findUserDetailsById: async (id) => {
   //   const queryText = `
-  //     SELECT id, username, name, avatar_url, email, provider, role, 
-  //            is_active, "isVerify", community_points, level, badge_level, 
-  //            language, created_at, last_login 
+  //     SELECT id, username, name, avatar_url, email, provider, role,
+  //            is_active, "isVerify", community_points, level, badge_level,
+  //            language, created_at, last_login
   //     FROM "Users" WHERE id = $1;
   //   `;
   //   const result = await db.query(queryText, [id]);
@@ -284,7 +323,7 @@ const userModel = {
       WHERE u.id = $1;
     `;
     const result = await db.query(queryText, [id]);
-    
+
     // Vẫn trả về result.rows[0], nhưng object này giờ đã chứa thêm 2 trường 'badge' và 'subscription'
     return result.rows[0];
   },
@@ -349,11 +388,18 @@ const userModel = {
 
   updateUser: async (userId, updateData) => {
     // --- BƯỚC 1: ĐỊNH NGHĨA CÁC TRƯỜNG ĐƯỢC PHÉP CẬP NHẬT ---
-    const allowedFields = ['name', 'email', 'avatar_url', 'level', 'language', 'is_active'];
+    const allowedFields = [
+      "name",
+      "email",
+      "avatar_url",
+      "level",
+      "language",
+      "is_active",
+    ];
 
     // --- BƯỚC 2: LỌC DỮ LIỆU ĐẦU VÀO ĐỂ CHỈ GIỮ LẠI CÁC TRƯỜNG HỢP LỆ ---
     const filteredUpdateData = Object.keys(updateData)
-      .filter(key => allowedFields.includes(key)) // Giữ lại các key có trong mảng allowedFields
+      .filter((key) => allowedFields.includes(key)) // Giữ lại các key có trong mảng allowedFields
       .reduce((obj, key) => {
         obj[key] = updateData[key]; // Tạo một object mới chỉ chứa dữ liệu hợp lệ
         return obj;
@@ -364,7 +410,7 @@ const userModel = {
 
     // Nếu không có trường hợp lệ nào để cập nhật, trả về null
     if (fieldsToUpdate.length === 0) {
-      console.log('Không có trường hợp lệ nào được cung cấp để cập nhật.');
+      console.log("Không có trường hợp lệ nào được cung cấp để cập nhật.");
       return null;
     }
 
@@ -373,7 +419,7 @@ const userModel = {
     // Xây dựng phần SET của câu truy vấn động
     const setClause = fieldsToUpdate
       .map((field, index) => `"${field}" = $${index + 1}`)
-      .join(', ');
+      .join(", ");
 
     // Lấy danh sách các giá trị tương ứng từ object đã lọc
     const values = Object.values(filteredUpdateData);
@@ -398,7 +444,6 @@ const userModel = {
     return result.rows[0];
   },
 
-
   getAllUsers2: async () => {
     const queryText = `SELECT id, community_points, badge_level FROM "Users";`;
     const result = await db.query(queryText);
@@ -413,11 +458,11 @@ const userModel = {
 
   addAchievement: async (options) => {
     const { userId, achievementId, progress, pointsToAdd } = options;
-    
+
     const client = await db.pool.connect();
 
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN");
 
       // Thao tác 1: Thêm bản ghi vào UserAchievements
       const insertQuery = `
@@ -426,8 +471,12 @@ const userModel = {
         RETURNING *;
       `;
       // Nếu progress không được cung cấp, nó sẽ là null, db sẽ xử lý.
-      const insertResult = await client.query(insertQuery, [userId, achievementId, progress]);
-      
+      const insertResult = await client.query(insertQuery, [
+        userId,
+        achievementId,
+        progress,
+      ]);
+
       // Thao tác 2: Cập nhật điểm cộng đồng cho người dùng
       if (pointsToAdd > 0) {
         const updatePointsQuery = `
@@ -438,13 +487,12 @@ const userModel = {
         await client.query(updatePointsQuery, [pointsToAdd, userId]);
       }
 
-      await client.query('COMMIT');
-      
-      return insertResult.rows[0];
+      await client.query("COMMIT");
 
+      return insertResult.rows[0];
     } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('Lỗi trong transaction khi gán thành tích:', error);
+      await client.query("ROLLBACK");
+      console.error("Lỗi trong transaction khi gán thành tích:", error);
       throw error;
     } finally {
       client.release();
@@ -453,11 +501,11 @@ const userModel = {
 
   findExamHistory: async ({ userId, limit, offset }) => {
     const baseQuery = `FROM "User_Exam_Attempts" uea JOIN "Exams" e ON uea.exam_id = e.id WHERE uea.user_id = $1 AND uea.end_time IS NOT NULL`;
-    
+
     const countQuery = `SELECT COUNT(*) ${baseQuery}`;
     const countResult = await db.query(countQuery, [userId]);
     const totalItems = parseInt(countResult.rows[0].count, 10);
-    
+
     const selectQuery = `
         SELECT uea.id, e.name as exam_name, uea.score_total, uea.is_passed, uea.end_time
         ${baseQuery}
@@ -465,7 +513,7 @@ const userModel = {
         LIMIT $2 OFFSET $3;
     `;
     const historyResult = await db.query(selectQuery, [userId, limit, offset]);
-    
+
     return { history: historyResult.rows, totalItems };
   },
 
@@ -490,7 +538,7 @@ const userModel = {
 
   deleteById: async (userId) => {
     // Nhờ có ON DELETE CASCADE, các dữ liệu liên quan trong các bảng
-    // UserSessions, UserDailyActivity, UserStreaks, UserAchievements, 
+    // UserSessions, UserDailyActivity, UserStreaks, UserAchievements,
     // UserSubscriptions, Notebooks, AILessons, TranslationHistory, UserUsage,
     // Violations, Appeals, RefreshTokens sẽ tự động được xóa.
     const queryText = `DELETE FROM "Users" WHERE id = $1;`;
@@ -546,11 +594,19 @@ const userModel = {
   getUserStats: async (userId) => {
     // Sử dụng Promise.all để lấy các thông số song song
     const [postCountRes, likesReceivedRes, streakRes] = await Promise.all([
-      db.query(`SELECT COUNT(*) FROM "Posts" WHERE user_id = $1 AND deleted_at IS NULL`, [userId]),
-      db.query(`SELECT COALESCE(SUM(likes), 0) as total FROM "Posts" WHERE user_id = $1 AND deleted_at IS NULL`, [userId]),
-      db.query(`SELECT current_streak FROM "UserStreaks" WHERE user_id = $1`, [userId])
+      db.query(
+        `SELECT COUNT(*) FROM "Posts" WHERE user_id = $1 AND deleted_at IS NULL`,
+        [userId]
+      ),
+      db.query(
+        `SELECT COALESCE(SUM(likes), 0) as total FROM "Posts" WHERE user_id = $1 AND deleted_at IS NULL`,
+        [userId]
+      ),
+      db.query(`SELECT current_streak FROM "UserStreaks" WHERE user_id = $1`, [
+        userId,
+      ]),
     ]);
-    
+
     return {
       post_count: parseInt(postCountRes.rows[0].count, 10),
       likes_received_count: parseInt(likesReceivedRes.rows[0].total, 10),
@@ -575,27 +631,22 @@ const userModel = {
       JOIN "BadgeLevels" bl ON u.badge_level = bl.level
       WHERE u.id = $1;
     `;
-    
+
     const result = await db.query(queryText, [userId]);
-    
+
     // Trả về bản ghi đầu tiên, hoặc undefined nếu không tìm thấy (user không tồn tại hoặc badge_level không hợp lệ)
     return result.rows[0];
   },
 
   addCommunityPoints: async (userId, points) => {
-        const queryText = `
+    const queryText = `
             UPDATE "Users" 
             SET community_points = community_points + $1 
             WHERE id = $2;
         `;
-        await db.query(queryText, [points, userId]);
-    },
 
-    
-
-
-
-
+    await db.query(queryText, [points, userId]);
+  },
 };
 
 module.exports = userModel;
