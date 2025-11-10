@@ -74,14 +74,14 @@ const paymentController = {
         page: parseInt(req.query.page, 10) || 1,
         limit: parseInt(req.query.limit, 10) || 10,
         search: req.query.search || '',
-        status: req.query.status || null,
-        method: req.query.method || null,
-        channel: req.query.channel || null,
+        status: req.query.status || 'all',
+        method: req.query.method || 'all',
+        channel: req.query.channel || 'all',
         startDate: req.query.startDate || null,
         endDate: req.query.endDate || null,
       };
       const result = await paymentService.getAll(options);
-      res.status(200).json({ success: true, ...result });
+      res.status(200).json({ success: true,data: result });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách thanh toán.', error: error.message });
     }

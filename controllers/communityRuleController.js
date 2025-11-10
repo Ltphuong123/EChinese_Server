@@ -14,7 +14,12 @@ const communityRuleController = {
   getAllRules: async (req, res) => {
     try {
       const rules = await communityRuleModel.findAll();
-      res.status(200).json({ success: true, data: rules });
+      res.status(200).json({ success: true, 
+        data: {
+          data:rules,
+          meta: { }
+        },
+      });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
     }

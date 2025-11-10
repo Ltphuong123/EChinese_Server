@@ -28,7 +28,7 @@ const examService = {
 
     // Sử dụng toán tử spread (...) để truyền TẤT CẢ các bộ lọc xuống model,
     // đồng thời thêm/ghi đè thuộc tính `offset` đã được tính toán.
-    const { exams, totalItems } = await examModel.findAllPaginated({
+    const { exams, totalItems } = await examModel.findAllPaginatedAdmin({
       ...filters,
       offset,
     });
@@ -47,14 +47,17 @@ const examService = {
   },
 
   updateFullExam: async (examId, examData, userId) => {
-    // Logic được xử lý hoàn toàn trong model bằng transaction
-    // Service có thể kiểm tra xem examId có tồn tại không trước nếu muốn
+    // Toàn bộ logic phức tạp được xử lý trong model bằng transaction
     const updatedExam = await examModel.updateFullExam(examId, examData, userId);
+    
+    // Model sẽ ném lỗi nếu không tìm thấy bài thi
     if (!updatedExam) {
         throw new Error('Bài thi không tồn tại.');
     }
+
     return updatedExam;
   },
+
 
   duplicateExam: async (examIdToCopy, userId) => {
     // --- Bước 1: Đọc toàn bộ cấu trúc của bài thi gốc ---
@@ -291,13 +294,52 @@ const examService = {
     return updatedExam;
   },
 
-  setExamDeletedStatus: async (examId, isDeleted) => {
-    const updatedExam = await examModel.setDeletedStatus(examId, isDeleted);
-    if (!updatedExam) {
+   /**
+   * Đặt trạng thái công bố (published) cho một bài thi.
+   * @param {string} examId - ID của bài thi.
+   * @param {boolean} isPublished - Trạng thái mới (true hoặc false).
+   * @returns {Promise<object>} Toàn bộ cấu trúc bài thi đã được cập nhật.
+   */
+  setPublishedStatus: async (examId, isPublished) => {
+    // Bước 1: Cập nhật trạng thái
+    const updatedExamStatus = await examModel.updateStatus(examId, { is_published: isPublished });
+    if (!updatedExamStatus) {
       throw new Error('Bài thi không tồn tại.');
     }
-    return updatedExam;
+
+    // Bước 2: Lấy lại toàn bộ cấu trúc bài thi bằng hàm findById đã có
+    const fullExamStructure = await examModel.findById(examId);
+    
+    return fullExamStructure;
   },
+
+  /**
+   * Đặt trạng thái xóa mềm (deleted) cho một bài thi.
+   * @param {string} examId - ID của bài thi.
+   * @param {boolean} isDeleted - Trạng thái mới (true hoặc false).
+   * @returns {Promise<object|null>} Toàn bộ cấu trúc bài thi nếu khôi phục, null nếu xóa.
+   */
+  setDeletedStatus: async (examId, isDeleted) => {
+    const statusToUpdate = { is_deleted: isDeleted };
+    // Khi xóa mềm, tự động hủy công bố.
+    // Khi khôi phục, tự động đặt về trạng thái nháp.
+    if (isDeleted) {
+        statusToUpdate.is_published = false;
+    } else {
+        statusToUpdate.is_published = false;
+    }
+
+    // Bước 1: Cập nhật trạng thái
+    const updatedExamStatus = await examModel.updateStatus(examId, statusToUpdate);
+    if (!updatedExamStatus) {
+      throw new Error('Bài thi không tồn tại.');
+    }
+
+      const fullExamStructure = await examModel.findById(examId);
+      return fullExamStructure;
+  
+  },
+
 
   forceDeleteExam: async (examId) => {
     const deletedCount = await examModel.hardDelete(examId);

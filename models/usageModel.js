@@ -3,6 +3,40 @@
 const db = require('../config/db');
 
 const usageModel = {
+  upsert: async (usageData, client = db) => {
+    const { user_id, feature, daily_count, last_reset } = usageData;
+    // NOTE: ON CONFLICT requires a UNIQUE constraint on (user_id, feature).
+    // The user requested not to change DB schema, so we implement upsert
+    // with a safe SELECT -> UPDATE or INSERT fallback. Caller may pass
+    // a transaction client; we use it directly (do not begin/commit here).
+
+    // First try to find existing record
+    const selectQuery = `SELECT id FROM "UserUsage" WHERE user_id = $1 AND feature = $2 LIMIT 1;`;
+    const selectRes = await client.query(selectQuery, [user_id, feature]);
+
+    if (selectRes.rowCount > 0) {
+      // Update existing
+      const updateQuery = `
+        UPDATE "UserUsage"
+        SET daily_count = $1, last_reset = $2
+        WHERE user_id = $3 AND feature = $4
+        RETURNING *;
+      `;
+      const updateRes = await client.query(updateQuery, [daily_count, last_reset, user_id, feature]);
+      return updateRes.rows[0];
+    }
+
+    // Insert new
+    const insertQuery = `
+      INSERT INTO "UserUsage" (user_id, feature, daily_count, last_reset)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *;
+    `;
+    const insertRes = await client.query(insertQuery, [user_id, feature, daily_count, last_reset]);
+    return insertRes.rows[0];
+  },
+
+  
   create: async (usageData) => {
     const { user_id, feature, daily_count } = usageData;
     

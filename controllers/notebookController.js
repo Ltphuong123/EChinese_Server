@@ -1,6 +1,439 @@
 const notebookService = require("../services/notebookService");
 
 const notebookController = {
+  createNotebook: async (req, res) => {
+    try {
+      const { id: userId, role } = req.user; // Lấy userId và role từ token
+      const requestData = req.body;
+
+      let newNotebook;
+
+      // Phân luồng logic dựa trên vai trò
+      if (role === 'admin' || role === 'super admin') {
+        // --- LOGIC CHO ADMIN ---
+        // Admin có thể gán user_id, status, is_premium...
+        // Validation cho admin
+        if (!requestData.name || !requestData.status) {
+          return res.status(400).json({ success: false, message: "Admin cần cung cấp 'name' và 'status'." });
+        }
+        // Gọi service với is_admin = true
+        newNotebook = await notebookService.createNotebook(userId, requestData, true);
+      } else {
+        // --- LOGIC CHO USER ---
+        // User chỉ có thể cung cấp 'name'
+        if (!requestData.name) {
+          return res.status(400).json({ success: false, message: "Bạn cần cung cấp tên cho sổ tay." });
+        }
+        // Tạo một object data sạch để đảm bảo user không thể tự gán các trường khác
+        const userData = { name: requestData.name };
+        // Gọi service với is_admin = false
+        newNotebook = await notebookService.createNotebook(userId, userData, false);
+      }
+
+      res.status(201).json({
+        success: true,
+        message: 'Tạo notebook thành công.',
+        data: newNotebook
+      });
+
+    } catch (error) {
+      if (error.code === '23505') { 
+        return res.status(409).json({ success: false, message: `Lỗi: ${error.detail}` });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi tạo notebook', error: error.message });
+    }
+  },
+
+  async getMyNotebooks(req, res) {
+    try {
+      const filters = {
+        userId: req.user.id, // Lấy từ token
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+        premium: req.query.premium || "all", // Cho phép user lọc cả premium
+        search: req.query.search || "",
+      };
+      const result = await notebookService.getNotebooksByFilter(filters);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  // 2. GET /api/notebooks/system
+  async getSystemNotebooksForUser(req, res) {
+    try {
+      const filters = {
+        userId: 'NULL', // Chỉ lấy sổ tay hệ thống
+        status: 'published', // User chỉ thấy sổ tay đã xuất bản
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+        premium: req.query.premium || "false", // Mặc định chỉ lấy sổ miễn phí
+        search: req.query.search || "",
+      };
+      const result = await notebookService.getNotebooksByFilter(filters);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  // --- CONTROLLER CHO ADMIN ---
+  
+  // 3. GET /api/admin/notebooks/system
+  async getSystemNotebooksForAdmin(req, res) {
+    try {
+      const filters = {
+        userId: 'NULL', // Chỉ lấy sổ tay hệ thống
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+        search: req.query.search || "",
+        status: req.query.status || "all",
+        premium: req.query.premium || "all",
+      };
+      const result = await notebookService.getNotebooksByFilter(filters);
+      res.status(200).json({ 
+        success: true, 
+        data: result });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  // 4. GET /api/admin/notebooks
+  async getAllNotebooksAdmin(req, res) {
+    try {
+      const filters = {
+        userId: 'all', // Lấy tất cả, không phân biệt user
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+        search: req.query.search || "",
+        status: req.query.status || "all",
+        premium: req.query.premium || "all",
+      };
+      const result = await notebookService.getNotebooksByFilter(filters);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  async getNotebookDetails(req, res) {
+    try {
+      const { id: notebookId } = req.params;
+      const { id: userId, role } = req.user; // Lấy thông tin người dùng từ token
+
+      // Các tham số filter cho danh sách từ vựng bên trong sổ tay
+      const vocabFilters = {
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 10,
+        search: req.query.search || '',
+        status: req.query.status || '', // Lọc trạng thái từ vựng: 'đã thuộc', 'chưa thuộc'...
+      };
+      
+      const notebook = await notebookService.getNotebookDetails(notebookId, userId, role, vocabFilters);
+
+      res.status(200).json({ success: true, data: notebook });
+
+    } catch (error) {
+      // Bắt lỗi "không tìm thấy" hoặc "không có quyền" từ service
+      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy chi tiết sổ tay' });
+    }
+  },
+
+  async addVocabulariesToNotebook(req, res) {
+    try {
+      const { notebookId } = req.params;
+      const { vocabIds } = req.body;
+      const { id: userId, role } = req.user; // Lấy userId và role từ token
+
+      // --- Validation ---
+      if (!vocabIds || !Array.isArray(vocabIds) || vocabIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'vocabIds phải là một mảng và không được rỗng.'
+        });
+      }
+
+      // Gọi service để xử lý logic
+      const result = await notebookService.addVocabulariesToNotebook(notebookId, userId, role, vocabIds);
+
+      res.status(200).json({
+        success: true,
+        message: `Đã thêm thành công ${result.addedCount} từ vựng vào sổ tay.`,
+        data: {
+          notebookId: notebookId,
+          addedCount: result.addedCount,
+          newTotalVocabCount: result.newTotalVocabCount
+        }
+      });
+
+    } catch (error) {
+      // Bắt các lỗi cụ thể từ service
+      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      if (error.message.includes('Sổ tay hệ thống')) {
+        return res.status(403).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi thêm từ vựng vào sổ tay' });
+    }
+  },
+
+  async addVocabulariesToNotebookUser(req, res) {
+    try {
+      const userId = req.user.id;
+      const { notebookId } = req.params;
+      const { vocabIds } = req.body;
+      if (!vocabIds || !Array.isArray(vocabIds) || vocabIds.length === 0) {
+        return res
+          .status(400)
+          .json({ success: false, message: "vocabIds là một mảng bắt buộc." });
+      }
+
+      const result = await notebookService.addVocabulariesUser(
+        notebookId,
+        userId,
+        vocabIds
+      );
+      res.status(200).json({
+        success: true,
+        message: `Đã thêm thành công ${result.addedCount} từ vựng.`,
+        data: { newTotalVocabCount: result.newTotalVocabCount },
+      });
+    } catch (error) {
+      if (error.message.includes("không tồn tại"))
+        return res.status(404).json({ success: false, message: error.message });
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  addVocabulariesToNotebookAdmin: async (req, res) => {
+    try {
+      const { notebookId } = req.params;
+      const { vocabIds } = req.body;
+
+      // --- Validation ---
+      if (!vocabIds || !Array.isArray(vocabIds) || vocabIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "vocabIds phải là một mảng và không được rỗng.",
+        });
+      }
+
+      const result = await notebookService.addVocabulariesToNotebook(
+        notebookId,
+        vocabIds
+      );
+
+      res.status(200).json({
+        success: true,
+        message: `Đã thêm thành công ${result.addedCount} từ vựng vào notebook.`,
+        addedCount: result.addedCount,
+      });
+    } catch (error) {
+      if (error.message.includes("không tồn tại")) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi thêm từ vựng vào notebook",
+        error: error.message,
+      });
+    }
+  },
+
+  async removeVocabulariesFromNotebookUser(req, res) {
+    try {
+      const userId = req.user.id;
+      const { notebookId } = req.params;
+      const { vocabIds } = req.body;
+      if (!vocabIds || !Array.isArray(vocabIds) || vocabIds.length === 0) {
+        return res
+          .status(400)
+          .json({ success: false, message: "vocabIds là một mảng bắt buộc." });
+      }
+
+      const result = await notebookService.removeVocabulariesUser(
+        notebookId,
+        userId,
+        vocabIds
+      );
+      res.status(200).json({
+        success: true,
+        message: `Đã xóa thành công ${result.removedCount} từ vựng.`,
+        data: { newTotalVocabCount: result.newTotalVocabCount },
+      });
+    } catch (error) {
+      if (error.message.includes("không tồn tại"))
+        return res.status(404).json({ success: false, message: error.message });
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  removeVocabulariesFromNotebookAdmin: async (req, res) => {
+    try {
+      const { notebookId } = req.params;
+      const { vocabIds } = req.body;
+
+      // Validation
+      if (!vocabIds || !Array.isArray(vocabIds) || vocabIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "vocabIds phải là một mảng và không được rỗng.",
+        });
+      }
+
+      const result = await notebookService.removeVocabulariesFromNotebook(
+        notebookId,
+        vocabIds
+      );
+
+      res.status(200).json({
+        success: true,
+        message: `Đã xóa thành công ${result.removedCount} từ vựng khỏi notebook.`,
+        // data: {
+        //   notebookId: notebookId,
+        //   removedCount: result.removedCount,
+        //   newTotalVocabCount: result.newTotalVocabCount
+        // }
+      });
+    } catch (error) {
+      if (error.message.includes("không tồn tại")) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi xóa từ vựng khỏi notebook",
+        error: error.message,
+      });
+    }
+  },
+
+  async addVocabulariesByLevelToNotebook(req, res) {
+    try {
+      const { notebookId } = req.params;
+      const { level } = req.body; // Ví dụ: "HSK1", "HSK2"
+      const { id: userId, role } = req.user;
+
+      // Validation
+      if (!level) {
+        return res.status(400).json({
+          success: false,
+          message: 'Trường "level" là bắt buộc.'
+        });
+      }
+
+      const result = await notebookService.addVocabulariesByLevel(notebookId, userId, role, level);
+
+      res.status(200).json({
+        success: true,
+        message: `Đã thêm thành công ${result.addedCount} từ vựng thuộc cấp độ ${level} vào sổ tay.`,
+        addedCount: result.addedCount,
+      });
+
+    } catch (error) {
+      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      if (error.message.includes('Sổ tay hệ thống')) {
+        return res.status(403).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi thêm từ vựng theo cấp độ' });
+    }
+  },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  getNotebookDetails2: async (req, res) => {
+    try {
+      const { id: notebookId } = req.params;
+      const userId = req.user.id; // Lấy từ token
+
+      // Truyền cả notebookId và userId xuống service để kiểm tra quyền truy cập
+      const notebookDetails = await notebookService.getNotebookWithVocabs(notebookId, userId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Lấy chi tiết sổ tay thành công.',
+        data: notebookDetails
+      });
+    } catch (error) {
+      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy chi tiết sổ tay', error: error.message });
+    }
+  },
+
+  updateNotebook: async (req, res) => {
+    try {
+      const { id: notebookId } = req.params;
+      const userId = req.user.id;
+      const payload = req.body;
+
+      const updatedNotebook = await notebookService.updateUserNotebook(notebookId, userId, payload);
+
+      res.status(200).json({
+        success: true,
+        message: 'Cập nhật sổ tay thành công.',
+        data: updatedNotebook
+      });
+    } catch (error) {
+      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      if (error.message.includes('không có dữ liệu')) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi cập nhật sổ tay', error: error.message });
+    }
+  },
+
+  updateVocabStatusInNotebook: async (req, res) => {
+    try {
+      const { notebookId, vocabId } = req.params;
+      const { status } = req.body;
+      const userId = req.user.id;
+
+      if (!status) {
+        return res.status(400).json({ success: false, message: "Trường 'status' là bắt buộc."});
+      }
+
+      const updatedItem = await notebookService.updateVocabStatus(notebookId, vocabId, userId, status);
+
+      res.status(200).json({
+        success: true,
+        message: 'Cập nhật trạng thái từ vựng thành công.',
+        data: updatedItem
+      });
+    } catch (error) {
+      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi cập nhật trạng thái', error: error.message });
+    }
+  },
+
+
+
+
   createNotebookAdmin: async (req, res) => {
     try {
       const notebookData = req.body;
@@ -81,31 +514,31 @@ const notebookController = {
     }
   },
 
-  getMyNotebooks: async (req, res) => {
-    try {
-      const userId = req.user.id; // Lấy từ token
-      // Lấy các tham số phân trang nếu cần
-      const { page = 1, limit = 100 } = req.query; // Mặc định limit cao để lấy hết
+  // getMyNotebooks: async (req, res) => {
+  //   try {
+  //     const userId = req.user.id; // Lấy từ token
+  //     // Lấy các tham số phân trang nếu cần
+  //     const { page = 1, limit = 100 } = req.query; // Mặc định limit cao để lấy hết
 
-      const result = await notebookService.getUserNotebooks(userId, {
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-      });
+  //     const result = await notebookService.getUserNotebooks(userId, {
+  //       page: parseInt(page, 10),
+  //       limit: parseInt(limit, 10),
+  //     });
 
-      res.status(200).json({
-        success: true,
-        message: "Lấy danh sách sổ tay cá nhân thành công.",
-        data: result.data,
-        meta: result.meta,
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy sổ tay cá nhân",
-        error: error.message,
-      });
-    }
-  },
+  //     res.status(200).json({
+  //       success: true,
+  //       message: "Lấy danh sách sổ tay cá nhân thành công.",
+  //       data: result.data,
+  //       meta: result.meta,
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({
+  //       success: false,
+  //       message: "Lỗi khi lấy sổ tay cá nhân",
+  //       error: error.message,
+  //     });
+  //   }
+  // },
 
   // --- HÀM MỚI ---
   getSystemNotebooks: async (req, res) => {
@@ -206,79 +639,9 @@ const notebookController = {
     }
   },
 
-  addVocabulariesToNotebookAdmin: async (req, res) => {
-    try {
-      const { notebookId } = req.params;
-      const { vocabIds } = req.body;
+  
 
-      // --- Validation ---
-      if (!vocabIds || !Array.isArray(vocabIds) || vocabIds.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "vocabIds phải là một mảng và không được rỗng.",
-        });
-      }
-
-      const result = await notebookService.addVocabulariesToNotebook(
-        notebookId,
-        vocabIds
-      );
-
-      res.status(200).json({
-        success: true,
-        message: `Đã thêm thành công ${result.addedCount} từ vựng vào notebook.`,
-        addedCount: result.addedCount,
-      });
-    } catch (error) {
-      if (error.message.includes("không tồn tại")) {
-        return res.status(404).json({ success: false, message: error.message });
-      }
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi thêm từ vựng vào notebook",
-        error: error.message,
-      });
-    }
-  },
-
-  removeVocabulariesFromNotebookAdmin: async (req, res) => {
-    try {
-      const { notebookId } = req.params;
-      const { vocabIds } = req.body;
-
-      // Validation
-      if (!vocabIds || !Array.isArray(vocabIds) || vocabIds.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "vocabIds phải là một mảng và không được rỗng.",
-        });
-      }
-
-      const result = await notebookService.removeVocabulariesFromNotebook(
-        notebookId,
-        vocabIds
-      );
-
-      res.status(200).json({
-        success: true,
-        message: `Đã xóa thành công ${result.removedCount} từ vựng khỏi notebook.`,
-        // data: {
-        //   notebookId: notebookId,
-        //   removedCount: result.removedCount,
-        //   newTotalVocabCount: result.newTotalVocabCount
-        // }
-      });
-    } catch (error) {
-      if (error.message.includes("không tồn tại")) {
-        return res.status(404).json({ success: false, message: error.message });
-      }
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi xóa từ vựng khỏi notebook",
-        error: error.message,
-      });
-    }
-  },
+  
 
   bulkUpdateNotebookStatusAdmin: async (req, res) => {
     try {
@@ -345,28 +708,28 @@ const notebookController = {
     }
   },
 
-  async getNotebookDetails(req, res) {
-    try {
-      const userId = req.user.id;
-      const { notebookId } = req.params;
-      const vocabFilters = {
-        page: parseInt(req.query.page) || 1,
-        limit: parseInt(req.query.limit) || 20,
-        search: req.query.search || "",
-        status: req.query.status || "",
-      };
-      const notebook = await notebookService.getNotebookDetails(
-        notebookId,
-        userId,
-        vocabFilters
-      );
-      res.status(200).json({ success: true, data: notebook });
-    } catch (error) {
-      if (error.message.includes("không tồn tại"))
-        return res.status(404).json({ success: false, message: error.message });
-      res.status(500).json({ success: false, message: error.message });
-    }
-  },
+  // async getNotebookDetails(req, res) {
+  //   try {
+  //     const userId = req.user.id;
+  //     const { notebookId } = req.params;
+  //     const vocabFilters = {
+  //       page: parseInt(req.query.page) || 1,
+  //       limit: parseInt(req.query.limit) || 20,
+  //       search: req.query.search || "",
+  //       status: req.query.status || "",
+  //     };
+  //     const notebook = await notebookService.getNotebookDetails(
+  //       notebookId,
+  //       userId,
+  //       vocabFilters
+  //     );
+  //     res.status(200).json({ success: true, data: notebook });
+  //   } catch (error) {
+  //     if (error.message.includes("không tồn tại"))
+  //       return res.status(404).json({ success: false, message: error.message });
+  //     res.status(500).json({ success: false, message: error.message });
+  //   }
+  // },
 
   //user
   async createUserNotebook(req, res) {
@@ -421,33 +784,7 @@ const notebookController = {
     }
   },
 
-  async addVocabulariesToNotebookUser(req, res) {
-    try {
-      const userId = req.user.id;
-      const { notebookId } = req.params;
-      const { vocabIds } = req.body;
-      if (!vocabIds || !Array.isArray(vocabIds) || vocabIds.length === 0) {
-        return res
-          .status(400)
-          .json({ success: false, message: "vocabIds là một mảng bắt buộc." });
-      }
-
-      const result = await notebookService.addVocabulariesUser(
-        notebookId,
-        userId,
-        vocabIds
-      );
-      res.status(200).json({
-        success: true,
-        message: `Đã thêm thành công ${result.addedCount} từ vựng.`,
-        data: { newTotalVocabCount: result.newTotalVocabCount },
-      });
-    } catch (error) {
-      if (error.message.includes("không tồn tại"))
-        return res.status(404).json({ success: false, message: error.message });
-      res.status(500).json({ success: false, message: error.message });
-    }
-  },
+  
 
   async updateNotebookUser(req, res) {
     try {
@@ -472,33 +809,7 @@ const notebookController = {
     }
   },
 
-  async removeVocabulariesFromNotebookUser(req, res) {
-    try {
-      const userId = req.user.id;
-      const { notebookId } = req.params;
-      const { vocabIds } = req.body;
-      if (!vocabIds || !Array.isArray(vocabIds) || vocabIds.length === 0) {
-        return res
-          .status(400)
-          .json({ success: false, message: "vocabIds là một mảng bắt buộc." });
-      }
-
-      const result = await notebookService.removeVocabulariesUser(
-        notebookId,
-        userId,
-        vocabIds
-      );
-      res.status(200).json({
-        success: true,
-        message: `Đã xóa thành công ${result.removedCount} từ vựng.`,
-        data: { newTotalVocabCount: result.newTotalVocabCount },
-      });
-    } catch (error) {
-      if (error.message.includes("không tồn tại"))
-        return res.status(404).json({ success: false, message: error.message });
-      res.status(500).json({ success: false, message: error.message });
-    }
-  },
+  
 
   listNotebooks: async (req, res) => {
     try {

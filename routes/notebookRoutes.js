@@ -3,52 +3,106 @@ const router = express.Router();
 const notebookController = require('../controllers/notebookController');
 const authMiddleware = require('../middlewares/authMiddleware');
 
-//user
+
+
+
+
+
 router.post(
-  '/notebooks',
-  authMiddleware.verifyToken, 
-  notebookController.createUserNotebook
+  '/notebooks', 
+  authMiddleware.verifyToken,
+  notebookController.createNotebook
 );
 
-// GET /api/notebooks/my-notebooks (Lấy sổ tay cá nhân)
+
+//user
 router.get(
-  '/notebooks/my-notebooks',
+  '/notebooks/my',
   authMiddleware.verifyToken,
   notebookController.getMyNotebooks
 );
 
-// GET /api/notebooks/system-notebooks (Lấy sổ tay hệ thống)
+// 2. Lấy danh sách sổ tay hệ thống (dành cho user xem)
 router.get(
-  '/notebooks/system-notebooks',
+  '/notebooks/system',
   authMiddleware.verifyToken,
-  notebookController.getSystemNotebooks
+  notebookController.getSystemNotebooksForUser
+);
+
+
+// === CÁC API MỚI CHO ADMIN ===
+
+// 3. Lấy toàn bộ sổ tay hệ thống (dành cho admin quản lý)
+router.get(
+  '/admin/notebooks/system',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  notebookController.getSystemNotebooksForAdmin
+);
+
+// 4. Lấy toàn bộ sổ tay trong DB (cả của user và hệ thống)
+router.get(
+  '/admin/notebooks',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  notebookController.getAllNotebooksAdmin
 );
 
 router.get(
-    '/notebooks/list',
-    authMiddleware.verifyToken,
-    notebookController.getNotebooksUser
+  '/notebooks/:id',
+  authMiddleware.verifyToken,
+  notebookController.getNotebookDetails
 );
+
+
+
+
 router.post(
     '/notebooks/:notebookId/vocabularies',
     authMiddleware.verifyToken,
     notebookController.addVocabulariesToNotebookUser
 );
 
+
+router.post(
+  '/admin/notebooks/:notebookId/vocabularies',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  notebookController.addVocabulariesToNotebookAdmin
+);
+
+
+
+
+router.delete('/notebooks/:notebookId/vocabularies',
+  authMiddleware.verifyToken, 
+  notebookController.removeVocabulariesFromNotebookUser);
+
+router.delete(
+  '/admin/notebooks/:notebookId/vocabularies',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  notebookController.removeVocabulariesFromNotebookAdmin
+);
+
+
+
+
+
+
+
+router.delete(
+  '/notebooks/:id/vocabularies/:vocabId',
+    authMiddleware.verifyToken,
+    notebookController.removeVocabFromNotebook
+);
 router.get(
     '/notebooks/:id/vocab',
     authMiddleware.verifyToken,
     notebookController.getVocabInNotebook
 );
-router.delete(
-    '/notebooks/:id/vocab/:vocabId',
-    authMiddleware.verifyToken,
-    notebookController.removeVocabFromNotebook
-);
+
+
 router.put(
-    '/notebooks/:id/vocab/:vocabId/status',
-    authMiddleware.verifyToken,
-    notebookController.updateVocabStatus
+  '/notebooks/:notebookId/vocabularies/:vocabId/status',
+  authMiddleware.verifyToken,
+  notebookController.updateVocabStatusInNotebook
 );
 router.delete(
     '/notebooks/:id',
@@ -56,13 +110,31 @@ router.delete(
     notebookController.deleteUserNotebook
 );
 
-router.put('/notebooks/:notebookId',authMiddleware.verifyToken, notebookController.updateNotebookUser);
 
-router.delete('/notebooks/:notebookId/vocabularies',authMiddleware.verifyToken, notebookController.removeVocabulariesFromNotebookUser);
+router.put(
+  '/notebooks/:id',
+  authMiddleware.verifyToken,
+  notebookController.updateNotebook
+);
 
-router.get('/notebooks/:notebookId',authMiddleware.verifyToken, notebookController.getNotebookDetails);
 
-//admin
+
+// === CÁC API MỚI CHO ADMIN ===
+
+// 3. Lấy toàn bộ sổ tay hệ thống (dành cho admin quản lý)
+router.get(
+  '/admin/notebooks/system',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  notebookController.getSystemNotebooksForAdmin
+);
+
+// 4. Lấy toàn bộ sổ tay trong DB (cả của user và hệ thống)
+router.get(
+  '/admin/notebooks',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  notebookController.getAllNotebooksAdmin
+);
+
 
 router.get(
   '/admin/notebooks',
@@ -77,12 +149,7 @@ router.get(
   notebookController.getNotebookByIdAdmin
 );
 
-router.post(
-  '/admin/notebooks',
-  authMiddleware.verifyToken,
-  authMiddleware.isAdmin,
-  notebookController.createNotebookAdmin
-);
+
 
 router.put(
     '/admin/notebooks/:id',
@@ -91,17 +158,6 @@ router.put(
     notebookController.updateNotebookAdmin
 );
 
-router.post(
-  '/admin/notebooks/:notebookId/vocabularies',
-  [authMiddleware.verifyToken, authMiddleware.isAdmin],
-  notebookController.addVocabulariesToNotebookAdmin
-);
-
-router.delete(
-  '/admin/notebooks/:notebookId/vocabularies',
-  [authMiddleware.verifyToken, authMiddleware.isAdmin],
-  notebookController.removeVocabulariesFromNotebookAdmin
-);
 
 router.post(
   '/admin/notebooks/bulk-status',
@@ -114,6 +170,13 @@ router.post(
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
   notebookController.bulkDeleteNotebooksAdmin
 );
+
+router.post(
+  '/notebooks/:notebookId/vocabularies-by-level',
+  authMiddleware.verifyToken,
+  notebookController.addVocabulariesByLevelToNotebook
+);
+
 
 
 

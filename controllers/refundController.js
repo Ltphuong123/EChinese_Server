@@ -15,33 +15,33 @@ const refundController = {
         endDate: req.query.endDate || null,
       };
       const result = await refundService.getAll(options);
-      res.status(200).json({ success: true, ...result });
+      res.status(200).json({ success: true, data:result });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách hoàn tiền.', error: error.message });
     }
   },
 
-  processRefundRequest: async (req, res) => {
-    try {
-      const { refundId } = req.params;
-      const payload = {
-          ...req.body,
-          adminId: req.user.id
-      };
-      
-      const updatedRefund = await refundService.processRefund(refundId, payload);
-      res.status(200).json({ success: true, message: 'Xử lý yêu cầu thành công.', data: updatedRefund });
+processRefund: async (req, res) => {
+        try {
+          const adminId = req.user.id;
+            const { id } = req.params;
+            const payload = req.body;
+            
+            const processedRefund = await refundService.processRefundRequest(id, adminId,payload);
 
-    } catch (error) {
-      if (error.message.includes('not found') || error.message.includes('Invalid action')) {
-        return res.status(404).json({ success: false, message: error.message });
-      }
-      if (error.message.includes('Only pending') || error.message.includes('required')) {
-        return res.status(400).json({ success: false, message: error.message });
-      }
-      res.status(500).json({ success: false, message: 'Lỗi khi xử lý yêu cầu.', error: error.message });
-    }
-  },
+            res.status(200).json({
+                success: true,
+                message: `Yêu cầu hoàn tiền đã được xử lý thành công.`,
+                data: processedRefund,
+            });
+        } catch (error) {
+            const statusCode = error.statusCode || 500;
+            res.status(statusCode).json({ success: false, message: error.message });
+        }
+    },
+
+
+
 
   // --- Controllers cho User ---
   createUserRefundRequest: async (req, res) => {

@@ -9,7 +9,7 @@ const authMiddleware = require('../middlewares/authMiddleware');
 const adminPath = '/monetization/refunds';
 router.use(adminPath, [authMiddleware.verifyToken, authMiddleware.isAdmin]);
 router.get(adminPath, refundController.getAllRefunds);
-router.put(`${adminPath}/:refundId/process`, refundController.processRefundRequest);
+router.put(`${adminPath}/:id/process`, refundController.processRefund);
 
 // --- User Routes ---
 const userPath = '/refunds';
