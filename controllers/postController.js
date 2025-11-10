@@ -214,28 +214,36 @@ const postController = {
     }
   },
 
-  softDeletePostByUser: async (req, res) => {
+
+
+  
+  
+  removePost: async (req, res) => {
     try {
       const { postId } = req.params;
-      const userId = req.user.id; // Lấy từ token
+      const { reason } = req.body; // Lý do gỡ bài, có thể không bắt buộc
+      
+      // Lấy thông tin người dùng đang thực hiện hành động từ token
+      const user = {
+          id: req.user.id,
+          role: req.user.role
+      };
 
-      await postService.softDeletePost(postId, userId);
+      await postService.removePost(postId, user, reason);
 
-      res.status(204).send();
+      res.status(200).json({ success: true, message: 'Gỡ bài viết thành công.' });
     } catch (error) {
-      if (
-        error.message.includes("không tồn tại") ||
-        error.message.includes("không có quyền")
-      ) {
+      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi xóa bài viết",
-        error: error.message,
-      });
+      if (error.message.includes('đã bị gỡ')) {
+          return res.status(400).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi gỡ bài viết', error: error.message });
     }
   },
+
+  
 };
 
 module.exports = postController;

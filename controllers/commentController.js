@@ -29,11 +29,17 @@ const commentController = {
     try {
       const { postId } = req.params;
       const comments = await commentService.getCommentsForPost(postId);
-      res.status(200).json({ success: true, data: comments });
+      res.status(200).json({ 
+        success: true, 
+        message: 'Lấy danh sách bình luận thành công.',
+        data: comments 
+      });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy bình luận', error: error.message });
     }
   },
+
+
 
   getCommentById: async (req, res) => {
     try {
@@ -68,47 +74,8 @@ const commentController = {
     }
   },
 
-  // softDeleteComment: async (req, res) => {
-  //   try {
-  //     const { commentId } = req.params;
-  //     const userId = req.user.id;
-  //     await commentService.softDeleteComment(commentId, userId);
-  //     res.status(204).send();
-  //   } catch (error) {
-  //     if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
-  //       return res.status(404).json({ success: false, message: error.message });
-  //     }
-  //     res.status(500).json({ success: false, message: 'Lỗi khi xóa bình luận', error: error.message });
-  //   }
-  // },
 
-  // // --- ADMIN ACTIONS ---
-  // removeCommentAdmin: async (req, res) => {
-  //   try {
-  //     const { commentId } = req.params;
-  //     const { reason } = req.body;
-  //     const adminId = req.user.id;
-  //     if (!reason) return res.status(400).json({ success: false, message: 'Lý do là bắt buộc.' });
-      
-  //     const comment = await commentService.removeComment(commentId, reason, adminId);
-  //     res.status(200).json({ success: true, message: 'Gỡ bình luận thành công.', data: comment });
-  //   } catch (error) {
-  //     if (error.message.includes('không tồn tại')) return res.status(404).json({ success: false, message: error.message });
-  //     res.status(500).json({ success: false, message: 'Lỗi khi gỡ bình luận', error: error.message });
-  //   }
-  // },
   
-  // restoreCommentAdmin: async (req, res) => {
-  //   try {
-  //     const { commentId } = req.params;
-  //     const adminId = req.user.id;
-  //     const comment = await commentService.restoreComment(commentId, adminId);
-  //     res.status(200).json({ success: true, message: 'Khôi phục bình luận thành công.', data: comment });
-  //   } catch (error) {
-  //      if (error.message.includes('không tồn tại')) return res.status(404).json({ success: false, message: error.message });
-  //     res.status(500).json({ success: false, message: 'Lỗi khi khôi phục bình luận', error: error.message });
-  //   }
-  // },
 
   
 };

@@ -38,35 +38,21 @@ router.post(
   postController.toggleLikePost
 );
 
+router.post(
+  `/community/posts/:postId/view`,
+  authMiddleware.verifyToken,
+  postController.recordPostView
+);
+
 router.get(`/community/posts/:postId/views`, postController.getPostViews);
 
 router.get(`/community/posts/:postId/likes`, postController.getPostLikes);
 
-// Ghi nhận một lượt xem bài viết
-// router.delete(
-//   `/community/posts/:postId`,
-//   authMiddleware.verifyToken,
-//   postController.softDeletePost
-// );
 
-// router.delete(
-//   `${BASE_PATH}/:postId`,
-//   authMiddleware.verifyToken,
-//   postController.softDeletePostByUser
-// );
-
-// // ADMIN: Gỡ bài viết của bất kỳ ai
-// router.delete(
-//   `/admin${BASE_PATH}/:postId`,
-//   [authMiddleware.verifyToken, authMiddleware.isAdmin],
-//   moderationController.removePostByAdmin // Đặt trong moderationController sẽ logic hơn
-// );
-
-// // ADMIN: Khôi phục một bài viết đã gỡ
-// router.post(
-//   `/admin${BASE_PATH}/:postId/restore`,
-//   [authMiddleware.verifyToken, authMiddleware.isAdmin],
-//   moderationController.restorePostByAdmin // Đặt trong moderationController
-// );
+router.delete(
+  `${BASE_PATH}/:postId`,
+  authMiddleware.verifyToken,
+  postController.removePost
+);
 
 module.exports = router;

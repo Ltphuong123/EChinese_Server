@@ -221,29 +221,54 @@ const paymentModel = {
     return result.rowCount;
   },
 
-  search: async (query, limit = 10) => {
-    const searchQuery = `%${query}%`;
+  search: async (query, limit = 20) => {
     const queryText = `
       SELECT 
         p.id,
         p.user_id,
+        p.subscription_id,
         p.amount,
+        p.currency,
         p.status,
+        p.payment_method,
+        p.payment_channel,
         p.gateway_transaction_id,
-        u.email as "userEmail"
+        p.transaction_date,
+        
+        -- Lấy thông tin từ các bảng liên quan
+        s.name AS "subscriptionName",
+        u.name AS "userName",
+        u.email AS "userEmail",
+        admin.name AS "processedByAdminName"
+        
       FROM "Payments" p
+      
+      -- Join để lấy tên người dùng và email
       LEFT JOIN "Users" u ON p.user_id = u.id
-      WHERE 
-        p.id::text ILIKE $1 OR
-        p.user_id::text ILIKE $1 OR
+      
+      -- Join để lấy tên gói đăng ký
+      LEFT JOIN "Subscriptions" s ON p.subscription_id = s.id
+      
+      -- Join để lấy tên admin đã xử lý (nếu có)
+      LEFT JOIN "Users" admin ON p.processed_by_admin = admin.id
+      
+      WHERE
+        p.gateway_transaction_id ILIKE $1 OR
         u.email ILIKE $1 OR
-        p.gateway_transaction_id ILIKE $1
+        u.name ILIKE $1 OR
+        s.name ILIKE $1 -- Thêm tìm kiếm theo tên gói
+        
       ORDER BY p.transaction_date DESC
       LIMIT $2;
     `;
-    const result = await db.query(queryText, [searchQuery, limit]);
-    return result.rows;
+    
+    const values = [`%${query}%`, limit];
+    
+    const result = await db.query(queryText, values);
+    return result.rows[0];
   },
+
+
 
   findByUserId: async (userId) => {
     const queryText = `

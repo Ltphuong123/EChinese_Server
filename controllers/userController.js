@@ -83,7 +83,9 @@ const userController = {
         refreshToken: data.refreshToken,
         user: data.user,
       });
-    } catch (error) {}
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
   },
 
   refreshToken: async (req, res) => {
