@@ -35,70 +35,79 @@ const postModel = {
   },
 
   findAllPublic: async (filters) => {
-    const { limit, offset, topic, userId } = filters;
-    console.log("Filters in findAllPublic:", filters);
+    const { limit, offset, topic, currentUserId, status } = filters;
+    
+    // --- Xử lý tham số và điều kiện WHERE ---
+    const queryParams = [currentUserId, limit, offset];
+    let whereClauses = `WHERE p.deleted_at IS NULL`;
 
-    const queryParams = [];
-    // Chỉ lấy các bài viết đã được công bố, phê duyệt và chưa bị xóa
-    let whereClauses = `WHERE p.status = 'published' AND p.is_approved = true AND p.deleted_at IS NULL`;
-
-    if (topic) {
+    // Lọc theo topic
+    if (topic&& topic !== 'undefined') {
       queryParams.push(topic);
       whereClauses += ` AND p.topic = $${queryParams.length}`;
     }
 
+    // Lọc theo status (trạng thái kiểm duyệt)
+    if (status && status !== 'all') {
+      queryParams.push(status);
+      whereClauses += ` AND p.status = $${queryParams.length}`;
+    } else {
+      // Mặc định, chỉ lấy các bài 'published' và đã 'approved'
+      whereClauses += ` AND p.status = 'published' AND p.is_approved = true`;
+    }
+
     const baseQuery = `
       FROM "Posts" p
-      LEFT JOIN "Users" u ON p.user_id = u.id
+      JOIN "Users" u ON p.user_id = u.id
+      LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
       ${whereClauses}
     `;
 
-    // Truy vấn đếm
+    // --- Truy vấn đếm ---
     const countQuery = `SELECT COUNT(p.id) ${baseQuery}`;
-    const totalResult = await db.query(countQuery, queryParams);
+    const countParams = queryParams.slice(3); // Chỉ lấy các param của WHERE
+    const totalResult = await db.query(countQuery, countParams);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
 
-    // Truy vấn lấy dữ liệu
+    // --- Truy vấn lấy dữ liệu chính ---
     const selectQuery = `
-    SELECT
-      p.id,
-      p.title,
-      p.content,
-      p.topic,
-      p.likes,
-      p.views,
-      p.created_at,
-      p.is_pinned,
-      json_build_object(
-        'id', u.id,
-        'name', u.name,
-        'avatar_url', u.avatar_url
-      ) AS author,
-      EXISTS(
-        SELECT 1 FROM "PostLikes" pl
-        WHERE pl.post_id = p.id
-          AND pl.user_id = $${queryParams.length + 1}
-      ) AS "isLiked",
-      EXISTS(
-        SELECT 1 FROM "Comments" c
-        WHERE c.post_id = p.id
-          AND c.user_id = $${queryParams.length + 1}
-          AND c.deleted_at IS NULL
-      ) AS "isCommented"
-    ${baseQuery}
-    ORDER BY p.is_pinned DESC, p.created_at DESC
-    LIMIT $${queryParams.length + 2}
-    OFFSET $${queryParams.length + 3};
-  `;
-
-    const postsResult = await db.query(selectQuery, [
-      ...queryParams,
-      userId,
-      limit,
-      offset,
-    ]);
+      SELECT 
+        p.*, -- Lấy tất cả các trường từ Posts, bao gồm auto_flagged
+        
+        -- Thông tin người dùng (author)
+        jsonb_build_object(
+          'id', u.id,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'badge_level', u.badge_level,
+          'community_points', u.community_points,
+          'level', u.level
+          -- Thêm các trường khác của user nếu cần
+        ) as "user",
+        
+        -- Thông tin huy hiệu (badge)
+        jsonb_build_object(
+            'level', bl.level,
+            'name', bl.name,
+            'icon', bl.icon
+        ) as badge,
+        
+        -- Đếm số lượng bình luận
+        (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count,
+        
+        -- Trạng thái tương tác của người dùng hiện tại
+        EXISTS (SELECT 1 FROM "PostLikes" pl WHERE pl.post_id = p.id AND pl.user_id = $1) as "isLiked",
+        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $1 AND c.deleted_at IS NULL) as "isCommented"
+        
+      ${baseQuery}
+      ORDER BY p.is_pinned DESC, p.created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    
+    const postsResult = await db.query(selectQuery, queryParams);
     return { posts: postsResult.rows, totalItems };
   },
+
 
   findById: async (postId) => {
     const queryText = `
@@ -289,73 +298,66 @@ const postModel = {
     return result.rowCount;
   },
 
-  findAllByUserId: async (userId, { limit, offset }) => {
+  findAllByUserId: async (userId, currentUserId, { limit, offset }) => {
     const where = `WHERE p.user_id = $1 AND p.deleted_at IS NULL`;
+    const params = [userId, currentUserId, limit, offset];
 
-    const countQuery = `SELECT COUNT(*) FROM "Posts" p ${where};`;
+    const baseQuery = `FROM "Posts" p JOIN "Users" u ON p.user_id = u.id ${where}`;
+
+    const countQuery = `SELECT COUNT(p.id) ${baseQuery};`;
     const totalResult = await db.query(countQuery, [userId]);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
 
     const selectQuery = `
       SELECT 
-        p.id, p.title, p.topic, p.likes, p.views, p.created_at, p.is_pinned,
-        -- Lấy một đoạn ngắn của content để preview
-        LEFT(p.content->>'text', 150) as content_preview 
-      FROM "Posts" p
-      ${where}
+        p.id, p.title, p.content, p.topic, p.likes, p.views, p.created_at, p.is_pinned,
+        json_build_object('id', u.id, 'name', u.name, 'avatar_url', u.avatar_url) as author,
+        EXISTS (SELECT 1 FROM "PostLikes" pl WHERE pl.post_id = p.id AND pl.user_id = $2) as "isLiked",
+        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $2) as "isCommented"
+      ${baseQuery}
       ORDER BY p.created_at DESC
-      LIMIT $2 OFFSET $3;
+      LIMIT $3 OFFSET $4;
     `;
-    const postsResult = await db.query(selectQuery, [userId, limit, offset]);
+    
+    const postsResult = await db.query(selectQuery, params);
     return { posts: postsResult.rows, totalItems };
   },
 
-  // --- HÀM MỚI 2: Lấy bài viết đã tương tác ---
+  /**
+   * --- HÀM 3: Lấy danh sách bài viết mà người dùng đã tương tác (like hoặc comment) ---
+   */
   findInteractedByUserId: async (userId, { limit, offset }) => {
-    // --- BƯỚC 1: Lấy danh sách ID các bài viết đã tương tác ---
-    // Sử dụng UNION để lấy các post_id duy nhất từ cả hai bảng
-    const getInteractedIdsQuery = `
-      (SELECT post_id FROM "PostLikes" WHERE user_id = $1)
-      UNION 
-      (SELECT post_id FROM "Comments" WHERE user_id = $1)
+    const params = [userId, limit, offset];
+    
+    // Điều kiện WHERE để tìm các bài viết đã tương tác
+    const whereInteracted = `
+      WHERE p.deleted_at IS NULL AND p.id IN (
+        SELECT post_id FROM "PostLikes" WHERE user_id = $1
+        UNION
+        SELECT post_id FROM "Comments" WHERE user_id = $1
+      )
     `;
-    const idsResult = await db.query(getInteractedIdsQuery, [userId]);
-    const interactedPostIds = idsResult.rows.map((row) => row.post_id);
 
-    // Nếu người dùng chưa tương tác với bài nào, trả về kết quả rỗng ngay lập-tức
-    if (interactedPostIds.length === 0) {
-      return { posts: [], totalItems: 0 };
-    }
+    const baseQuery = `FROM "Posts" p JOIN "Users" u ON p.user_id = u.id ${whereInteracted}`;
 
-    const totalItems = interactedPostIds.length;
-
-    // --- BƯỚC 2: Lấy thông tin chi tiết của các bài viết đó ---
-    // Sử dụng `WHERE id = ANY($1::uuid[])` để truy vấn hiệu quả với một mảng ID.
+    // Truy vấn đếm
+    const countQuery = `SELECT COUNT(p.id) ${baseQuery};`;
+    const totalResult = await db.query(countQuery, [userId]);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+    
+    // Truy vấn lấy dữ liệu đầy đủ
     const selectQuery = `
       SELECT
-        p.id, p.title, p.topic, p.likes, p.views, p.created_at, p.is_pinned,
-        LEFT(p.content->>'text', 150) as content_preview,
-        json_build_object(
-          'id', u.id,
-          'name', u.name,
-          'avatar_url', u.avatar_url
-        ) as author
-      FROM "Posts" p
-      JOIN "Users" u ON p.user_id = u.id
-      WHERE p.id = ANY($1::uuid[])
-        AND p.deleted_at IS NULL
-        AND p.status = 'published'
+        p.id, p.title, p.content, p.topic, p.likes, p.views, p.created_at, p.is_pinned,
+        json_build_object('id', u.id, 'name', u.name, 'avatar_url', u.avatar_url) as author,
+        EXISTS (SELECT 1 FROM "PostLikes" pl WHERE pl.post_id = p.id AND pl.user_id = $1) as "isLiked",
+        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $1) as "isCommented"
+      ${baseQuery}
       ORDER BY p.created_at DESC
       LIMIT $2 OFFSET $3;
     `;
-
-    // Truyền mảng ID, limit, và offset vào câu lệnh
-    const postsResult = await db.query(selectQuery, [
-      interactedPostIds,
-      limit,
-      offset,
-    ]);
-
+    
+    const postsResult = await db.query(selectQuery, params);
     return { posts: postsResult.rows, totalItems };
   },
 };

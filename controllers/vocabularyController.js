@@ -19,12 +19,13 @@ const vocabularyController = {
 
       const totalProcessed = vocabulariesData.length;
       const successCount = result.processedItems.length;
-      const failureCount = result.failedItems.length;
+      const failureCount = result.errors.length;
 
       res.status(201).json({
         success: true,
         message: `Đã xử lý ${totalProcessed} mục. Thành công: ${successCount}, Thất bại: ${failureCount}.`,
-        data: result
+        data: result.processedItems,
+        errors: result.errors
       });
 
     } catch (error) {

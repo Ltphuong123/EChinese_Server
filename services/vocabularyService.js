@@ -1,59 +1,92 @@
 // services/vocabularyService.js
 
 const vocabularyModel = require('../models/vocabularyModel');
+const { v4: uuidv4 } = require('uuid'); // Import để tạo giá trị duy nhất
 
 const vocabularyService = {
   bulkCreateOrUpdateVocabularies: async (vocabulariesData) => {
     const processedItems = [];
-    const failedItems = [];
+    const errors = [];
 
-    for (const vocabData of vocabulariesData) {
+    for (const [index, vocabData] of vocabulariesData.entries()) {
+      let originalHanzi = vocabData.hanzi;
+      let errorDetail = null;
+      let isError = false;
+
       try {
-        // --- Validation cơ bản ---
-        if (!vocabData.hanzi || !vocabData.pinyin || !vocabData.meaning) {
-            throw new Error('Thiếu thông tin bắt buộc (hanzi, pinyin, meaning).');
+        // --- 1. Xử lý giá trị mặc định và validation ---
+        if (!vocabData.hanzi) {
+            vocabData.hanzi = `DEFAULT_HANZI_${uuidv4()}`;
+            errorDetail = 'Thiếu thông tin bắt buộc: hanzi. Đã tạo giá trị mặc định duy nhất.';
+            isError = true;
+        }
+        if (!vocabData.pinyin) {
+            vocabData.pinyin = 'chưa có phiên âm';
+            if(!errorDetail) errorDetail = 'Thiếu thông tin bắt buộc: pinyin. Đã thêm giá trị mặc định.';
+            isError = true;
+        }
+        if (!vocabData.meaning) {
+            vocabData.meaning = 'chưa có nghĩa';
+            if(!errorDetail) errorDetail = 'Thiếu thông tin bắt buộc: meaning. Đã thêm giá trị mặc định.';
+            isError = true;
+        }
+        if (!vocabData.word_types || !Array.isArray(vocabData.word_types) || vocabData.word_types.length === 0) {
+            vocabData.word_types = ['Danh từ'];
+            if(!errorDetail) errorDetail = 'Thiếu thông tin bắt buộc: wordTypes. Đã thêm giá trị mặc định [DT].';
+            isError = true;
+        }
+        if (!vocabData.level || !Array.isArray(vocabData.level) || vocabData.level.length === 0) {
+            vocabData.level = ['HSK1'];
+            if(!errorDetail) errorDetail = 'Thiếu thông tin bắt buộc: level. Đã thêm giá trị mặc định [HSK1].';
+            isError = true;
         }
 
-        let result;
-        let action = 'create'; // Giả định hành động mặc định là 'create'
-
-        // --- Logic kiểm tra ID ---
+        // --- 2. Logic kiểm tra ID và quyết định hành động (create/update) ---
+        let action = 'create';
         if (vocabData.id) {
-          // Nếu có ID, kiểm tra xem nó có thực sự tồn tại trong database không
           const idExists = await vocabularyModel.exists(vocabData.id);
-          
           if (idExists) {
-            // ID tồn tại -> thực hiện cập nhật
             action = 'update';
           } else {
-            // ID không tồn tại -> coi như tạo mới, loại bỏ ID không hợp lệ
-            // Đặt id thành null để đảm bảo hàm create không bị ảnh hưởng
-            vocabData.id = null; 
+            // ID được cung cấp nhưng không hợp lệ, vẫn tạo mới.
+            // >>> THAY ĐỔI Ở ĐÂY: Không còn gán lỗi cho trường hợp này nữa. <<<
+            // if(!errorDetail) errorDetail = `ID '${vocabData.id}' không tồn tại. Đã tạo một bản ghi mới thay vì cập nhật.`;
+            // isError = true; // <-- BỎ DÒNG NÀY
+            vocabData.id = null; // Vẫn loại bỏ ID không hợp lệ để đảm bảo hành động 'create' thành công.
           }
         }
-
-        // --- Thực hiện hành động ---
+        
+        // --- 3. Luôn thử lưu vào Database ---
+        let result;
         if (action === 'update') {
           result = await vocabularyModel.updateWithWordTypes(vocabData.id, vocabData);
-        } else { // action === 'create'
-          // Đảm bảo không truyền id rác vào hàm create
+        } else {
           delete vocabData.id;
           result = await vocabularyModel.createWithWordTypes(vocabData);
         }
         
-        // Thêm thông tin về hành động đã thực hiện để dễ debug
+        // --- 4. Ghi nhận kết quả ---
+        if (isError) {
+          errors.push({
+            index: index,
+            hanzi: result.hanzi,
+            id: result.id,
+            detail: errorDetail
+          });
+        }
         processedItems.push({ ...result, action });
 
-      } catch (error) {
-        failedItems.push({
-          item: vocabData,
-          error: error.message,
-          detail: error.detail
+      } catch (dbError) {
+        errors.push({
+          index: index,
+          hanzi: originalHanzi || vocabData.hanzi,
+          id: vocabData.id || null,
+          detail: dbError.detail || dbError.message
         });
       }
     }
 
-    return { processedItems, failedItems };
+    return { processedItems, errors };
   },
   
   getPaginatedVocabularies: async (filters) => {

@@ -78,9 +78,10 @@ const examController = {
   updateFullExamAdmin: async (req, res) => {
     const { id } = req.params;
     const examData = req.body;
-    const userId = req.user.id; // Người thực hiện cập nhật
+    const userId = req.user.id; // Lấy ID người thực hiện cập nhật từ token
 
     try {
+      // Validation cơ bản
       if (!examData.name || !examData.exam_type_id || !examData.sections) {
         return res.status(400).json({
           success: false,
@@ -88,8 +89,10 @@ const examController = {
         });
       }
 
+      // Gọi service để thực hiện logic cập nhật phức tạp
       const updatedExam = await examService.updateFullExam(id, examData, userId);
 
+      // Trả về dữ liệu bài thi mới đã được cập nhật
       res.status(200).json({
         success: true,
         message: 'Cập nhật bài thi hoàn chỉnh thành công.',
@@ -100,9 +103,11 @@ const examController = {
        if (error.message.includes('không tồn tại')) {
         return res.status(404).json({ success: false, message: error.message });
       }
+      // Bắt các lỗi chung khác
       res.status(500).json({ success: false, message: 'Lỗi máy chủ khi cập nhật bài thi', error: error.message });
     }
   },
+
 
   duplicateExamAdmin: async (req, res) => {
     try {
@@ -233,35 +238,80 @@ const examController = {
     }
   },
 
-  softDeleteExamAdmin: async (req, res) => {
+  publishExamAdmin: async (req, res) => {
     try {
       const { id } = req.params;
-      await examService.setExamDeletedStatus(id, true);
-      res.status(200).send({ success: true, message: 'Thành công'});
+      // Service sẽ trả về cấu trúc đầy đủ của bài thi
+      const updatedExam = await examService.setPublishedStatus(id, true);
+      res.status(200).json({ success: true, message: 'Công bố bài thi thành công.', data: updatedExam });
     } catch (error) {
       if (error.message.includes('không tồn tại')) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      res.status(500).json({ success: false, message: 'Lỗi khi xóa mềm bài thi', error: error.message });
+      res.status(500).json({ success: false, message: 'Lỗi khi công bố bài thi', error: error.message });
     }
   },
 
+  /**
+   * Controller cho API hủy công bố bài thi.
+   * Method: POST
+   * URL: /api/admin/exams/:id/unpublish
+   */
+  unpublishExamAdmin: async (req, res) => {
+    try {
+      const { id } = req.params;
+      // Service sẽ trả về cấu trúc đầy đủ của bài thi
+      const updatedExam = await examService.setPublishedStatus(id, false);
+      res.status(200).json({ success: true, message: 'Hủy công bố bài thi thành công.', data: updatedExam });
+    } catch (error) {
+      if (error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi hủy công bố bài thi', error: error.message });
+    }
+  },
+
+  /**
+   * Controller cho API xóa mềm bài thi.
+   * Method: DELETE
+   * URL: /api/admin/exams/:id
+   */
+  softDeleteExamAdmin: async (req, res) => {
+    try {
+      const { id } = req.params;
+      // await examService.setDeletedStatus(id, true);
+      // Theo chuẩn REST, DELETE thành công trả về 204 và không có body
+           const restoredExam = await examService.setDeletedStatus(id, true);
+      res.status(200).json({ success: true, message: 'Khôi phục bài thi thành công.', data: restoredExam });
+
+    } catch (error) {
+      if (error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi xóa bài thi', error: error.message });
+    }
+  },
+
+  /**
+   * Controller cho API khôi phục bài thi.
+   * Method: POST
+   * URL: /api/admin/exams/:id/restore
+   */
   restoreExamAdmin: async (req, res) => {
     try {
       const { id } = req.params;
-      const restoredExam = await examService.setExamDeletedStatus(id, false);
-      res.status(200).json({
-        success: true,
-        message: 'Khôi phục bài thi thành công.',
-        data: restoredExam
-      });
-    } catch (error) {
+      // Service sẽ trả về cấu trúc đầy đủ của bài thi
+      const restoredExam = await examService.setDeletedStatus(id, false);
+      res.status(200).json({ success: true, message: 'Khôi phục bài thi thành công.', data: restoredExam });
+    } catch (error)
+ {
       if (error.message.includes('không tồn tại')) {
         return res.status(404).json({ success: false, message: error.message });
       }
       res.status(500).json({ success: false, message: 'Lỗi khi khôi phục bài thi', error: error.message });
     }
   },
+
 
   forceDeleteExamAdmin: async (req, res) => {
     try {

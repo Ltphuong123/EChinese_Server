@@ -79,12 +79,12 @@ const userService = {
       userService.updateLoginStreak(user.id, today),
     ]);
 
-    const { password_hash, ...userWithoutPassword } = user;
+    const user2 = await userModel.findUserDetailsById(user.id);
 
     return {
       token: accessToken,
       refreshToken: refreshToken,
-      user: userWithoutPassword,
+      user: user2,
     };
   },
 
@@ -125,13 +125,14 @@ const userService = {
       userModel.updateDailyActivity(user.id, today),
       userService.updateLoginStreak(user.id, today),
     ]);
+    const user2 = await userModel.findUserDetailsById(user.id);
 
-    const { password_hash, ...userWithoutPassword } = user;
+    // const { password_hash, ...userWithoutPassword } = user;
 
     return {
       token: accessToken,
       refreshToken: refreshToken,
-      user: userWithoutPassword,
+      user: user2,
     };
   },
 
