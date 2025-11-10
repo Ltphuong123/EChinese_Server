@@ -104,10 +104,22 @@ const subscriptionModel = {
   /**
    * Xóa một gói
    */
-  delete: async (id) => {
-    const queryText = 'DELETE FROM "Subscriptions" WHERE id = $1';
-    await db.query(queryText, [id]);
-  },
+  delete: async (id, client = db) => {
+        const queryText = `DELETE FROM "Subscriptions" WHERE id = $1;`;
+        await client.query(queryText, [id]);
+    },
+    
+    deleteRelatedUserSubscriptions: async (subscriptionId, client = db) => {
+        const queryText = `DELETE FROM "UserSubscriptions" WHERE subscription_id = $1;`;
+        await client.query(queryText, [subscriptionId]);
+    },
+    
+    deleteRelatedPayments: async (subscriptionId, client = db) => {
+        const queryText = `DELETE FROM "Payments" WHERE subscription_id = $1;`;
+        await client.query(queryText, [subscriptionId]);
+    },
+
+
 };
 
 module.exports = subscriptionModel;

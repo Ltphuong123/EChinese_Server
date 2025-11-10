@@ -86,7 +86,7 @@ router.get(
   userController.getMyPosts
 );
 
-// Lấy danh sách bài viết người dùng đã tương tác
+// Lấy danh sách bài viết người dùng đã tương tác (like hoặc comment)
 router.get(
   '/users/me/interacted-posts',
   authMiddleware.verifyToken,

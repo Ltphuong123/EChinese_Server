@@ -16,7 +16,7 @@ router.get(basePath, userSubscriptionController.getAll);
 router.get(`${basePath}/history/:userId`, userSubscriptionController.getHistory);
 
 // PUT /api/monetization/user-subscriptions/:userSubId
-router.put(`${basePath}/:userSubId`, userSubscriptionController.update);
+router.put(`${basePath}/:id`, userSubscriptionController.updateDetails);
 
 router.post(basePath, userSubscriptionController.addSubscription);
 

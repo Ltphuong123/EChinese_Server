@@ -10,21 +10,17 @@ const postService = {
     return await postModel.create(dataToCreate);
   },
 
-  getPublicPosts: async (filters = { page: 1, limit: 10 }) => {
+  getPublicPosts: async (filters) => {
     const { page, limit } = filters;
     const offset = (page - 1) * limit;
 
-    const { posts, totalItems } = await postModel.findAllPublic({
-      ...filters,
-      offset,
-    });
-
+    // `filters` đã chứa `status`, truyền thẳng xuống là được
+    const { posts, totalItems } = await postModel.findAllPublic({ ...filters, offset });
+    
     const totalPages = Math.ceil(totalItems / limit);
-    return {
-      data: posts,
-      meta: { total: totalItems, page, limit, totalPages },
-    };
+    return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
   },
+
 
   getPostById: async (postId) => {
     // Tăng lượt xem khi có người xem bài viết
@@ -151,41 +147,28 @@ const postService = {
     }
   },
 
-  getPostsByUserId: async (userId, filters = { page: 1, limit: 10 }) => {
+  getUserPosts: async (userId, currentUserId, filters) => {
     const { page, limit } = filters;
     const offset = (page - 1) * limit;
 
-    const { posts, totalItems } = await postModel.findAllByUserId(userId, {
-      limit,
-      offset,
-    });
-
+    const { posts, totalItems } = await postModel.findAllByUserId(userId, currentUserId, { limit, offset });
+    
     const totalPages = Math.ceil(totalItems / limit);
-    return {
-      data: posts,
-      meta: { total: totalItems, page, limit, totalPages },
-    };
+    return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
   },
 
   // --- HÀM MỚI ---
-  getInteractedPostsByUserId: async (
-    userId,
-    filters = { page: 1, limit: 10 }
-  ) => {
+  // Service cho API getMyInteractedPosts
+  getInteractedPosts: async (userId, filters) => {
     const { page, limit } = filters;
     const offset = (page - 1) * limit;
 
-    const { posts, totalItems } = await postModel.findInteractedByUserId(
-      userId,
-      { limit, offset }
-    );
-
+    const { posts, totalItems } = await postModel.findInteractedByUserId(userId, { limit, offset });
+    
     const totalPages = Math.ceil(totalItems / limit);
-    return {
-      data: posts,
-      meta: { total: totalItems, page, limit, totalPages },
-    };
+    return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
   },
+
 };
 
 module.exports = postService;

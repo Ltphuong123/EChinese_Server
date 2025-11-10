@@ -35,6 +35,7 @@ router.get(
 
 
 //admin
+
 router.post(
   '/admin/exams',
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
@@ -54,22 +55,37 @@ router.get(
 );
 
 router.put(
-  '/admin/exams/:id',
-  [authMiddleware.verifyToken, authMiddleware.isAdmin],
-  examController.updateFullExamAdmin
+    '/admin/exams/:id',
+    [authMiddleware.verifyToken, authMiddleware.isAdmin],
+    examController.updateFullExamAdmin
 );
 
-router.delete(
-  '/admin/exams/:id',
+router.post(
+  '/admin/exams/:id/publish',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  examController.publishExamAdmin
+);
+
+// POST /api/admin/exams/:id/unpublish - Hủy công bố bài thi
+router.post(
+  '/admin/exams/:id/unpublish',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  examController.unpublishExamAdmin
+);
+
+router.post(
+  '/admin/exams/:id/delete',
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
   examController.softDeleteExamAdmin
 );
 
+// POST /api/admin/exams/:id/restore - Khôi phục bài thi
 router.post(
   '/admin/exams/:id/restore',
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
   examController.restoreExamAdmin
 );
+
 
 router.delete(
   '/admin/exams/:id/force',

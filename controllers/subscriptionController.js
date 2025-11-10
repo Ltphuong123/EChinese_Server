@@ -14,7 +14,8 @@ const subscriptionController = {
         sortOrder: req.query.sortOrder || 'desc',
       };
       const result = await subscriptionService.getAll(options);
-      res.status(200).json({ success: true, ...result });
+      res.status(200).json({ success: true, 
+        data: result });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách gói', error: error.message });
     }
@@ -84,21 +85,22 @@ const subscriptionController = {
   },
 
   deleteSubscription: async (req, res) => {
-    try {
-      const { id } = req.params;
-      await subscriptionService.delete(id);
-      res.status(200).json({ success: true, message: 'Xóa gói thành công.' });
-    } catch (error) {
-      if (error.message.includes('not found')) {
-        return res.status(404).json({ success: false, message: 'Không tìm thấy gói đăng ký.' });
-      }
-      // Bắt lỗi foreign key violation
-      if (error.code === '23503') {
-        return res.status(409).json({ success: false, message: 'Không thể xóa gói này vì đang có người dùng sử dụng.' });
-      }
-      res.status(500).json({ success: false, message: 'Lỗi khi xóa gói', error: error.message });
-    }
-  },
+        try {
+            const { id } = req.params;
+            await subscriptionService.deletePermanently(id);
+            res.status(200).json({
+                success: true,
+                message: 'Gói đăng ký và tất cả dữ liệu liên quan đã được xóa vĩnh viễn.',
+            });
+        } catch (error) {
+            if (error.message.includes('không tồn tại')) {
+                return res.status(404).json({ success: false, message: error.message });
+            }
+            res.status(500).json({ success: false, message: 'Lỗi khi xóa vĩnh viễn gói đăng ký.', error: error.message });
+        }
+    },
+
+
 };
 
 module.exports = subscriptionController;

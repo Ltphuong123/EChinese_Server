@@ -95,12 +95,16 @@ const userController = {
       const result = await userService.getUsersAdmin({ page, limit, searchTerm, roleFilter });
       
       res.status(200).json({
-        data: result.users,
-        meta: {
-          total: result.totalItems,
-          page: result.currentPage,
-          limit: limit,
-          totalPages: result.totalPages,
+        success: true,
+        message: "Lấy danh sách thành công.",
+        data: {
+          data: result.users,
+          meta: {
+            total: result.totalItems,
+            page: result.currentPage,
+            limit: limit,
+            totalPages: result.totalPages,
+          }
         }
       });
     } catch (error) {
@@ -151,45 +155,12 @@ const userController = {
       }
 
       const updatedUser = await userService.updateUserAdmin(userId, updateData);
-       const {
-          id,
-          username,
-          password_hash,
-          name,
-          avatar_url,
-          email,
-          provider,
-          provider_id,
-          role,
-          is_active,
-          isVerify,
-          community_points,
-          level,
-          badge_level,
-          language,
-          created_at,
-          last_login
-       } = updatedUser
 
       res.status(200).json({
-          id,
-          username,
-          password_hash,
-          name,
-          avatar_url,
-          email,
-          provider,
-          provider_id,
-          role,
-          is_active,
-          isVerify,
-          community_points,
-          level,
-          badge_level,
-          language,
-          created_at,
-          last_login
-       });
+        success: true,
+        message: "Cập nhật người dùng thành công.",
+        data: updatedUser
+      });
 
     } catch (error) {
       if (error.message.includes('không tồn tại')) {
@@ -467,19 +438,18 @@ const userController = {
         limit: parseInt(req.query.limit, 10) || 10,
       };
 
-      const result = await postService.getPostsByUserId(userId, filters);
-
-      res.status(200).json({
-        success: true,
-        data: result.data,
-        meta: result.meta,
-      });
+      // Gọi service getUserPosts, truyền userId 2 lần
+      // lần 1: để lọc bài viết của user này
+      // lần 2: để kiểm tra trạng thái like/comment của user này
+      const result = await postService.getUserPosts(userId, userId, filters);
+      
+      res.status(200).json({ success: true, ...result });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy bài viết của bạn', error: error.message });
     }
   },
 
-  // --- HÀM MỚI ---
+  // API 2: Lấy các bài viết tôi đã tương tác
   getMyInteractedPosts: async (req, res) => {
     try {
       const userId = req.user.id;
@@ -488,17 +458,14 @@ const userController = {
         limit: parseInt(req.query.limit, 10) || 10,
       };
 
-      const result = await postService.getInteractedPostsByUserId(userId, filters);
+      const result = await postService.getInteractedPosts(userId, filters);
 
-      res.status(200).json({
-        success: true,
-        data: result.data,
-        meta: result.meta,
-      });
+      res.status(200).json({ success: true, ...result });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy bài viết đã tương tác', error: error.message });
     }
   },
+
 
 
 
