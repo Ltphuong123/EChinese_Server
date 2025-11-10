@@ -1,13 +1,15 @@
 const express = require("express");
 const router = express.Router();
+
 const userController = require("../controllers/userController");
 const authMiddleware = require("../middlewares/authMiddleware");
 const moderationController = require("../controllers/moderationController");
 const paymentController = require("../controllers/paymentController");
 const achievementController = require("../controllers/achievementController");
+const { authLimiter } = require("../middlewares/rateLimitMiddleware");
 
 router.post("/auth/register", userController.signup);
-router.post("/auth/login", userController.login);
+router.post("/auth/login", authLimiter, userController.login);
 router.post("/auth/google-login", userController.googleLogin);
 router.post("/auth/refresh-token", userController.refreshToken);
 router.post("/auth/logout", userController.logout);
@@ -17,6 +19,17 @@ router.post(
   userController.resetPassword
 );
 router.post("/auth/change-password", userController.changePassword);
+
+router.get(
+  "/users/me/usage",
+  authMiddleware.verifyToken,
+  userController.getUsageInfo
+);
+router.get(
+  "/users/me/payment-history",
+  authMiddleware.verifyToken,
+  paymentController.getUserPaymentHistory
+);
 
 router.get(
   "/users/me/usage",
