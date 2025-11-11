@@ -2,6 +2,8 @@
 
 const commentModel = require('../models/commentModel');
 const postModel = require('../models/postModel'); // Để kiểm tra bài viết có tồn tại không
+const communityService = require('../services/communityService');
+
 
 const commentService = {
   createComment: async (postId, userId, content, parentCommentId) => {
@@ -70,26 +72,80 @@ const commentService = {
     return comment;
   },
 
-  // softDeleteComment: async (commentId, userId) => {
-  //   const deletedCount = await commentModel.softDelete(commentId, userId, 'Người dùng tự xóa');
-  //   if (deletedCount === 0) {
-  //     throw new Error('Bình luận không tồn tại hoặc bạn không có quyền xóa.');
-  //   }
-  // },
+  
+  
 
-  // removeComment: async (commentId, reason, adminId) => {
-  //   const comment = await commentModel.updateDeletionStatus(commentId, true, reason, adminId);
-  //   if (!comment) throw new Error('Bình luận không tồn tại.');
-  //   await postModel.logModeration(comment.id, 'comment', 'gỡ', reason, adminId);
-  //   return comment;
-  // },
 
-  // restoreComment: async (commentId, adminId) => {
-  //   const comment = await commentModel.updateDeletionStatus(commentId, false);
-  //   if (!comment) throw new Error('Bình luận không tồn tại.');
-  //   await postModel.logModeration(comment.id, 'comment', 'khôi phục', 'Khôi phục bởi quản trị viên', adminId);
-  //   return comment;
-  // },
+  removeComment: async (commentId, user, reason) => {
+    // 1. Lấy thông tin bình luận và bài viết chứa nó
+    const comment = await commentModel.findWithPostOwner(commentId);
+    
+    if (!comment) {
+      throw new Error("Bình luận không tồn tại.");
+    }
+    
+    if (comment.deleted_at) {
+        throw new Error("Bình luận này đã bị gỡ trước đó.");
+    }
+
+    // 2. Logic phân quyền
+    const isAdmin = user.role === 'admin' || user.role === 'super admin';
+    const isCommentOwner = comment.user_id === user.id;
+    const isPostOwner = comment.post_owner_id === user.id;
+
+    if (!isAdmin && !isCommentOwner && !isPostOwner) {
+      // Nếu không phải admin, không phải chủ bình luận, và cũng không phải chủ bài viết -> Từ chối
+      throw new Error("Bạn không có quyền gỡ bình luận này.");
+    }
+    
+    // 3. Chuẩn bị dữ liệu để xóa mềm
+    const dataToRemove = {
+      deleted_at: new Date(),
+      deleted_by: user.id,
+      deleted_reason: reason || 
+        (isAdmin ? "Gỡ bởi quản trị viên" : 
+        (isPostOwner ? "Gỡ bởi chủ bài viết" : "Gỡ bởi người dùng")),
+    };
+
+    // 4. Gọi model để cập nhật
+    await commentModel.softDelete(commentId, dataToRemove);
+    
+    // 5. (Tùy chọn) Ghi log hành động kiểm duyệt
+    if (isAdmin || isPostOwner) {
+        await communityService.createLog({
+            target_type: 'comment',
+            target_id: commentId,
+            action: 'gỡ',
+            reason: reason || (isAdmin ? "Gỡ bởi quản trị viên" : "Gỡ bởi chủ bài viết"),
+            performed_by: user.id
+        });
+    }
+  },
+
+  restoreComment: async (commentId, adminId) => {
+    // Sử dụng hàm đã có để lấy thông tin
+    const comment = await commentModel.findWithPostOwner(commentId); 
+    if (!comment) {
+      throw new Error("Bình luận không tồn tại.");
+    }
+    if (!comment.deleted_at) {
+      throw new Error("Bình luận này chưa bị gỡ nên không thể khôi phục.");
+    }
+
+    await commentModel.restore(commentId);
+    
+    await communityService.createLog({
+      target_type: 'comment',
+      target_id: commentId,
+      action: 'khôi phục',
+      reason: "Khôi phục bởi quản trị viên",
+      performed_by: adminId
+    });
+
+    
+    // TODO: Ghi log hành động khôi phục vào ModerationLogs
+  },
+
   
 };
 

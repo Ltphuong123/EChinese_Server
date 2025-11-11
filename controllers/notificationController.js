@@ -81,17 +81,41 @@ const notificationController = {
   // POST /notifications/mark-read
   markAsRead: async (req, res) => {
     try {
-      const { ids, asRead = true } = req.body;
-      const userId = req.user.id;
-      if (!ids || !Array.isArray(ids) || ids.length === 0) {
-        return res.status(400).json({ success: false, message: 'Mảng ids là bắt buộc.' });
+      const { ids, asRead } = req.body;
+      const userId = req.user.id; // Lấy ID từ token
+
+      // --- Validation cơ bản ---
+      if (!Array.isArray(ids)) {
+        return res.status(400).json({
+          success: false,
+          message: "Trường 'ids' phải là một mảng."
+        });
       }
-      const result = await notificationService.markNotificationsAsRead(ids, userId, asRead);
-      res.status(200).json({ success: true, data: result });
+      if (typeof asRead !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          message: "Trường 'asRead' phải là true hoặc false."
+        });
+      }
+      if (ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Mảng 'ids' không được để trống."
+        });
+      }
+
+      await notificationService.markNotificationsAsRead(ids, userId, asRead);
+
+      res.status(200).json({
+        success: true,
+        message: `Đã đánh dấu ${ids.length} thông báo thành công.`
+      });
+
     } catch (error) {
-      res.status(500).json({ success: false, message: 'Lỗi khi đánh dấu đã đọc', error: error.message });
+      res.status(500).json({ success: false, message: 'Lỗi khi cập nhật thông báo', error: error.message });
     }
   },
+
 };
 
 module.exports = notificationController;

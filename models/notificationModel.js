@@ -89,16 +89,25 @@ const notificationModel = {
     return result.rowCount;
   },
   
-  markReadByIds: async (ids, userId, asRead) => {
-    const readAtValue = asRead ? 'CURRENT_TIMESTAMP' : 'NULL';
+  updateReadStatus: async (notificationIds, userId, asRead) => {
+    // Nếu asRead là true, đặt read_at là thời gian hiện tại.
+    // Nếu asRead là false, đặt read_at về NULL.
+    const readAtValue = asRead ? new Date() : null;
+
     const queryText = `
       UPDATE "Notifications"
-      SET read_at = ${readAtValue}
-      WHERE id = ANY($1::uuid[]) AND recipient_id = $2;
+      SET read_at = $1
+      WHERE id = ANY($2::uuid[]) AND recipient_id = $3;
     `;
-    const result = await db.query(queryText, [ids, userId]);
+    // ANY($2::uuid[]) là cách hiệu quả trong PostgreSQL để kiểm tra
+    // xem một giá trị có nằm trong một mảng hay không.
+
+    const result = await db.query(queryText, [readAtValue, notificationIds, userId]);
+    
+    // Trả về số lượng hàng đã bị ảnh hưởng
     return result.rowCount;
   },
+
 };
 
 

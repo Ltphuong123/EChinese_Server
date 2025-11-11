@@ -62,18 +62,30 @@ getDashboardStats: async () => {
 
 
   findModerationLogs: async ({ limit, offset }) => {
-    // Truy vấn đếm
+    // Truy vấn đếm tổng số bản ghi
     const countQuery = `SELECT COUNT(*) FROM "ModerationLogs";`;
     const totalResult = await db.query(countQuery);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
 
-    // Truy vấn lấy dữ liệu, join với Users để lấy tên người thực hiện
+    // Truy vấn lấy dữ liệu chi tiết
     const selectQuery = `
       SELECT 
-        ml.*,
-        u.name as performed_by_name
+        ml.id,
+        ml.target_type,
+        ml.target_id,
+        ml.action,
+        ml.reason,
+        ml.performed_by,
+        ml.created_at,
+        
+        -- Lấy tên của admin nếu performed_by là một UUID hợp lệ,
+        -- nếu không thì trả về chính giá trị performed_by (ví dụ: 'auto_ai')
+        COALESCE(u.name, ml.performed_by::text) as performed_by_name
+        
       FROM "ModerationLogs" ml
-      JOIN "Users" u ON ml.performed_by = u.id
+      -- Dùng LEFT JOIN để không bị mất các log có performed_by là 'auto_ai'
+      LEFT JOIN "Users" u ON ml.performed_by = u.id
+      
       ORDER BY ml.created_at DESC
       LIMIT $1
       OFFSET $2;
@@ -82,6 +94,27 @@ getDashboardStats: async () => {
     
     return { logs: logsResult.rows, totalItems };
   },
+
+  createModerationLog: async (logData) => {
+    const {
+      target_type,
+      target_id,
+      action,
+      reason,
+      performed_by,
+    } = logData;
+
+    const queryText = `
+      INSERT INTO "ModerationLogs" (target_type, target_id, action, reason, performed_by)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *;
+    `;
+    const values = [target_type, target_id, action, reason, performed_by];
+    const result = await db.query(queryText, values);
+    return result.rows[0];
+  },
+
+
 };
 
 module.exports = communityModel;

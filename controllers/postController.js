@@ -243,6 +243,25 @@ const postController = {
     }
   },
 
+
+
+  restorePost: async (req, res) => {
+    try {
+      const { postId } = req.params;
+      const adminId = req.user.id; // Lấy ID admin từ token
+
+      await postService.restorePost(postId, adminId);
+      
+      res.status(200).json({ success: true, message: 'Khôi phục bài viết thành công.' });
+    } catch (error) {
+      if (error.message.includes('không tồn tại') || error.message.includes('chưa bị gỡ')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi khôi phục bài viết', error: error.message });
+    }
+  },
+
+
   
 };
 

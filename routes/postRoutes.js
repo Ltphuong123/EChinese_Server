@@ -55,4 +55,13 @@ router.delete(
   postController.removePost
 );
 
+
+router.put(
+  `/community/posts/:postId/restore`,
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  postController.restorePost // Đặt hàm controller trong postController
+);
+
+
+
 module.exports = router;

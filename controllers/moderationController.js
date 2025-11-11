@@ -18,21 +18,34 @@ const moderationController = {
   getReports: async (req, res) => {
     try {
       const result = await moderationService.getReports(req.query);
-      res.status(200).json({ success: true, ...result });
+      res.status(200).json({ success: true, data: result });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
     }
   },
+
   updateReportStatus: async (req, res) => {
     try {
       const { reportId } = req.params;
-      const payload = { ...req.body, resolved_by: req.user.id };
+      // Body request có thể chứa: status, resolution, severity
+      const payload = { ...req.body, resolved_by: req.user.id }; // Gán ID admin thực hiện
+      
       const updatedReport = await moderationService.updateReportStatus(reportId, payload);
-      res.status(200).json({ success: true, data: updatedReport });
+      
+      res.status(200).json({ 
+          success: true, 
+          message: "Xử lý báo cáo thành công.",
+          data: updatedReport 
+      });
     } catch (error) {
-      res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+        if (error.message.includes("không tồn tại")) {
+            return res.status(404).json({ success: false, message: error.message });
+        }
+      res.status(500).json({ success: false, message: 'Lỗi khi xử lý báo cáo', error: error.message });
     }
   },
+
+
 
 
 
@@ -70,7 +83,7 @@ const moderationController = {
         targetType: req.query.targetType || 'all',
       };
       const result = await moderationService.getViolations(filters);
-      res.status(200).json({ success: true, ...result });
+      res.status(200).json({ success: true, data:result });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách vi phạm', error: error.message });
     }
@@ -138,7 +151,7 @@ const moderationController = {
   getAdminAppeals: async (req, res) => {
     try {
       const result = await moderationService.getAdminAppeals(req.query);
-      res.status(200).json({ success: true, ...result });
+      res.status(200).json({ success: true, data: result });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách khiếu nại', error: error.message });
     }

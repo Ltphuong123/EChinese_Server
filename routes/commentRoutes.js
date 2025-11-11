@@ -30,9 +30,17 @@ router.put(
   commentController.updateComment
 );
 
+router.delete(
+  '/community/comments/:commentId',
+  authMiddleware.verifyToken,
+  commentController.removeComment
+);
 
-
-
+router.put(
+  '/community/comments/:commentId/restore',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  commentController.restoreComment
+);
 
 
 

@@ -35,10 +35,18 @@ const notificationService = {
     return count > 0;
   },
 
-  markNotificationsAsRead: async (ids, userId, asRead) => {
-    const count = await notificationModel.markReadByIds(ids, userId, asRead);
-    return { updatedCount: count };
+  markNotificationsAsRead: async (notificationIds, userId, asRead) => {
+    // Kiểm tra xem mảng ID có rỗng không
+    if (!notificationIds || notificationIds.length === 0) {
+      throw new Error("Mảng ID thông báo không được để trống.");
+    }
+    
+    const updatedCount = await notificationModel.updateReadStatus(notificationIds, userId, asRead);
+    
+    // Bạn có thể trả về số lượng đã cập nhật nếu cần
+    return updatedCount;
   },
+
 };
 
 module.exports = notificationService;

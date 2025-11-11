@@ -19,6 +19,17 @@ const communityService = {
           meta: { page, limit, total: totalItems, totalPages }
       };
   },
+
+  createLog: async (logData) => {
+    // Service có thể thêm các bước validation ở đây nếu cần.
+    // Ví dụ: kiểm tra xem target_type có hợp lệ không.
+    if (!['post', 'comment'].includes(logData.target_type)) {
+      throw new Error(`Loại mục tiêu không hợp lệ: ${logData.target_type}`);
+    }
+
+    return await communityModel.createModerationLog(logData);
+  },
+
 };
 
 module.exports = communityService;

@@ -10,7 +10,60 @@ const moderationService = {
     const totalPages = Math.ceil(totalItems / limit);
     return { data: reports, meta: { total: totalItems, page, limit, totalPages } };
   },
-  updateReportStatus: (reportId, data) => moderationModel.updateReportStatus(reportId, data),
+  
+
+  
+  
+  updateReportStatus: async (reportId, data) => {
+    // 1. Lấy thông tin báo cáo gốc để có target_id, target_type, và user_id của người bị báo cáo
+    const report = await moderationModel.findReportById(reportId);
+    if (!report) {
+      throw new Error("Báo cáo không tồn tại.");
+    }
+    
+    // 2. Cập nhật trạng thái của bản ghi Report
+    const updatedReport = await moderationModel.updateReportStatus(reportId, {
+        status: data.status,
+        resolved_by: data.resolved_by, // adminId
+        resolution: data.resolution,
+    });
+    if (!updatedReport) {
+        throw new Error("Cập nhật trạng thái báo cáo thất bại.");
+    }
+
+    // 3. Logic tự động tạo Vi phạm nếu status là 'resolved'
+    if (data.status === 'resolved') {
+      // Điều kiện để tạo vi phạm: phải có severity và phải xác định được người dùng bị báo cáo
+      if (!data.severity || !report.target_user_id) {
+          console.warn(`Báo cáo ${reportId} được giải quyết nhưng thiếu 'severity' hoặc không xác định được 'target_user_id' để tạo vi phạm.`);
+          // Trả về report đã cập nhật mà không làm gì thêm
+          return updatedReport; 
+      }
+
+      // 3.1. Chuẩn bị dữ liệu cho bản ghi Violation
+      const violationData = {
+        user_id: report.target_user_id, // ID của người dùng đã vi phạm
+        target_type: report.target_type,
+        target_id: report.target_id,
+        severity: data.severity,
+        detected_by: 'admin', // Vi phạm được xác nhận bởi admin qua xử lý báo cáo
+        handled: true,        // Đã xử lý
+        resolution: data.resolution || `Vi phạm được xác nhận từ báo cáo #${report.id}`,
+      };
+      
+      // 3.2. Gọi model để tạo bản ghi Violation (không cần rules)
+      const newViolation = await moderationModel.createViolation(violationData);
+      
+      // 3.3. Liên kết vi phạm vừa tạo ngược lại với báo cáo để tiện truy vết
+      await moderationModel.linkViolationToReport(reportId, newViolation.id);
+      
+      // 3.4. Gắn ID vi phạm vào đối tượng trả về cho client
+      updatedReport.related_violation_id = newViolation.id;
+    }
+    
+    return updatedReport;
+  },
+
 
 
 
@@ -32,6 +85,7 @@ const moderationService = {
     const newViolation = await moderationModel.createViolationWithRules(violationData, ruleIds);
     return newViolation;
   },
+
   getViolations: async (filters) => {
     const { page, limit } = filters;
     const offset = (page - 1) * limit;
