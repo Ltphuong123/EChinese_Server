@@ -1,6 +1,6 @@
 // file: models/postModel.js
 
-const db = require('../config/db');
+const db = require("../config/db");
 
 const postModel = {
   create: async (postData) => {
@@ -14,7 +14,6 @@ const postModel = {
       auto_flagged = false,
       is_pinned = false,
     } = postData;
-
 
     const queryText = `
       INSERT INTO "Posts" (user_id, title, content, topic, status, is_approved, auto_flagged, is_pinned)
@@ -37,19 +36,19 @@ const postModel = {
 
   findAllPublic: async (filters) => {
     const { limit, offset, topic, currentUserId, status } = filters;
-    
+
     // --- Xử lý tham số và điều kiện WHERE ---
     const queryParams = [currentUserId, limit, offset];
     let whereClauses = `WHERE p.deleted_at IS NULL`;
 
     // Lọc theo topic
-    if (topic&& topic !== 'undefined') {
+    if (topic && topic !== "undefined") {
       queryParams.push(topic);
       whereClauses += ` AND p.topic = $${queryParams.length}`;
     }
 
     // Lọc theo status (trạng thái kiểm duyệt)
-    if (status && status !== 'all') {
+    if (status && status !== "all") {
       queryParams.push(status);
       whereClauses += ` AND p.status = $${queryParams.length}`;
     } else {
@@ -104,11 +103,10 @@ const postModel = {
       ORDER BY p.is_pinned DESC, p.created_at DESC
       LIMIT $2 OFFSET $3;
     `;
-    
+
     const postsResult = await db.query(selectQuery, queryParams);
     return { posts: postsResult.rows, totalItems };
   },
-
 
   findById: async (postId) => {
     const queryText = `
@@ -274,12 +272,16 @@ const postModel = {
     return result.rows[0].views;
   },
 
-
   findAllByUserId: async (userId, currentUserId, { limit, offset }) => {
     const where = `WHERE p.user_id = $1 AND p.deleted_at IS NULL`;
     const params = [userId, currentUserId, limit, offset];
 
-    const baseQuery = `FROM "Posts" p JOIN "Users" u ON p.user_id = u.id ${where}`;
+    const baseQuery = `
+      FROM "Posts" p
+      JOIN "Users" u ON p.user_id = u.id
+      LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+      ${where}
+    `;
 
     const countQuery = `SELECT COUNT(p.id) ${baseQuery};`;
     const totalResult = await db.query(countQuery, [userId]);
@@ -287,15 +289,38 @@ const postModel = {
 
     const selectQuery = `
       SELECT 
-        p.id, p.title, p.content, p.topic, p.likes, p.views, p.created_at, p.is_pinned,
-        json_build_object('id', u.id, 'name', u.name, 'avatar_url', u.avatar_url) as author,
+        p.*, -- Lấy tất cả các trường từ Posts, bao gồm auto_flagged
+        
+        -- Thông tin người dùng (author)
+        jsonb_build_object(
+          'id', u.id,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'badge_level', u.badge_level,
+          'community_points', u.community_points,
+          'level', u.level
+          -- Thêm các trường khác của user nếu cần
+        ) as "user",
+        
+        -- Thông tin huy hiệu (badge)
+        jsonb_build_object(
+            'level', bl.level,
+            'name', bl.name,
+            'icon', bl.icon
+        ) as badge,
+        
+        -- Đếm số lượng bình luận
+        (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count,
+        
+        -- Trạng thái tương tác của người dùng hiện tại
         EXISTS (SELECT 1 FROM "PostLikes" pl WHERE pl.post_id = p.id AND pl.user_id = $2) as "isLiked",
-        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $2) as "isCommented"
+        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $2 AND c.deleted_at IS NULL) as "isCommented"
+        
       ${baseQuery}
       ORDER BY p.created_at DESC
       LIMIT $3 OFFSET $4;
     `;
-    
+
     const postsResult = await db.query(selectQuery, params);
     return { posts: postsResult.rows, totalItems };
   },
@@ -305,7 +330,7 @@ const postModel = {
    */
   findInteractedByUserId: async (userId, { limit, offset }) => {
     const params = [userId, limit, offset];
-    
+
     // Điều kiện WHERE để tìm các bài viết đã tương tác
     const whereInteracted = `
       WHERE p.deleted_at IS NULL AND p.id IN (
@@ -315,35 +340,56 @@ const postModel = {
       )
     `;
 
-    const baseQuery = `FROM "Posts" p JOIN "Users" u ON p.user_id = u.id ${whereInteracted}`;
+    const baseQuery = `
+      FROM "Posts" p
+      JOIN "Users" u ON p.user_id = u.id
+      LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+      ${whereInteracted}
+    `;
 
     // Truy vấn đếm
     const countQuery = `SELECT COUNT(p.id) ${baseQuery};`;
     const totalResult = await db.query(countQuery, [userId]);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
-    
+
     // Truy vấn lấy dữ liệu đầy đủ
     const selectQuery = `
       SELECT
-        p.id, p.title, p.content, p.topic, p.likes, p.views, p.created_at, p.is_pinned,
-        json_build_object('id', u.id, 'name', u.name, 'avatar_url', u.avatar_url) as author,
+        p.*, -- Lấy tất cả các trường từ Posts, bao gồm auto_flagged
+        
+        -- Thông tin người dùng (author)
+        jsonb_build_object(
+          'id', u.id,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'badge_level', u.badge_level,
+          'community_points', u.community_points,
+          'level', u.level
+          -- Thêm các trường khác của user nếu cần
+        ) as "user",
+        
+        -- Thông tin huy hiệu (badge)
+        jsonb_build_object(
+            'level', bl.level,
+            'name', bl.name,
+            'icon', bl.icon
+        ) as badge,
+        
+        -- Đếm số lượng bình luận
+        (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count,
+        
+        -- Trạng thái tương tác của người dùng hiện tại
         EXISTS (SELECT 1 FROM "PostLikes" pl WHERE pl.post_id = p.id AND pl.user_id = $1) as "isLiked",
-        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $1) as "isCommented"
+        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $1 AND c.deleted_at IS NULL) as "isCommented"
+        
       ${baseQuery}
       ORDER BY p.created_at DESC
       LIMIT $2 OFFSET $3;
     `;
-    
+
     const postsResult = await db.query(selectQuery, params);
     return { posts: postsResult.rows, totalItems };
   },
-
-
-
-
-
-
-
 
   findRawById: async (postId) => {
     const queryText = `SELECT * FROM "Posts" WHERE id = $1;`;
@@ -366,9 +412,14 @@ const postModel = {
         status = $4
       WHERE id = $5;
     `;
-    await db.query(queryText, [deleted_at, deleted_by, deleted_reason, status, postId]);
+    await db.query(queryText, [
+      deleted_at,
+      deleted_by,
+      deleted_reason,
+      status,
+      postId,
+    ]);
   },
-
 
   restore: async (postId) => {
     const queryText = `
@@ -384,8 +435,6 @@ const postModel = {
     `;
     await db.query(queryText, [postId]);
   },
-
-
 };
 
 module.exports = postModel;
