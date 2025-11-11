@@ -229,6 +229,8 @@ const notebookController = {
       const userId = req.user.id;
       const { notebookId } = req.params;
       const { vocabIds } = req.body;
+      const { status } = req.body || "chưa thuộc";
+      console.log("Vocab IDs received:", vocabIds);
       if (!vocabIds || !Array.isArray(vocabIds) || vocabIds.length === 0) {
         return res
           .status(400)
@@ -238,7 +240,8 @@ const notebookController = {
       const result = await notebookService.addVocabulariesUser(
         notebookId,
         userId,
-        vocabIds
+        vocabIds,
+        status
       );
       res.status(200).json({
         success: true,

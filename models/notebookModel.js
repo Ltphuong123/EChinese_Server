@@ -194,7 +194,7 @@ const notebookModel = {
     return result.rows[0];
   },
 
-  addVocabularies: async (notebookId, vocabIds) => {
+  addVocabularies: async (notebookId, vocabIds, status) => {
     const client = await db.pool.connect();
 
     try {
@@ -207,7 +207,7 @@ const notebookModel = {
       // 'chưa thuộc' là giá trị mặc định cho status khi thêm từ mới.
       const insertQuery = `
         INSERT INTO "NotebookVocabItems" (notebook_id, vocab_id, status)
-        SELECT $1, unnest($2::uuid[]), 'chưa thuộc'
+        SELECT $1, unnest($2::uuid[]), '${status}'
         ON CONFLICT (notebook_id, vocab_id) DO NOTHING
         RETURNING vocab_id;
       `;
