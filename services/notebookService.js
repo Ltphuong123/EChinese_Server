@@ -15,7 +15,7 @@ const notebookService = {
         is_premium: data.is_premium || false,
         status: data.status,
         user_id: data.user_id || null, // Admin có thể gán cho user khác, hoặc để null
-        created_by: creatorId,          // Người tạo là admin
+        created_by: creatorId, // Người tạo là admin
       };
     } else {
       // User chỉ có thể tạo notebook cho chính mình
@@ -23,8 +23,8 @@ const notebookService = {
         name: data.name,
         options: {},
         is_premium: false, // Mặc định
-        status: 'published', // Mặc định
-        user_id: creatorId,    // Chủ sở hữu là chính user đó
+        status: "published", // Mặc định
+        user_id: creatorId, // Chủ sở hữu là chính user đó
         created_by: creatorId, // Người tạo cũng là user đó
       };
     }
@@ -36,11 +36,12 @@ const notebookService = {
   async getNotebooksByFilter(filters) {
     const { page, limit } = filters;
     const offset = (page - 1) * limit;
+    console.log("Filters received in service:", filters);
 
     // Truyền tất cả filters xuống model
-    const { notebooks, totalItems } = await notebookModel.findAll({ 
-      ...filters, 
-      offset 
+    const { notebooks, totalItems } = await notebookModel.findAll({
+      ...filters,
+      offset,
     });
 
     const totalPages = Math.ceil(totalItems / limit);
@@ -52,27 +53,28 @@ const notebookService = {
         limit,
         total: totalItems,
         totalPages,
-      }
+      },
     };
   },
 
   async getNotebookDetails(notebookId, userId, userRole, vocabFilters) {
-    const isAdmin = userRole === 'admin' || userRole === 'super admin';
-    
+    const isAdmin = userRole === "admin" || userRole === "super admin";
+
     const notebook = await notebookModel.findById(notebookId);
 
     if (!notebook) {
-      throw new Error('Sổ tay không tồn tại.');
+      throw new Error("Sổ tay không tồn tại.");
     }
-    
+
     const isOwner = notebook.user_id === userId;
     const isSystemNotebook = notebook.user_id === null;
 
     // --- LOGIC PHÂN QUYỀN (giữ nguyên) ---
     if (!isAdmin) {
-      const isPublishedSystemNotebook = isSystemNotebook && notebook.status === 'published';
+      const isPublishedSystemNotebook =
+        isSystemNotebook && notebook.status === "published";
       if (!isOwner && !isPublishedSystemNotebook) {
-        throw new Error('Bạn không có quyền xem sổ tay này.');
+        throw new Error("Bạn không có quyền xem sổ tay này.");
       }
     }
 
@@ -81,12 +83,20 @@ const notebookService = {
     const offset = (page - 1) * limit;
     let vocabResult;
 
-    if (isOwner && !isAdmin) { // Trường hợp User xem sổ tay của chính mình
-        vocabResult = await notebookModel.findVocabulariesInPersonalNotebook(notebookId, { ...vocabFilters, offset });
-    } else { // Trường hợp Admin xem bất kỳ sổ nào, hoặc User xem sổ tay hệ thống
-        vocabResult = await notebookModel.findVocabulariesInSystemNotebook(notebookId, { ...vocabFilters, offset });
+    if (isOwner && !isAdmin) {
+      // Trường hợp User xem sổ tay của chính mình
+      vocabResult = await notebookModel.findVocabulariesInPersonalNotebook(
+        notebookId,
+        { ...vocabFilters, offset }
+      );
+    } else {
+      // Trường hợp Admin xem bất kỳ sổ nào, hoặc User xem sổ tay hệ thống
+      vocabResult = await notebookModel.findVocabulariesInSystemNotebook(
+        notebookId,
+        { ...vocabFilters, offset }
+      );
     }
-    
+
     // Gộp kết quả
     const { vocabularies, totalItems } = vocabResult;
     notebook.vocabularies = {
@@ -95,10 +105,10 @@ const notebookService = {
         page: page,
         limit: limit,
         total: totalItems,
-        totalPages: Math.ceil(totalItems / limit)
-      }
+        totalPages: Math.ceil(totalItems / limit),
+      },
     };
-    
+
     return notebook;
   },
 
@@ -125,7 +135,7 @@ const notebookService = {
     return result;
   },
 
-async removeVocabulariesUser(notebookId, userId, vocabIds) {
+  async removeVocabulariesUser(notebookId, userId, vocabIds) {
     const notebook = await notebookModel.findByIdAndUserId(notebookId, userId);
     if (!notebook)
       throw new Error(
@@ -135,20 +145,20 @@ async removeVocabulariesUser(notebookId, userId, vocabIds) {
     return notebookModel.removeVocabularies(notebookId, vocabIds);
   },
 
-async addVocabulariesByLevel(notebookId, userId, userRole, level) {
-    const isAdmin = userRole === 'admin' || userRole === 'super admin';
+  async addVocabulariesByLevel(notebookId, userId, userRole, level) {
+    const isAdmin = userRole === "admin" || userRole === "super admin";
 
     // Bước 1: Kiểm tra quyền sở hữu
     const notebook = await notebookModel.findById(notebookId);
     if (!notebook) {
-      throw new Error('Sổ tay không tồn tại.');
+      throw new Error("Sổ tay không tồn tại.");
     }
     if (!isAdmin) {
       if (notebook.user_id === null) {
-        throw new Error('Sổ tay hệ thống không thể chỉnh sửa.');
+        throw new Error("Sổ tay hệ thống không thể chỉnh sửa.");
       }
       if (notebook.user_id !== userId) {
-        throw new Error('Bạn không có quyền thêm từ vựng vào sổ tay này.');
+        throw new Error("Bạn không có quyền thêm từ vựng vào sổ tay này.");
       }
     }
 
@@ -156,24 +166,11 @@ async addVocabulariesByLevel(notebookId, userId, userRole, level) {
     return notebookModel.addVocabulariesByLevel(notebookId, level);
   },
 
-
-  
-
-
-
-
-
-
-
-
-
-
-
   updateUserNotebook: async (notebookId, userId, payload) => {
     // Chỉ cho phép người dùng cập nhật một số trường nhất định
-    const allowedUpdates = ['name', 'options'];
+    const allowedUpdates = ["name", "options"];
     const safeUpdateData = {};
-    
+
     for (const key of allowedUpdates) {
       if (payload[key] !== undefined) {
         safeUpdateData[key] = payload[key];
@@ -181,42 +178,46 @@ async addVocabulariesByLevel(notebookId, userId, userRole, level) {
     }
 
     if (Object.keys(safeUpdateData).length === 0) {
-      throw new Error('Không có dữ liệu hợp lệ để cập nhật.');
+      throw new Error("Không có dữ liệu hợp lệ để cập nhật.");
     }
 
-    const updatedNotebook = await notebookModel.updateByUser(notebookId, userId, safeUpdateData);
-    
+    const updatedNotebook = await notebookModel.updateByUser(
+      notebookId,
+      userId,
+      safeUpdateData
+    );
+
     if (!updatedNotebook) {
-      throw new Error('Cập nhật thất bại. Sổ tay không tồn tại hoặc bạn không có quyền chỉnh sửa.');
+      throw new Error(
+        "Cập nhật thất bại. Sổ tay không tồn tại hoặc bạn không có quyền chỉnh sửa."
+      );
     }
-    
+
     return updatedNotebook;
   },
-
 
   getNotebookWithVocabs: async (notebookId, userId) => {
     // 1. Lấy thông tin cơ bản của sổ tay
     const notebookInfo = await notebookModel.findById(notebookId);
 
     if (!notebookInfo) {
-      throw new Error('Sổ tay không tồn tại.');
+      throw new Error("Sổ tay không tồn tại.");
     }
 
     // 2. Kiểm tra quyền truy cập: Chỉ chủ sở hữu mới được xem sổ tay của mình
     // (Trong tương lai, bạn có thể thêm logic cho sổ tay công khai hoặc admin)
     if (notebookInfo.user_id !== userId) {
-      throw new Error('Bạn không có quyền truy cập vào sổ tay này.');
+      throw new Error("Bạn không có quyền truy cập vào sổ tay này.");
     }
 
     // 3. Lấy danh sách chi tiết các từ vựng trong sổ tay đó
     const vocabItems = await notebookModel.findVocabsByNotebookId(notebookId);
-    
+
     // 4. Gắn danh sách từ vựng vào thông tin sổ tay
     notebookInfo.vocabularies = vocabItems;
 
     return notebookInfo;
   },
-
 
   getPaginatedNotebooks: async (filters) => {
     const { userId, page, limit, search, status, premium } = filters;
@@ -305,10 +306,6 @@ async addVocabulariesByLevel(notebookId, userId, userRole, level) {
     return updatedNotebook;
   },
 
-
-
-
-
   bulkUpdateStatus: async (ids, status) => {
     const updatedCount = await notebookModel.bulkUpdateStatus(ids, status);
     return updatedCount;
@@ -324,9 +321,6 @@ async addVocabulariesByLevel(notebookId, userId, userRole, level) {
     return notebookModel.createUserNoteBook(userId, name);
   },
 
-  
-
-  
   async updateNotebookUser(notebookId, userId, name) {
     const updated = await notebookModel.update(notebookId, userId, name);
     if (!updated)
@@ -471,20 +465,24 @@ async addVocabulariesByLevel(notebookId, userId, userRole, level) {
     // Service sẽ kiểm tra quyền sở hữu của sổ tay trước
     const notebook = await notebookModel.findById(notebookId);
     if (!notebook) {
-      throw new Error('Sổ tay không tồn tại.');
+      throw new Error("Sổ tay không tồn tại.");
     }
     if (notebook.user_id !== userId) {
-      throw new Error('Bạn không có quyền chỉnh sửa sổ tay này.');
+      throw new Error("Bạn không có quyền chỉnh sửa sổ tay này.");
     }
 
     // Sau khi xác thực, gọi model để cập nhật
-    const updatedItem = await notebookModel.updateVocabStatus(notebookId, vocabId, status);
+    const updatedItem = await notebookModel.updateVocabStatus(
+      notebookId,
+      vocabId,
+      status
+    );
     if (!updatedItem) {
-        throw new Error('Từ vựng không tồn tại trong sổ tay này.');
+      throw new Error("Từ vựng không tồn tại trong sổ tay này.");
     }
     return updatedItem;
   },
-  
+
   deleteUserNotebook: async (notebookId, userId) => {
     // Bước 1: Lấy thông tin sổ tay để kiểm tra chủ sở hữu
     const notebook = await notebookModel.findByIdSimple(notebookId);
