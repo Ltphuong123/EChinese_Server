@@ -120,14 +120,14 @@ const notebookService = {
     return result;
   },
 
-  async addVocabulariesUser(notebookId, userId, vocabIds) {
+  async addVocabulariesUser(notebookId, userId, vocabIds, status) {
     const notebook = await notebookModel.findByIdAndUserId(notebookId, userId);
     if (!notebook)
       throw new Error(
         "Notebook không tồn tại hoặc bạn không có quyền truy cập."
       );
     // Dùng lại logic transaction từ model của admin
-    return notebookModel.addVocabularies(notebookId, vocabIds);
+    return notebookModel.addVocabularies(notebookId, vocabIds, status);
   },
 
   removeVocabulariesFromNotebook: async (notebookId, vocabIds) => {
