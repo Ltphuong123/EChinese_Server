@@ -248,22 +248,22 @@ const vocabularyModel = {
     return  result.rows[0];
   },
 
-  exists: async (id) => {
-    // --- THAY ĐỔI Ở ĐÂY ---
-    // Sử dụng dynamic import() để tải ESM module
-    const uuid = await import('uuid');
+  // exists: async (id) => {
+  //   // --- THAY ĐỔI Ở ĐÂY ---
+  //   // Sử dụng dynamic import() để tải ESM module
+  //   const uuid = await import('uuid');
 
-    // Bước 1: Kiểm tra UUID
-    // Cách gọi hàm cũng khác một chút ở v9
-    if (!uuid.validate(id) || uuid.version(id) !== 4) {
-      return false;
-    }
+  //   // Bước 1: Kiểm tra UUID
+  //   // Cách gọi hàm cũng khác một chút ở v9
+  //   if (!uuid.validate(id) || uuid.version(id) !== 4) {
+  //     return false;
+  //   }
 
-    // Bước 2: Truy vấn database
-    const queryText = `SELECT 1 FROM "Vocabulary" WHERE id = $1 LIMIT 1;`;
-    const result = await db.query(queryText, [id]);
-    return result.rowCount > 0;
-  },
+  //   // Bước 2: Truy vấn database
+  //   const queryText = `SELECT 1 FROM "Vocabulary" WHERE id = $1 LIMIT 1;`;
+  //   const result = await db.query(queryText, [id]);
+  //   return result.rowCount > 0;
+  // },
 
 
 
@@ -527,6 +527,118 @@ const vocabularyModel = {
       client.release();
     }
   },
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+  /**
+   * Kiểm tra sự tồn tại của một từ vựng bằng ID.
+   */
+  exists: async (id) => {
+    const queryText = `SELECT 1 FROM "Vocabulary" WHERE id = $1;`;
+    const result = await db.query(queryText, [id]);
+    return result.rowCount > 0;
+  },
+
+  /**
+   * Tìm một từ vựng dựa trên hanzi (UNIQUE field), trả về word_types.
+   */
+  findByHanzi: async (hanzi) => {
+    const queryText = `
+        SELECT v.*, array_remove(array_agg(vwt.word_type), NULL) as "word_types"
+        FROM "Vocabulary" v
+        LEFT JOIN "VocabularyWordType" vwt ON v.id = vwt.vocab_id
+        WHERE v.hanzi = $1
+        GROUP BY v.id;
+    `;
+    const result = await db.query(queryText, [hanzi]);
+    return result.rows[0];
+  },
+  
+  /**
+   * Tạo một từ vựng mới và các liên kết word type của nó.
+   */
+  createWithWordTypes: async (vocabData) => {
+    const { hanzi, pinyin, meaning, notes, level, image_url, word_types } = vocabData;
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const vocabQuery = `
+        INSERT INTO "Vocabulary" (hanzi, pinyin, meaning, notes, level, image_url)
+        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
+      `;
+      const vocabResult = await client.query(vocabQuery, [hanzi, pinyin, meaning, notes, level, image_url]);
+      const newVocab = vocabResult.rows[0];
+
+      if (word_types && word_types.length > 0) {
+        const typeValues = word_types.map(typeCode => `('${newVocab.id}', '${typeCode}')`).join(',');
+        await client.query(`INSERT INTO "VocabularyWordType" (vocab_id, word_type) VALUES ${typeValues};`);
+      }
+      
+      await client.query('COMMIT');
+      return { ...newVocab, word_types };
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  },
+
+  /**
+   * Cập nhật và hợp nhất (MERGE) một từ vựng.
+   */
+  upsertAndMerge: async (vocabData) => {
+    // Sử dụng snake_case và gán giá trị mặc định là mảng rỗng nếu không có
+    const { id, pinyin, meaning, notes, level, image_url, word_types: new_word_types = [] } = vocabData;
+    const client = await db.pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+
+      const vocabQuery = `
+        UPDATE "Vocabulary" 
+        SET pinyin = $1, meaning = $2, notes = $3, level = $4, image_url = $5
+        WHERE id = $6 RETURNING *;
+      `;
+      const vocabResult = await client.query(vocabQuery, [pinyin, meaning, notes, level, image_url, id]);
+      const updatedVocab = vocabResult.rows[0];
+      
+      const existingTypesQuery = `SELECT word_type FROM "VocabularyWordType" WHERE vocab_id = $1;`;
+      const existingTypesResult = await client.query(existingTypesQuery, [id]);
+      const existingTypes = existingTypesResult.rows.map(r => r.word_type);
+
+      const typesToAdd = new_word_types.filter(type => !existingTypes.includes(type));
+
+      if (typesToAdd.length > 0) {
+        const typeValues = typesToAdd.map(typeCode => `('${id}', '${typeCode}')`).join(',');
+        await client.query(`INSERT INTO "VocabularyWordType" (vocab_id, word_type) VALUES ${typeValues};`);
+      }
+      
+      await client.query('COMMIT');
+
+      return { ...updatedVocab, word_types: [...existingTypes, ...typesToAdd] };
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  },
+
 
 };
 

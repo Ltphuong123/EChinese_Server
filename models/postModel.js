@@ -15,6 +15,7 @@ const postModel = {
       is_pinned = false,
     } = postData;
 
+
     const queryText = `
       INSERT INTO "Posts" (user_id, title, content, topic, status, is_approved, auto_flagged, is_pinned)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -369,6 +370,20 @@ const postModel = {
   },
 
 
+  restore: async (postId) => {
+    const queryText = `
+      UPDATE "Posts"
+      SET 
+        deleted_at = NULL,
+        deleted_by = NULL,
+        deleted_reason = NULL,
+        -- Chuyển status về 'published' và is_approved về true
+        status = 'published',
+        is_approved = true 
+      WHERE id = $1;
+    `;
+    await db.query(queryText, [postId]);
+  },
 
 
 };

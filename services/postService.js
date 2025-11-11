@@ -1,11 +1,15 @@
 // file: services/postService.js
 
 const postModel = require("../models/postModel");
+const communityService = require('../services/communityService');
+
 
 const postService = {
   createPost: async (postData, userId) => {
     // Gán user_id từ token để đảm bảo an toàn
     const dataToCreate = { ...postData, user_id: userId };
+    
+    
     // TODO: Có thể thêm logic kiểm duyệt nội dung tự động ở đây
     return await postModel.create(dataToCreate);
   },
@@ -205,16 +209,40 @@ const postService = {
     
     // 5. (Tùy chọn) Ghi log hành động của admin
     if (isAdmin && !isOwner) {
-        // TODO: Gọi service để tạo một bản ghi trong ModerationLogs
-        // moderationService.createLog({
-        //     target_type: 'post',
-        //     target_id: postId,
-        //     action: 'gỡ',
-        //     reason: reason,
-        //     performed_by: user.id
-        // });
+      await communityService.createLog({
+        target_type: 'post',
+        target_id: postId,
+        action: 'gỡ', // 'gỡ' là giá trị enum bạn đã định nghĩa
+        reason: reason || "Gỡ bởi quản trị viên",
+        performed_by: user.id
+      });
     }
   },
+
+
+  restorePost: async (postId, adminId) => {
+    const post = await postModel.findRawById(postId);
+    if (!post) {
+      throw new Error("Bài viết không tồn tại.");
+    }
+    if (!post.deleted_at) {
+      throw new Error("Bài viết này chưa bị gỡ nên không thể khôi phục.");
+    }
+
+    // Thực hiện khôi phục
+    await postModel.restore(postId);
+
+    // TODO: Ghi log hành động khôi phục vào ModerationLogs
+    await communityService.createLog({
+      target_type: 'post',
+      target_id: postId,
+      action: 'khôi phục', // 'khôi phục' là giá trị enum bạn đã định nghĩa
+      reason: "Khôi phục bởi quản trị viên",
+      performed_by: adminId
+    });
+
+  },
+
 
 
 

@@ -1,6 +1,8 @@
 // file: controllers/commentController.js
 
 const commentService = require('../services/commentService');
+const communityService = require('../services/communityService');
+
 
 const commentController = {
   // CREATE
@@ -75,7 +77,46 @@ const commentController = {
   },
 
 
-  
+  removeComment: async (req, res) => {
+    try {
+      const { commentId } = req.params;
+      const { reason } = req.body; // Lý do gỡ
+      
+      const user = {
+          id: req.user.id,
+          role: req.user.role
+      };
+
+      await commentService.removeComment(commentId, user, reason);
+
+      res.status(200).json({ success: true, message: 'Gỡ bình luận thành công.' });
+    } catch (error) {
+      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      if (error.message.includes('đã bị gỡ')) {
+          return res.status(400).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi gỡ bình luận', error: error.message });
+    }
+  },
+
+
+  restoreComment: async (req, res) => {
+    try {
+      const { commentId } = req.params;
+      const adminId = req.user.id;
+
+      await commentService.restoreComment(commentId, adminId);
+      
+      res.status(200).json({ success: true, message: 'Khôi phục bình luận thành công.' });
+    } catch (error) {
+      if (error.message.includes('không tồn tại') || error.message.includes('chưa bị gỡ')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi khôi phục bình luận', error: error.message });
+    }
+  },
 
   
 };

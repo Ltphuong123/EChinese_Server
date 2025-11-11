@@ -133,6 +133,48 @@ const commentModel = {
   //   return result.rows[0];
   // },
 
+  findWithPostOwner: async (commentId) => {
+    const queryText = `
+      SELECT 
+        c.*,
+        p.user_id as post_owner_id
+      FROM "Comments" c
+      JOIN "Posts" p ON c.post_id = p.id
+      WHERE c.id = $1;
+    `;
+    const result = await db.query(queryText, [commentId]);
+    return result.rows[0];
+  },
+
+  /**
+   * --- HÀM MỚI ---
+   * Thực hiện xóa mềm một bình luận.
+   */
+  softDelete: async (commentId, data) => {
+    const { deleted_at, deleted_by, deleted_reason } = data;
+    const queryText = `
+      UPDATE "Comments"
+      SET 
+        deleted_at = $1,
+        deleted_by = $2,
+        deleted_reason = $3
+      WHERE id = $4;
+    `;
+    await db.query(queryText, [deleted_at, deleted_by, deleted_reason, commentId]);
+  },
+
+  restore: async (commentId) => {
+    const queryText = `
+      UPDATE "Comments"
+      SET 
+        deleted_at = NULL,
+        deleted_by = NULL,
+        deleted_reason = NULL
+      WHERE id = $1;
+    `;
+    await db.query(queryText, [commentId]);
+  },
+
   
 };
 
