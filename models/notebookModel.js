@@ -9,8 +9,8 @@ const notebookModel = {
       options,
       is_premium,
       status,
-      user_id,    // Có thể là null (do admin tạo) hoặc một UUID (do user tạo hoặc admin gán)
-      created_by  // Luôn là một UUID của người thực hiện hành động
+      user_id, // Có thể là null (do admin tạo) hoặc một UUID (do user tạo hoặc admin gán)
+      created_by, // Luôn là một UUID của người thực hiện hành động
     } = notebookData;
 
     // Xây dựng câu lệnh SQL INSERT.
@@ -24,27 +24,21 @@ const notebookModel = {
 
     // Tạo mảng các giá trị tương ứng với các placeholder ($1, $2, ...)
     // Thứ tự phải khớp chính xác với thứ tự các cột trong câu lệnh INSERT.
-    const values = [
-      name,
-      options,
-      is_premium,
-      status,
-      user_id,
-      created_by
-    ];
-    
+    const values = [name, options, is_premium, status, user_id, created_by];
+
     // Thực thi câu truy vấn với các tham số đã được bảo vệ (chống SQL Injection).
     const result = await db.query(queryText, values);
-    
+
     // Trả về bản ghi đầu tiên trong kết quả (vì chúng ta chỉ chèn một hàng).
     return result.rows[0];
   },
 
   async findAll(filters) {
-    const { limit, offset, search, status, premium, userId } = filters;
-    
+    const { limit, offset, search, status, premium, userId, userCreated } =
+      filters;
+
     const queryParams = [];
-    let whereClauses = 'WHERE 1=1';
+    let whereClauses = "WHERE 1=1";
 
     // Xây dựng các điều kiện WHERE động
     if (search) {
@@ -52,25 +46,34 @@ const notebookModel = {
       whereClauses += ` AND name ILIKE $${queryParams.length}`;
     }
 
-    if (status && status !== 'all') {
+    if (status && status !== "all") {
       queryParams.push(status);
       whereClauses += ` AND status = $${queryParams.length}`;
     }
-    
-    if (premium && premium !== 'all') {
-      const isPremiumValue = premium === 'true';
+
+    if (premium && premium !== "all") {
+      const isPremiumValue = premium === "true";
       queryParams.push(isPremiumValue);
       whereClauses += ` AND is_premium = $${queryParams.length}`;
     }
 
     // --- Logic phân quyền cốt lõi ---
     if (userId) {
-      if (userId === 'NULL') {
+      if (userId === "NULL") {
         whereClauses += ` AND user_id IS NULL`;
-      } else if (userId !== 'all') {
+      } else if (userId !== "all") {
         // Đây là trường hợp lấy sổ tay cá nhân
         queryParams.push(userId);
         whereClauses += ` AND user_id = $${queryParams.length}`;
+
+        // Logic mới: phân biệt notebook user tự tạo vs copy từ template
+        if (userCreated === true) {
+          // Lấy notebook user tự tạo (user_id = created_by)
+          whereClauses += ` AND user_id = created_by`;
+        } else if (userCreated === false) {
+          // Lấy notebook copy từ template (user_id != created_by)
+          whereClauses += ` AND user_id != created_by`;
+        }
       }
       // Nếu userId === 'all', không thêm điều kiện gì cả -> lấy tất cả.
     }
@@ -79,7 +82,7 @@ const notebookModel = {
     const countQuery = `SELECT COUNT(*) FROM "Notebooks" ${whereClauses}`;
     const totalResult = await db.query(countQuery, queryParams);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
-    
+
     // --- Truy vấn 2: Lấy dữ liệu phân trang ---
     const selectQuery = `
       SELECT id, name, vocab_count, created_at, status, is_premium, user_id, created_by 
@@ -89,9 +92,12 @@ const notebookModel = {
     `;
 
     queryParams.push(limit, offset);
-    const finalSelectQuery = `${selectQuery} LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`;
-    
+    const finalSelectQuery = `${selectQuery} LIMIT $${
+      queryParams.length - 1
+    } OFFSET $${queryParams.length}`;
+
     const notebooksResult = await db.query(finalSelectQuery, queryParams);
+    console.log("notebooksResult.rows:", notebooksResult.rows);
 
     return {
       notebooks: notebooksResult.rows,
@@ -112,11 +118,11 @@ const notebookModel = {
       queryParams.push(status);
       whereClauses += ` AND nvi.status = $${queryParams.length}`;
     }
-    
+
     const countQuery = `SELECT COUNT(*) FROM "NotebookVocabItems" nvi JOIN "Vocabulary" v ON nvi.vocab_id = v.id ${whereClauses}`;
     const totalResult = await db.query(countQuery, queryParams);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
-    
+
     // Câu lệnh SELECT lấy thêm cột `status` từ bảng `NotebookVocabItems`
     const selectQuery = `
       SELECT v.id, v.hanzi, v.pinyin, v.meaning, v.level, v.image_url, 
@@ -127,14 +133,15 @@ const notebookModel = {
       ${whereClauses}
       ORDER BY nvi.added_at DESC
     `;
-    
+
     queryParams.push(limit, offset);
-    const finalSelectQuery = `${selectQuery} LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`;
+    const finalSelectQuery = `${selectQuery} LIMIT $${
+      queryParams.length - 1
+    } OFFSET $${queryParams.length}`;
     const vocabResult = await db.query(finalSelectQuery, queryParams);
-    
+
     return { vocabularies: vocabResult.rows, totalItems };
   },
-
 
   async findVocabulariesInSystemNotebook(notebookId, filters) {
     // Logic gần như tương tự, nhưng không có cột `status`
@@ -161,11 +168,13 @@ const notebookModel = {
       ${whereClauses}
       ORDER BY nvi.added_at DESC
     `;
-    
+
     queryParams.push(limit, offset);
-    const finalSelectQuery = `${selectQuery} LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`;
+    const finalSelectQuery = `${selectQuery} LIMIT $${
+      queryParams.length - 1
+    } OFFSET $${queryParams.length}`;
     const vocabResult = await db.query(finalSelectQuery, queryParams);
-    
+
     return { vocabularies: vocabResult.rows, totalItems };
   },
 
@@ -177,7 +186,7 @@ const notebookModel = {
     // Thực thi câu truy vấn, truyền notebookId vào mảng tham số.
     // Việc này đảm bảo an toàn, chống lại SQL Injection.
     const result = await db.query(queryText, [notebookId]);
-    
+
     // kết quả trả về từ db.query là một object có thuộc tính 'rows', là một mảng các bản ghi.
     // Vì chúng ta tìm theo khóa chính, mảng này sẽ có tối đa 1 phần tử.
     // Chúng ta trả về phần tử đầu tiên của mảng. Nếu không tìm thấy bản ghi nào,
@@ -185,7 +194,7 @@ const notebookModel = {
     return result.rows[0];
   },
 
-  addVocabularies: async (notebookId, vocabIds) => {
+  addVocabularies: async (notebookId, vocabIds, status) => {
     const client = await db.pool.connect();
 
     try {
@@ -198,7 +207,7 @@ const notebookModel = {
       // 'chưa thuộc' là giá trị mặc định cho status khi thêm từ mới.
       const insertQuery = `
         INSERT INTO "NotebookVocabItems" (notebook_id, vocab_id, status)
-        SELECT $1, unnest($2::uuid[]), 'chưa thuộc'
+        SELECT $1, unnest($2::uuid[]), '${status}'
         ON CONFLICT (notebook_id, vocab_id) DO NOTHING
         RETURNING vocab_id;
       `;
@@ -251,7 +260,7 @@ const notebookModel = {
     return result.rows[0];
   },
 
-removeVocabularies: async (notebookId, vocabIds) => {
+  removeVocabularies: async (notebookId, vocabIds) => {
     const client = await db.pool.connect();
 
     try {
@@ -310,11 +319,11 @@ removeVocabularies: async (notebookId, vocabIds) => {
     }
   },
 
-async addVocabulariesByLevel(notebookId, level) {
+  async addVocabulariesByLevel(notebookId, level) {
     const client = await db.pool.connect();
 
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN");
 
       // --- Thao tác 1: Thêm hàng loạt từ vựng ---
       // Sử dụng một subquery để tìm tất cả vocab_id thuộc level được chỉ định,
@@ -332,7 +341,7 @@ async addVocabulariesByLevel(notebookId, level) {
       `;
       const insertResult = await client.query(insertQuery, [level, notebookId]);
       const addedCount = insertResult.rowCount;
-      
+
       // --- Thao tác 2: Cập nhật lại vocab_count ---
       // Đếm lại toàn bộ để đảm bảo chính xác
       const updateCountQuery = `
@@ -346,44 +355,41 @@ async addVocabulariesByLevel(notebookId, level) {
       const updateResult = await client.query(updateCountQuery, [notebookId]);
 
       if (updateResult.rowCount === 0) {
-        throw new Error('Notebook không tồn tại.');
+        throw new Error("Notebook không tồn tại.");
       }
 
       const newTotalVocabCount = updateResult.rows[0].vocab_count;
 
-      await client.query('COMMIT');
+      await client.query("COMMIT");
 
       return { addedCount, newTotalVocabCount };
-
     } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('Lỗi trong transaction khi thêm từ vựng theo level:', error);
+      await client.query("ROLLBACK");
+      console.error(
+        "Lỗi trong transaction khi thêm từ vựng theo level:",
+        error
+      );
       throw error;
     } finally {
       client.release();
     }
   },
 
-
-
-
-
-
-
-
-
-
   updateByUser: async (notebookId, userId, updateData) => {
     const fieldsToUpdate = Object.keys(updateData);
     if (fieldsToUpdate.length === 0) return null;
 
-    const setClause = fieldsToUpdate.map((field, index) => `"${field}" = $${index + 1}`).join(', ');
+    const setClause = fieldsToUpdate
+      .map((field, index) => `"${field}" = $${index + 1}`)
+      .join(", ");
     const values = Object.values(updateData);
 
     const queryText = `
       UPDATE "Notebooks"
       SET ${setClause}
-      WHERE id = $${fieldsToUpdate.length + 1} AND user_id = $${fieldsToUpdate.length + 2}
+      WHERE id = $${fieldsToUpdate.length + 1} AND user_id = $${
+      fieldsToUpdate.length + 2
+    }
       RETURNING *;
     `;
     const result = await db.query(queryText, [...values, notebookId, userId]);
@@ -400,8 +406,6 @@ async addVocabulariesByLevel(notebookId, level) {
     const result = await db.query(queryText, [status, notebookId, vocabId]);
     return result.rows[0];
   },
-
-
 
   findVocabsByNotebookId: async (notebookId) => {
     const queryText = `
@@ -427,7 +431,6 @@ async addVocabulariesByLevel(notebookId, level) {
     const result = await db.query(queryText, [notebookId]);
     return result.rows;
   },
-
 
   async createUserNoteBook(userId, name) {
     const query = `
@@ -573,8 +576,6 @@ async addVocabulariesByLevel(notebookId, level) {
     return result.rows[0];
   },
 
-  
-
   // findById: async (id) => {
   //   const queryText = `SELECT * FROM "Notebooks" WHERE id = $1;`;
   //   const result = await db.query(queryText, [id]);
@@ -582,8 +583,6 @@ async addVocabulariesByLevel(notebookId, level) {
   //   // result.rows[0] sẽ là object notebook hoặc undefined nếu không có kết quả
   //   return result.rows[0];
   // },
-
-  
 
   bulkUpdateStatus: async (ids, status) => {
     // Sử dụng toán tử ANY của PostgreSQL để cập nhật các hàng có id nằm trong một mảng.
@@ -622,8 +621,6 @@ async addVocabulariesByLevel(notebookId, level) {
     const result = await db.query(query, [name, notebookId, userId]);
     return result.rows[0];
   },
-
-
 
   async findVocabulariesByNotebookId(notebookId, filters) {
     const { limit, offset, search, status } = filters;
@@ -749,7 +746,7 @@ async addVocabulariesByLevel(notebookId, level) {
 
     return result.rows;
   },
-  
+
   findVocabulariesByNotebookId: async ({
     notebookId,
     filters,

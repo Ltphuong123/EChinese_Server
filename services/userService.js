@@ -11,15 +11,25 @@ const db = require("../config/db");
 const saltRounds = 10;
 
 const generateAccessToken = (user) => {
-  return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET|| '7b9c3f8a4e9b2c1d0e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6', {
-    expiresIn: process.env.JWT_EXPIRATION || "1d",
-  });
+  return jwt.sign(
+    { id: user.id, role: user.role },
+    process.env.JWT_SECRET ||
+      "7b9c3f8a4e9b2c1d0e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6",
+    {
+      expiresIn: process.env.JWT_EXPIRATION || "1d",
+    }
+  );
 };
 
 const generateRefreshToken = (user) => {
-  return jwt.sign({ id: user.id }, process.env.JWT_REFRESH_SECRET || '7b9c3f8a4e9b2c1d0e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6', {
-    expiresIn: process.env.JWT_REFRESH_EXPIRATION || "7d",
-  });
+  return jwt.sign(
+    { id: user.id },
+    process.env.JWT_REFRESH_SECRET ||
+      "7b9c3f8a4e9b2c1d0e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6",
+    {
+      expiresIn: process.env.JWT_REFRESH_EXPIRATION || "7d",
+    }
+  );
 };
 
 const userService = {
@@ -37,6 +47,14 @@ const userService = {
       data.password_hash = null;
     }
     const newUser = await userModel.createUser(data);
+
+    // Copy template notebooks cho user mới
+    try {
+      await userService.copyTemplateNotebooksForUser(newUser.id);
+    } catch (error) {
+      console.error("Lỗi khi copy template notebooks:", error);
+      // Không throw để không ảnh hưởng tới việc tạo user
+    }
 
     return { ...newUser };
   },
@@ -103,6 +121,13 @@ const userService = {
         avatar_url,
       };
       user = await userModel.createUser(newUserData);
+
+      // Copy template notebooks cho user mới
+      try {
+        await userService.copyTemplateNotebooksForUser(user.id);
+      } catch (error) {
+        console.error("Lỗi khi copy template notebooks:", error);
+      }
     }
     // 3. Tạo token
     const accessToken = generateAccessToken(user);
@@ -544,6 +569,57 @@ const userService = {
     }
 
     return badge;
+  },
+
+  // Copy template notebooks cho user mới
+  copyTemplateNotebooksForUser: async (userId) => {
+    try {
+      // Lấy tất cả template notebooks (user_id = null và status = published)
+      const templateNotebooks = await db.query(
+        `SELECT * FROM "Notebooks" WHERE user_id IS NULL AND status = 'published'`
+      );
+
+      for (const template of templateNotebooks.rows) {
+        // Tạo bản sao notebook cho user
+        const copiedNotebookResult = await db.query(
+          `INSERT INTO "Notebooks" (name, options, is_premium, status, user_id, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING id`,
+          [
+            template.name,
+            template.options,
+            template.is_premium,
+            "published",
+            userId,
+            template.created_by,
+          ]
+        );
+
+        const copiedNotebookId = copiedNotebookResult.rows[0].id;
+
+        // Copy tất cả từ vựng từ template
+        await db.query(
+          `INSERT INTO "NotebookVocabItems" (notebook_id, vocab_id, status)
+           SELECT $1, vocab_id, 'chưa thuộc'
+           FROM "NotebookVocabItems"
+           WHERE notebook_id = $2`,
+          [copiedNotebookId, template.id]
+        );
+
+        // Cập nhật vocab_count
+        await db.query(
+          `UPDATE "Notebooks"
+           SET vocab_count = (
+             SELECT COUNT(*) FROM "NotebookVocabItems" WHERE notebook_id = $1
+           )
+           WHERE id = $1`,
+          [copiedNotebookId]
+        );
+      }
+    } catch (error) {
+      console.error("Lỗi khi copy template notebooks:", error);
+      throw error;
+    }
   },
 };
 
