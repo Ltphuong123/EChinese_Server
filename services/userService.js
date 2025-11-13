@@ -621,6 +621,146 @@ const userService = {
       throw error;
     }
   },
+
+  // Lấy thống kê hoạt động của user trong tuần hiện tại
+  getWeeklyActivity: async (userId) => {
+    try {
+      // Tính toán ngày bắt đầu và kết thúc của tuần hiện tại (T2 - CN)
+      const today = new Date();
+      const currentDay = today.getDay(); // 0 = CN, 1 = T2, ..., 6 = T7
+      const mondayOffset = currentDay === 0 ? 6 : currentDay - 1; // Tính offset để về T2
+
+      const monday = new Date(today);
+      monday.setDate(today.getDate() - mondayOffset);
+      monday.setHours(0, 0, 0, 0);
+
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      // Lấy dữ liệu hoạt động từ DB
+      const activityData = await db.query(
+        `SELECT date, minutes_online, login_count 
+         FROM "UserDailyActivity" 
+         WHERE user_id = $1 AND date >= $2 AND date <= $3 
+         ORDER BY date`,
+        [
+          userId,
+          monday.toISOString().split("T")[0],
+          sunday.toISOString().split("T")[0],
+        ]
+      );
+
+      // Tạo map để tra cứu nhanh
+      const activityMap = new Map();
+      activityData.rows.forEach((row) => {
+        activityMap.set(row.date, {
+          minutes: row.minutes_online || 0,
+          loginCount: row.login_count || 0,
+        });
+      });
+
+      // Tạo dữ liệu cho 7 ngày trong tuần
+      const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+      const weekData = [];
+      let totalMinutes = 0;
+      let streak = 0;
+      let currentStreak = 0;
+
+      // Lấy ngày hôm nay theo múi giờ local
+      const todayLocal = new Date();
+      todayLocal.setHours(0, 0, 0, 0);
+
+      for (let i = 0; i < 7; i++) {
+        const currentDate = new Date(monday);
+        currentDate.setDate(monday.getDate() + i);
+        currentDate.setHours(0, 0, 0, 0);
+
+        const dateString = currentDate.toISOString().split("T")[0];
+
+        const activity = activityMap.get(dateString);
+        const minutes = activity ? activity.minutes : 0;
+        const completed = minutes > 0;
+
+        // So sánh ngày chính xác
+        const isToday = currentDate.getTime() === todayLocal.getTime();
+
+        weekData.push({
+          day: dayNames[i],
+          completed,
+          minutes,
+          isToday,
+        });
+
+        totalMinutes += minutes;
+
+        // Tính streak liên tiếp
+        if (completed) {
+          currentStreak++;
+          streak = Math.max(streak, currentStreak);
+        } else {
+          currentStreak = 0;
+        }
+      }
+
+      return {
+        streak,
+        total_minutes: totalMinutes,
+        weekData,
+      };
+    } catch (error) {
+      console.error("Lỗi khi lấy thống kê hoạt động tuần:", error);
+      throw error;
+    }
+  },
+
+  // Lấy bảng xếp hạng điểm cộng đồng
+  getCommunityLeaderboard: async ({ page, limit }) => {
+    try {
+      const offset = (page - 1) * limit;
+
+      // Đếm tổng số users có điểm cộng đồng > 0
+      const countResult = await db.query(
+        `SELECT COUNT(*) FROM "Users" WHERE community_points > 0 AND is_active = true`
+      );
+      const totalItems = parseInt(countResult.rows[0].count, 10);
+
+      // Lấy dữ liệu bảng xếp hạng với phân trang
+      const leaderboardResult = await db.query(
+        `SELECT 
+          u.id as user_id,
+          u.name as user_name,
+          u.avatar_url as user_avatar,
+          u.level as user_level,
+          u.community_points,
+          bl.level as badge_level,
+          bl.name as badge_name,
+          bl.icon as badge_icon,
+          bl.min_points as badge_min_points
+         FROM "Users" u
+         LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+         WHERE u.community_points > 0 AND u.is_active = true
+         ORDER BY u.community_points DESC, u.name ASC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
+
+      const totalPages = Math.ceil(totalItems / limit);
+
+      return {
+        data: leaderboardResult.rows,
+        meta: {
+          page,
+          limit,
+          total: totalItems,
+          totalPages,
+        },
+      };
+    } catch (error) {
+      console.error("Lỗi khi lấy bảng xếp hạng điểm cộng đồng:", error);
+      throw error;
+    }
+  },
 };
 
 module.exports = userService;

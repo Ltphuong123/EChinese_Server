@@ -68,6 +68,19 @@ router.get(
   userController.getCurrentUserBadge
 );
 
+// Lấy thống kê hoạt động của user trong tuần hiện tại
+router.get(
+  "/users/me/weekly-activity",
+  authMiddleware.verifyToken,
+  userController.getWeeklyActivity
+);
+
+// Lấy bảng xếp hạng điểm cộng đồng
+router.get(
+  "/users/community-leaderboard",
+  userController.getCommunityLeaderboard
+);
+
 // --- ACHIEVEMENT ROUTES FOR ANY USER ---
 
 // GET /api/users/:userId/achievements (Xem thành tích của người dùng khác)
