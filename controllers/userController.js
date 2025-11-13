@@ -620,6 +620,50 @@ const userController = {
       });
     }
   },
+
+  // API: Lấy thời gian hoạt động của user trong tuần hiện tại
+  getWeeklyActivity: async (req, res) => {
+    try {
+      const userId = req.user.id;
+
+      const result = await userService.getWeeklyActivity(userId);
+
+      res.status(200).json({
+        success: true,
+        message: "Lấy thống kê hoạt động tuần thành công",
+        data: result,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy thống kê hoạt động tuần",
+        error: error.message,
+      });
+    }
+  },
+
+  // API: Lấy bảng xếp hạng điểm cộng đồng
+  getCommunityLeaderboard: async (req, res) => {
+    try {
+      const page = parseInt(req.query.page, 10) || 1;
+      const limit = parseInt(req.query.limit, 10) || 10; // Trả về top 10
+
+      const result = await userService.getCommunityLeaderboard({ page, limit });
+
+      res.status(200).json({
+        success: true,
+        message: "Lấy bảng xếp hạng thành công.",
+        data: result.data,
+        meta: result.meta,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy bảng xếp hạng",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = userController;
