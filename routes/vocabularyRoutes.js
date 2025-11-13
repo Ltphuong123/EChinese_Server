@@ -51,6 +51,7 @@ router.put(
   vocabularyController.updateVocabulary
 );
 
+router.post('/admin/vocabularies/word-types', vocabularyController.createWordType);
 
 module.exports = router;
 

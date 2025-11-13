@@ -40,7 +40,7 @@ const userModel = {
 
     await userSubscriptionService.addSubscription(
       result.rows[0].id,
-      "750ac898-82aa-4327-a589-9f98fabecb2d"
+      "cc8ee1e7-3ce7-4b60-9ea3-d8e840823514"
     );
 
     return result.rows[0];
