@@ -9,7 +9,7 @@ const achievementController = require("../controllers/achievementController");
 const { authLimiter } = require("../middlewares/rateLimitMiddleware");
 
 router.post("/auth/register", userController.signup);
-router.post("/auth/login", authLimiter, userController.login);
+router.post("/auth/login", userController.login);
 router.post("/auth/google-login", userController.googleLogin);
 router.post("/auth/refresh-token", userController.refreshToken);
 router.post("/auth/logout", userController.logout);
