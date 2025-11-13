@@ -3,35 +3,7 @@
 const vocabularyService = require('../services/vocabularyService');
 
 const vocabularyController = {
-  createOrUpdateVocabulariesAdmin: async (req, res) => {
-    try {
-      const vocabulariesData = req.body;
-
-      if (!Array.isArray(vocabulariesData) || vocabulariesData.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Dữ liệu đầu vào phải là một mảng và không được rỗng.'
-        });
-      }
-      
-      // Gọi service mới
-      const result = await vocabularyService.bulkCreateOrUpdateVocabularies(vocabulariesData);
-
-      const totalProcessed = vocabulariesData.length;
-      const successCount = result.processedItems.length;
-      const failureCount = result.errors.length;
-
-      res.status(201).json({
-        success: true,
-        message: `Đã xử lý ${totalProcessed} mục. Thành công: ${successCount}, Thất bại: ${failureCount}.`,
-        data: result.processedItems,
-        errors: result.errors
-      });
-
-    } catch (error) {
-      res.status(500).json({ success: false, message: 'Lỗi máy chủ khi xử lý từ vựng', error: error.message });
-    }
-  },
+  
 
   getVocabulariesAdmin: async (req, res) => {
     try {
@@ -322,6 +294,60 @@ const vocabularyController = {
         message: 'Lỗi khi cập nhật từ vựng',
         error: error.message
       });
+    }
+  },
+
+
+
+
+
+
+
+
+
+
+
+
+
+  createOrUpdateVocabulariesAdmin: async (req, res) => {
+    try {
+      const vocabulariesData = req.body;
+
+      if (!Array.isArray(vocabulariesData) || vocabulariesData.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Dữ liệu đầu vào phải là một mảng và không được rỗng.'
+        });
+      }
+      
+      // Gọi service mới
+      const result = await vocabularyService.bulkCreateOrUpdateVocabularies(vocabulariesData);
+
+      const totalProcessed = vocabulariesData.length;
+      const successCount = result.processedItems.length;
+      const failureCount = result.errors.length;
+
+      res.status(201).json({
+        success: true,
+        message: `Đã xử lý ${totalProcessed} mục. Thành công: ${successCount}, Thất bại: ${failureCount}.`,
+        data: result.processedItems,
+        errors: result.errors
+      });
+
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi máy chủ khi xử lý từ vựng', error: error.message });
+    }
+  },
+
+
+
+  createWordType: async (req, res) => {
+    try {
+      const { code } = req.body;
+      const newWordType = await vocabularyService.createWordType(code);
+      res.status(201).json({ success: true, message: 'Tạo loại từ thành công.', data: newWordType });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi tạo loại từ.', error: error.message });
     }
   },
 

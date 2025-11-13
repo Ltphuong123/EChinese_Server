@@ -8,12 +8,19 @@ const port = process.env.PORT || 5000;
 
 const { generalLimiter } = require('./middlewares/rateLimitMiddleware');
 
+// const corsOptions = {
+//   origin: 'https://echinese-adminweb-fe.onrender.com', // Chỉ cho phép domain này
+//   optionsSuccessStatus: 200 
+// };
+// app.use(cors(corsOptions));
 
-// app.use(cors());
+
+app.use(cors());
 const corsOptions = {
   origin: "*", // Chỉ cho phép yêu cầu từ địa chỉ này
   optionsSuccessStatus: 200,
 };
+
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/api', generalLimiter);

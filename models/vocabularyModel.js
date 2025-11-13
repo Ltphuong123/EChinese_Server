@@ -543,6 +543,112 @@ const vocabularyModel = {
 
 
 
+
+
+  
+  
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+  //   /**
+  //  * Tìm một từ vựng dựa trên hanzi (UNIQUE field), trả về word_types.
+  //  */
+  // findByHanzi: async (hanzi) => {
+  //   const queryText = `
+  //       SELECT v.*, array_remove(array_agg(vwt.word_type), NULL) as "word_types"
+  //       FROM "Vocabulary" v
+  //       LEFT JOIN "VocabularyWordType" vwt ON v.id = vwt.vocab_id
+  //       WHERE v.hanzi = $1
+  //       GROUP BY v.id;
+  //   `;
+  //   const result = await db.query(queryText, [hanzi]);
+  //   return result.rows[0];
+  // },
+
+  // /**
+  //  * Cập nhật và hợp nhất (MERGE) một từ vựng.
+  //  */
+  // upsertAndMerge: async (vocabData) => {
+  //   // Sử dụng snake_case và gán giá trị mặc định là mảng rỗng nếu không có
+  //   const { id, pinyin, meaning, notes, level, image_url, word_types: new_word_types = [] } = vocabData;
+  //   const client = await db.pool.connect();
+    
+  //   try {
+  //     await client.query('BEGIN');
+
+  //     const vocabQuery = `
+  //       UPDATE "Vocabulary" 
+  //       SET pinyin = $1, meaning = $2, notes = $3, level = $4, image_url = $5
+  //       WHERE id = $6 RETURNING *;
+  //     `;
+  //     const vocabResult = await client.query(vocabQuery, [pinyin, meaning, notes, level, image_url, id]);
+  //     const updatedVocab = vocabResult.rows[0];
+      
+  //     const existingTypesQuery = `SELECT word_type FROM "VocabularyWordType" WHERE vocab_id = $1;`;
+  //     const existingTypesResult = await client.query(existingTypesQuery, [id]);
+  //     const existingTypes = existingTypesResult.rows.map(r => r.word_type);
+
+  //     const typesToAdd = new_word_types.filter(type => !existingTypes.includes(type));
+
+  //     if (typesToAdd.length > 0) {
+  //       const typeValues = typesToAdd.map(typeCode => `('${id}', '${typeCode}')`).join(',');
+  //       await client.query(`INSERT INTO "VocabularyWordType" (vocab_id, word_type) VALUES ${typeValues};`);
+  //     }
+      
+  //     await client.query('COMMIT');
+
+  //     return { ...updatedVocab, word_types: [...existingTypes, ...typesToAdd] };
+  //   } catch (e) {
+  //     await client.query('ROLLBACK');
+  //     throw e;
+  //   } finally {
+  //     client.release();
+  //   }
+  // },
+
+  // /**
+  //  * Tạo một từ vựng mới và các liên kết word type của nó.
+  //  */
+  // createWithWordTypes: async (vocabData) => {
+  //   const { hanzi, pinyin, meaning, notes, level, image_url, word_types } = vocabData;
+  //   const client = await db.pool.connect();
+  //   try {
+  //     await client.query('BEGIN');
+      
+  //     const vocabQuery = `
+  //       INSERT INTO "Vocabulary" (hanzi, pinyin, meaning, notes, level, image_url)
+  //       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;
+  //     `;
+  //     const vocabResult = await client.query(vocabQuery, [hanzi, pinyin, meaning, notes, level, image_url]);
+  //     const newVocab = vocabResult.rows[0];
+
+  //     if (word_types && word_types.length > 0) {
+  //       const typeValues = word_types.map(typeCode => `('${newVocab.id}', '${typeCode}')`).join(',');
+  //       await client.query(`INSERT INTO "VocabularyWordType" (vocab_id, word_type) VALUES ${typeValues};`);
+  //     }
+      
+  //     await client.query('COMMIT');
+  //     return { ...newVocab, word_types };
+  //   } catch (e) {
+  //     await client.query('ROLLBACK');
+  //     throw e;
+  //   } finally {
+  //     client.release();
+  //   }
+  // },
+
   /**
    * Kiểm tra sự tồn tại của một từ vựng bằng ID.
    */
@@ -553,7 +659,22 @@ const vocabularyModel = {
   },
 
   /**
-   * Tìm một từ vựng dựa trên hanzi (UNIQUE field), trả về word_types.
+   * Tìm một từ vựng dựa trên ID, trả về đầy đủ thông tin kèm word_types.
+   */
+  findById: async (id) => {
+    const queryText = `
+        SELECT v.*, array_remove(array_agg(vwt.word_type), NULL) as "word_types"
+        FROM "Vocabulary" v
+        LEFT JOIN "VocabularyWordType" vwt ON v.id = vwt.vocab_id
+        WHERE v.id = $1
+        GROUP BY v.id;
+    `;
+    const result = await db.query(queryText, [id]);
+    return result.rows[0];
+  },
+
+  /**
+   * Tìm một từ vựng dựa trên hanzi (UNIQUE field), trả về đầy đủ thông tin kèm word_types.
    */
   findByHanzi: async (hanzi) => {
     const queryText = `
@@ -602,8 +723,7 @@ const vocabularyModel = {
    * Cập nhật và hợp nhất (MERGE) một từ vựng.
    */
   upsertAndMerge: async (vocabData) => {
-    // Sử dụng snake_case và gán giá trị mặc định là mảng rỗng nếu không có
-    const { id, pinyin, meaning, notes, level, image_url, word_types: new_word_types = [] } = vocabData;
+    const { id, hanzi, pinyin, meaning, notes, level, image_url, word_types: new_word_types = [] } = vocabData;
     const client = await db.pool.connect();
     
     try {
@@ -611,10 +731,10 @@ const vocabularyModel = {
 
       const vocabQuery = `
         UPDATE "Vocabulary" 
-        SET pinyin = $1, meaning = $2, notes = $3, level = $4, image_url = $5
-        WHERE id = $6 RETURNING *;
+        SET hanzi = $1, pinyin = $2, meaning = $3, notes = $4, level = $5, image_url = $6
+        WHERE id = $7 RETURNING *;
       `;
-      const vocabResult = await client.query(vocabQuery, [pinyin, meaning, notes, level, image_url, id]);
+      const vocabResult = await client.query(vocabQuery, [hanzi, pinyin, meaning, notes, level, image_url, id]);
       const updatedVocab = vocabResult.rows[0];
       
       const existingTypesQuery = `SELECT word_type FROM "VocabularyWordType" WHERE vocab_id = $1;`;
@@ -639,6 +759,12 @@ const vocabularyModel = {
     }
   },
 
+
+  createWordType: async (code) => {
+    const queryText = `INSERT INTO "WordType" (code) VALUES ($1) RETURNING *;`;
+    const result = await db.query(queryText, [code]); // Luôn lưu mã dưới dạng chữ hoa
+    return result.rows[0];
+  },
 
 };
 
