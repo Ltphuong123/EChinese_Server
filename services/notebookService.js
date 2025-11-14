@@ -127,7 +127,7 @@ const notebookService = {
         "Notebook không tồn tại hoặc bạn không có quyền truy cập."
       );
     // Dùng lại logic transaction từ model của admin
-    return notebookModel.addVocabularies(notebookId, vocabIds, status);
+    return notebookModel.addVocabulariesUser(notebookId, vocabIds, status);
   },
 
   removeVocabulariesFromNotebook: async (notebookId, vocabIds) => {

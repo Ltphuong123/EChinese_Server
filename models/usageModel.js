@@ -118,7 +118,28 @@ const usageModel = {
         itemsPerPage: limit
       }
     };
-  }
+  },
+
+  findByUserAndFeature: async (userId, feature, client = db, forUpdate = false) => {
+        const lockClause = forUpdate ? ' FOR UPDATE' : '';
+        const query = `SELECT * FROM "UserUsage" WHERE user_id = $1 AND feature = $2${lockClause}`;
+        const result = await client.query(query, [userId, feature]);
+        return result.rows[0];
+    },
+
+    incrementCount: async (usageId, client = db) => {
+        const query = `
+            UPDATE "UserUsage"
+            SET daily_count = daily_count + 1
+            WHERE id = $1
+            RETURNING *;
+        `;
+        const result = await client.query(query, [usageId]);
+        return result.rows[0];
+    }
+
+
+
 };
 
 module.exports = usageModel;
