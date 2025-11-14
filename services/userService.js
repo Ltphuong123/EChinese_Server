@@ -33,6 +33,28 @@ const generateRefreshToken = (user) => {
 };
 
 const userService = {
+  fetchUserById: async (userId) => {
+    const user = await userModel.findUserDetailsById(userId);
+    if (!user) throw new Error('Người dùng không tồn tại.');
+    // Map only required fields
+    return {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      avatar_url: user.avatar_url,
+      email: user.email,
+      provider: user.provider,
+      role: user.role,
+      is_active: user.is_active,
+      isVerify: user.isVerify,
+      community_points: user.community_points,
+      level: user.level,
+      badge_level: user.badge_level,
+      language: user.language,
+      created_at: user.created_at,
+      last_login: user.last_login,
+    };
+  },
   createUser: async (userData) => {
     if (!userData || typeof userData !== "object") {
       throw new Error("Dữ liệu đầu vào không hợp lệ");
@@ -278,15 +300,73 @@ const userService = {
       throw new Error("Người dùng không tồn tại.");
     }
 
-    // Tổng hợp tất cả dữ liệu vào một object duy nhất
+    // Chuẩn hóa dữ liệu theo cấu trúc yêu cầu
+    const achievementsNormalized = (achievements || []).map((a) => ({
+      id: a.id,
+      achievement_id: a.achievement_id,
+      achievement_name: a.achievement_name || a.name,
+      achieved_at: a.achieved_at,
+      user_id: user.id,
+      user_name: user.name,
+      user_avatar: user.avatar_url,
+    }));
+
+    const dailyActivitiesNormalized = (dailyActivities || []).map((d) => ({
+      user_id: d.user_id || user.id,
+      date: d.date,
+      login_count: d.login_count,
+      minutes_online: d.minutes_online,
+    }));
+
+    const sessionsNormalized = (sessions || []).map((s) => ({
+      id: s.id || undefined,
+      user_id: s.user_id || user.id,
+      device: s.device,
+      ip_address: s.ip_address,
+      login_at: s.login_at,
+      logout_at: s.logout_at,
+    }));
+
+    const streakNormalized = streak
+      ? {
+          user_id: streak.user_id || user.id,
+          current_streak: streak.current_streak,
+          longest_streak: streak.longest_streak,
+          last_login_date: streak.last_login_date,
+        }
+      : null;
+
+    const subscriptionNormalized = subscription
+      ? {
+          id: subscription.id,
+          name: subscription.name,
+          description: { html: subscription.description },
+          duration_months: subscription.duration_months,
+          price: subscription.price,
+          daily_quota_ai_lesson: subscription.daily_quota_ai_lesson,
+          daily_quota_translate: subscription.daily_quota_translate,
+          is_active: subscription.is_active === true,
+          created_at: subscription.created_at,
+          updated_at: subscription.updated_at,
+        }
+      : null;
+
+    const usageNormalized = (usage || []).map((u) => ({
+      id: u.id,
+      user_id: u.user_id || user.id,
+      feature: u.feature,
+      daily_count: u.daily_count,
+      last_reset: u.last_reset,
+    }));
+
     return {
       user,
-      achievements,
-      dailyActivities,
-      sessions,
-      streak: streak || null, // Trả về null nếu user chưa có streak
-      subscription: subscription || null, // Trả về null nếu user không có gói active
-      usage,
+      achievements: achievementsNormalized,
+      dailyActivities: dailyActivitiesNormalized,
+      sessions: sessionsNormalized,
+      streak: streakNormalized,
+      subscription: subscriptionNormalized,
+      usage: usageNormalized,
     };
   },
 
