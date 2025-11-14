@@ -1,5 +1,6 @@
 const db = require("../config/db");
 const userSubscriptionService = require("../services/userSubscriptionService");
+const userUsageService = require("../services/usageService");
 
 const userModel = {
   getAllUsers: async () => {
@@ -42,6 +43,9 @@ const userModel = {
       result.rows[0].id,
       "cc8ee1e7-3ce7-4b60-9ea3-d8e840823514"
     );
+    await userUsageService.resetUsageCounters(result.rows[0].id, ['ai_lesson', 'ai_translate']);
+
+    
 
     return result.rows[0];
   },
@@ -62,7 +66,7 @@ const userModel = {
   findUserByUsername: async (username) => {
     const queryText = `SELECT * FROM  "Users" WHERE username = $1;`;
     const result = await db.query(queryText, [username]);
-
+    
     return result.rows[0];
   },
 
@@ -330,7 +334,15 @@ const userModel = {
 
   findUserAchievements: async (userId) => {
     const queryText = `
-      SELECT a.name, a.description, a.icon, a.points, ua.achieved_at
+      SELECT 
+        ua.id,
+        ua.user_id,
+        ua.achievement_id,
+        a.name AS achievement_name,
+        a.description,
+        a.icon,
+        a.points,
+        ua.achieved_at
       FROM "UserAchievements" ua
       JOIN "Achievements" a ON ua.achievement_id = a.id
       WHERE ua.user_id = $1
@@ -342,7 +354,7 @@ const userModel = {
 
   findUserDailyActivities: async (userId, limit = 30) => {
     const queryText = `
-      SELECT date, minutes_online, login_count
+      SELECT user_id, date, minutes_online, login_count
       FROM "UserDailyActivity"
       WHERE user_id = $1
       ORDER BY date DESC
@@ -354,7 +366,7 @@ const userModel = {
 
   findUserSessions: async (userId, limit = 10) => {
     const queryText = `
-      SELECT login_at, logout_at, device, ip_address
+      SELECT id, user_id, login_at, logout_at, device, ip_address
       FROM "UserSessions"
       WHERE user_id = $1
       ORDER BY login_at DESC
@@ -366,7 +378,7 @@ const userModel = {
 
   findUserActiveSubscription: async (userId) => {
     const queryText = `
-      SELECT s.*, us.start_date, us.expiry_date, us.auto_renew
+      SELECT s.*, us.start_date, us.expiry_date, us.auto_renew, us.is_active
       FROM "UserSubscriptions" us
       JOIN "Subscriptions" s ON us.subscription_id = s.id
       WHERE us.user_id = $1 AND us.is_active = true
@@ -378,7 +390,7 @@ const userModel = {
 
   findUserUsage: async (userId) => {
     const queryText = `
-      SELECT feature, daily_count, last_reset
+      SELECT id, user_id, feature, daily_count, last_reset
       FROM "UserUsage"
       WHERE user_id = $1;
     `;

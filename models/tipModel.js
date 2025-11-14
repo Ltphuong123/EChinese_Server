@@ -26,20 +26,20 @@ const tipModel = {
     let whereClauses = 'WHERE 1=1';
 
     // Lọc theo topic
-    if (topic) {
+    if (topic && topic !== "undefined" && topic !== null) {
       queryParams.push(topic);
       whereClauses += ` AND topic = $${queryParams.length}`;
     }
 
     // Lọc theo level
-    if (level) {
+    if (level && level !== "undefined" && level !== null) {
       queryParams.push(level);
       whereClauses += ` AND level = $${queryParams.length}`;
     }
 
     // Lọc theo is_pinned
     // Chỉ thêm điều kiện lọc nếu is_pinned được định nghĩa
-    if (is_pinned !== undefined && is_pinned !== null) {
+    if (is_pinned !== "undefined" && is_pinned !== null) {
       // Chuyển đổi string 'true'/'false' từ query param thành boolean
       const isPinnedValue = String(is_pinned).toLowerCase() === 'true';
       queryParams.push(isPinnedValue);
@@ -47,7 +47,7 @@ const tipModel = {
     }
 
     // Tìm kiếm trong cột content (kiểu jsonb)
-    if (search) {
+    if (search && search !== "undefined" && search !== null) {
       queryParams.push(`%${search}%`);
       // Chuyển đổi jsonb thành text để có thể dùng ILIKE
       // Đây là cách tìm kiếm đơn giản và hiệu quả cho hầu hết các trường hợp

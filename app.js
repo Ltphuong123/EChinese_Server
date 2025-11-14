@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -18,6 +19,9 @@ const corsOptions = {
   origin: "*", // Chỉ cho phép yêu cầu từ địa chỉ này
   optionsSuccessStatus: 200,
 };
+
+app.use(express.json({ limit: '100mb' }));
+
 
 app.use(cors(corsOptions));
 app.use(express.json());

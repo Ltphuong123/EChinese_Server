@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const mediaController = require('../controllers/mediaController');
 const authMiddleware = require('../middlewares/authMiddleware');
-const upload = require('../config/multerConfig');
+// Removed multer: no upload middleware required
 
 
 router.post(

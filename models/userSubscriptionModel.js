@@ -232,6 +232,19 @@ const userSubscriptionModel = {
 
     
 
+    findActiveWithPlanDetails: async (userId, client = db) => {
+        const query = `
+            SELECT s.daily_quota_ai_lesson, s.daily_quota_translate
+            FROM "UserSubscriptions" us
+            JOIN "Subscriptions" s ON us.subscription_id = s.id
+            WHERE us.user_id = $1 AND us.is_active = true
+            ORDER BY us.created_at DESC
+            LIMIT 1;
+        `;
+        const result = await client.query(query, [userId]);
+        return result.rows[0];
+    },
+
 
 
 
