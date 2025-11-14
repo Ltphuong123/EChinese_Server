@@ -500,16 +500,20 @@ const userService = {
 
     if (Object.keys(safeUpdateData).length === 0) {
       // Nếu người dùng chỉ gửi các trường không được phép,
-      // chúng ta coi như không có gì để cập nhật.
-      // Trả về thông tin user hiện tại.
+      // trả về thông tin user đầy đủ giống khi login
       return userModel.findUserDetailsById(userId);
     }
 
-    // Chúng ta có thể dùng lại hàm updateUser đã viết cho admin,
-    // vì nó đã được thiết kế để xử lý dữ liệu động một cách an toàn.
+    // Cập nhật user
     const updatedUser = await userModel.updateUser(userId, safeUpdateData);
 
-    return updatedUser;
+    if (!updatedUser) {
+      throw new Error("Người dùng không tồn tại.");
+    }
+
+    // Lấy lại thông tin chi tiết đầy đủ giống user khi login
+    const userDetails = await userModel.findUserDetailsById(userId);
+    return userDetails;
   },
 
   changePassword: async (username, oldPassword, newPassword) => {
