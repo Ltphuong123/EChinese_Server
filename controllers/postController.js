@@ -42,7 +42,39 @@ const postController = {
         status: req.query.status,
       };
       const result = await postService.getPublicPosts(filters);
-      res.status(200).json({ success: true, data:result });
+      // Transform posts to required shape
+      const transformed = (result.data || []).map(post => {
+        // Build content object
+        let contentHtml = null, contentText = null, contentImages = [];
+        const rawContent = post.content;
+        const stripTags = (html) => (html || '').replace(/<[^>]*>/g, '').trim();
+        if (rawContent && typeof rawContent === 'object') {
+          contentHtml = rawContent.html || rawContent.content || null;
+          contentText = rawContent.text || stripTags(contentHtml);
+          if (Array.isArray(rawContent.images)) contentImages = rawContent.images; else if (rawContent.image) contentImages = [rawContent.image];
+        } else if (typeof rawContent === 'string') {
+          contentHtml = rawContent;
+          contentText = stripTags(rawContent);
+        }
+        return {
+          id: post.id,
+          user_id: post.user_id,
+          title: post.title,
+          content: { html: contentHtml, text: contentText, images: contentImages },
+          topic: post.topic,
+          likes: post.likes || 0,
+          views: post.views || 0,
+          created_at: post.created_at,
+          status: post.status,
+          is_pinned: post.is_pinned,
+          is_approved: post.is_approved,
+          auto_flagged: post.auto_flagged,
+          user: post.user || null,
+          badge: post.badge || null,
+          comment_count: post.comment_count || 0
+        };
+      });
+      res.status(200).json({ data: transformed, meta: result.meta });
     } catch (error) {
       res.status(500).json({
         success: false,

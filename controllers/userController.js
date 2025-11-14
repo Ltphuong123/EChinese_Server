@@ -15,6 +15,19 @@ const userController = {
     }
   },
 
+  fetchUserById: async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const user = await userService.fetchUserById(userId);
+      return res.status(200).json(user);
+    } catch (error) {
+      if (error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      return res.status(500).json({ success: false, message: 'Lỗi khi lấy người dùng', error: error.message });
+    }
+  },
+
   signup: async (req, res) => {
     try {
       const newUser = await userService.createUser(req.body);
@@ -214,13 +227,11 @@ const userController = {
           .json({ success: false, message: "Không có dữ liệu để cập nhật." });
       }
 
-      const updatedUser = await userService.updateUserAdmin(userId, updateData);
-
-      res.status(200).json({
-        success: true,
-        message: "Cập nhật người dùng thành công.",
-        data: updatedUser,
-      });
+      await userService.updateUserAdmin(userId, updateData);
+      // Lấy lại bản ghi đầy đủ với provider sau khi cập nhật
+      const fresh = await userService.fetchUserById(userId);
+      // Trả về đúng cấu trúc phẳng yêu cầu
+      return res.status(200).json(fresh);
     } catch (error) {
       if (error.message.includes("không tồn tại")) {
         return res.status(404).json({ success: false, message: error.message });

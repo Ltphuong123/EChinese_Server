@@ -21,4 +21,19 @@ router.post(
   usageController.createUsage
 );
 
+router.post(
+    '/usage/increment',
+    authMiddleware.verifyToken, // Bảo vệ route, đảm bảo có req.user
+    usageController.incrementUsage
+);
+
+router.post(
+    '/admin/usage/reset',
+    authMiddleware.verifyToken, authMiddleware.isAdmin, // Yêu cầu cả đăng nhập và quyền admin
+    usageController.resetUserUsage
+);
+
+
+
+
 module.exports = router;

@@ -1,5 +1,12 @@
 const db = require("../config/db");
 
+const VOCAB_STATUS = {
+  NOT_LEARNED: 'chưa thuộc',
+  LEARNED: 'đã thuộc',
+  FAVORITE: 'yêu thích',
+  UNCERTAIN: 'không chắc',
+};
+
 const notebookModel = {
   create: async (notebookData) => {
     // Trích xuất các thuộc tính từ object notebookData.
@@ -194,65 +201,157 @@ const notebookModel = {
     return result.rows[0];
   },
 
-  addVocabularies: async (notebookId, vocabIds, status) => {
+  // addVocabularies: async (notebookId, vocabIds, status) => {
+  //   const client = await db.pool.connect();
+  //   console.log(status);
+
+  //   try {
+  //     await client.query("BEGIN");
+
+  //     // --- Thao tác 1: Thêm các liên kết vào bảng NotebookVocabItems ---
+  //     // Xây dựng câu lệnh INSERT với nhiều giá trị
+  //     // ON CONFLICT DO NOTHING: Nếu một cặp (notebook_id, vocab_id) đã tồn tại,
+  //     // câu lệnh sẽ bỏ qua nó một cách nhẹ nhàng mà không báo lỗi. Điều này rất hữu ích.
+  //     // 'chưa thuộc' là giá trị mặc định cho status khi thêm từ mới.
+  //     const insertQuery = `
+  //       INSERT INTO "NotebookVocabItems" (notebook_id, vocab_id, status)
+  //       SELECT $1, unnest($2::uuid[]), '${status}'
+  //       ON CONFLICT (notebook_id, vocab_id) DO NOTHING
+  //       RETURNING vocab_id;
+  //     `;
+
+  //     // unnest($2::uuid[]) là một cách hiệu quả trong PostgreSQL để biến một mảng thành các hàng.
+  //     const insertResult = await client.query(insertQuery, [
+  //       notebookId,
+  //       vocabIds,
+  //     ]);
+  //     const addedCount = insertResult.rowCount;
+
+  //     // --- Thao tác 2: Cập nhật lại cột vocab_count trong bảng Notebooks ---
+  //     // Cách làm an toàn nhất là đếm lại toàn bộ từ trong notebook thay vì chỉ cộng thêm.
+  //     // Điều này giúp tránh lỗi đồng bộ nếu có thao tác xóa xảy ra đồng thời.
+  //     const updateCountQuery = `
+  //       UPDATE "Notebooks"
+  //       SET vocab_count = (
+  //         SELECT COUNT(*) FROM "NotebookVocabItems" WHERE notebook_id = $1
+  //       )
+  //       WHERE id = $1
+  //       RETURNING vocab_count;
+  //     `;
+  //     const updateResult = await client.query(updateCountQuery, [notebookId]);
+
+  //     // Kiểm tra xem notebook có tồn tại không
+  //     if (updateResult.rowCount === 0) {
+  //       throw new Error("Notebook không tồn tại.");
+  //     }
+
+  //     const newTotalVocabCount = updateResult.rows[0].vocab_count;
+
+  //     await client.query("COMMIT");
+
+  //     return { status, status };
+  //   } catch (error) {
+  //     await client.query("ROLLBACK");
+  //     console.error(
+  //       "Lỗi trong transaction khi thêm từ vựng vào notebook:",
+  //       error
+  //     );
+  //     throw error;
+  //   } finally {
+  //     client.release();
+  //   }
+  // },
+
+
+  async addVocabularies(notebookId, vocabIds) {
     const client = await db.pool.connect();
-
     try {
-      await client.query("BEGIN");
+      await client.query('BEGIN');
 
-      // --- Thao tác 1: Thêm các liên kết vào bảng NotebookVocabItems ---
-      // Xây dựng câu lệnh INSERT với nhiều giá trị
-      // ON CONFLICT DO NOTHING: Nếu một cặp (notebook_id, vocab_id) đã tồn tại,
-      // câu lệnh sẽ bỏ qua nó một cách nhẹ nhàng mà không báo lỗi. Điều này rất hữu ích.
-      // 'chưa thuộc' là giá trị mặc định cho status khi thêm từ mới.
+      // --- SỬA Ở ĐÂY ---
+      // Sử dụng hằng số đã định nghĩa để đảm bảo tính nhất quán
       const insertQuery = `
         INSERT INTO "NotebookVocabItems" (notebook_id, vocab_id, status)
-        SELECT $1, unnest($2::uuid[]), '${status}'
+        SELECT $1, unnest($2::uuid[]), $3
         ON CONFLICT (notebook_id, vocab_id) DO NOTHING
         RETURNING vocab_id;
       `;
-
-      // unnest($2::uuid[]) là một cách hiệu quả trong PostgreSQL để biến một mảng thành các hàng.
-      const insertResult = await client.query(insertQuery, [
-        notebookId,
-        vocabIds,
-      ]);
+      // Truyền giá trị status như một tham số
+      const insertResult = await client.query(insertQuery, [notebookId, vocabIds, VOCAB_STATUS.NOT_LEARNED]);
       const addedCount = insertResult.rowCount;
 
-      // --- Thao tác 2: Cập nhật lại cột vocab_count trong bảng Notebooks ---
-      // Cách làm an toàn nhất là đếm lại toàn bộ từ trong notebook thay vì chỉ cộng thêm.
-      // Điều này giúp tránh lỗi đồng bộ nếu có thao tác xóa xảy ra đồng thời.
+      // ... (Phần còn lại của hàm không thay đổi)
       const updateCountQuery = `
         UPDATE "Notebooks"
-        SET vocab_count = (
-          SELECT COUNT(*) FROM "NotebookVocabItems" WHERE notebook_id = $1
-        )
-        WHERE id = $1
-        RETURNING vocab_count;
+        SET vocab_count = (SELECT COUNT(*) FROM "NotebookVocabItems" WHERE notebook_id = $1)
+        WHERE id = $1 RETURNING vocab_count;
       `;
       const updateResult = await client.query(updateCountQuery, [notebookId]);
-
-      // Kiểm tra xem notebook có tồn tại không
-      if (updateResult.rowCount === 0) {
-        throw new Error("Notebook không tồn tại.");
-      }
-
+      if (updateResult.rowCount === 0) throw new Error('Notebook không tồn tại.');
       const newTotalVocabCount = updateResult.rows[0].vocab_count;
 
-      await client.query("COMMIT");
-
+      await client.query('COMMIT');
       return { addedCount, newTotalVocabCount };
+
     } catch (error) {
-      await client.query("ROLLBACK");
-      console.error(
-        "Lỗi trong transaction khi thêm từ vựng vào notebook:",
-        error
-      );
+      await client.query('ROLLBACK');
+      console.error('Lỗi trong transaction khi thêm từ vựng vào notebook:', error);
       throw error;
     } finally {
       client.release();
     }
   },
+
+
+
+  async addVocabulariesUser(notebookId, vocabIds, status) {
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const insertQuery = `
+        INSERT INTO "NotebookVocabItems" (notebook_id, vocab_id, status)
+        SELECT $1, unnest($2::uuid[]), $3
+        ON CONFLICT (notebook_id, vocab_id) DO NOTHING
+        RETURNING vocab_id;
+      `;
+      // Truyền giá trị status nhận được từ service
+      const insertResult = await client.query(insertQuery, [notebookId, vocabIds, status]);
+      const addedCount = insertResult.rowCount;
+
+      // Không cần cập nhật count nếu không có gì được thêm vào
+      if (addedCount > 0) {
+        const updateCountQuery = `
+          UPDATE "Notebooks"
+          SET vocab_count = (SELECT COUNT(*) FROM "NotebookVocabItems" WHERE notebook_id = $1)
+          WHERE id = $1 RETURNING vocab_count;
+        `;
+        await client.query(updateCountQuery, [notebookId]);
+      }
+
+      // Lấy lại tổng số cuối cùng
+      const finalCountResult = await client.query('SELECT vocab_count FROM "Notebooks" WHERE id = $1', [notebookId]);
+      if (finalCountResult.rowCount === 0) {
+        throw new Error('Notebook không tồn tại.');
+      }
+      const newTotalVocabCount = finalCountResult.rows[0].vocab_count;
+      
+      await client.query('COMMIT');
+      return { addedCount, newTotalVocabCount };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Lỗi trong transaction khi thêm từ vựng vào notebook:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+  
+
+
+
+
 
   async findByIdAndUserId(notebookId, userId) {
     const query = `SELECT * FROM "Notebooks" WHERE id = $1 AND user_id = $2;`;
@@ -319,61 +418,107 @@ const notebookModel = {
     }
   },
 
+  // async addVocabulariesByLevel(notebookId, level) {
+  //   const client = await db.pool.connect();
+
+  //   try {
+  //     await client.query("BEGIN");
+
+  //     // --- Thao tác 1: Thêm hàng loạt từ vựng ---
+  //     // Sử dụng một subquery để tìm tất cả vocab_id thuộc level được chỉ định,
+  //     // sau đó INSERT chúng vào NotebookVocabItems.
+  //     // ON CONFLICT DO NOTHING sẽ tự động bỏ qua các từ đã tồn tại trong sổ tay.
+  //     const insertQuery = `
+  //       WITH vocabs_to_add AS (
+  //         SELECT id FROM "Vocabulary" WHERE $1 = ANY(level)
+  //       )
+  //       INSERT INTO "NotebookVocabItems" (notebook_id, vocab_id, status)
+  //       SELECT $2, id, 'chưa thuộc'
+  //       FROM vocabs_to_add
+  //       ON CONFLICT (notebook_id, vocab_id) DO NOTHING
+  //       RETURNING vocab_id;
+  //     `;
+  //     const insertResult = await client.query(insertQuery, [level, notebookId]);
+  //     const addedCount = insertResult.rowCount;
+
+  //     // --- Thao tác 2: Cập nhật lại vocab_count ---
+  //     // Đếm lại toàn bộ để đảm bảo chính xác
+  //     const updateCountQuery = `
+  //       UPDATE "Notebooks"
+  //       SET vocab_count = (
+  //         SELECT COUNT(*) FROM "NotebookVocabItems" WHERE notebook_id = $1
+  //       )
+  //       WHERE id = $1
+  //       RETURNING vocab_count;
+  //     `;
+  //     const updateResult = await client.query(updateCountQuery, [notebookId]);
+
+  //     if (updateResult.rowCount === 0) {
+  //       throw new Error("Notebook không tồn tại.");
+  //     }
+
+  //     const newTotalVocabCount = updateResult.rows[0].vocab_count;
+
+  //     await client.query("COMMIT");
+
+  //     return { addedCount, newTotalVocabCount };
+  //   } catch (error) {
+  //     await client.query("ROLLBACK");
+  //     console.error(
+  //       "Lỗi trong transaction khi thêm từ vựng theo level:",
+  //       error
+  //     );
+  //     throw error;
+  //   } finally {
+  //     client.release();
+  //   }
+  // },
+
+
   async addVocabulariesByLevel(notebookId, level) {
     const client = await db.pool.connect();
-
     try {
-      await client.query("BEGIN");
+      await client.query('BEGIN');
 
-      // --- Thao tác 1: Thêm hàng loạt từ vựng ---
-      // Sử dụng một subquery để tìm tất cả vocab_id thuộc level được chỉ định,
-      // sau đó INSERT chúng vào NotebookVocabItems.
-      // ON CONFLICT DO NOTHING sẽ tự động bỏ qua các từ đã tồn tại trong sổ tay.
+      // --- SỬA Ở ĐÂY ---
       const insertQuery = `
         WITH vocabs_to_add AS (
           SELECT id FROM "Vocabulary" WHERE $1 = ANY(level)
         )
         INSERT INTO "NotebookVocabItems" (notebook_id, vocab_id, status)
-        SELECT $2, id, 'chưa thuộc'
+        SELECT $2, id, $3
         FROM vocabs_to_add
         ON CONFLICT (notebook_id, vocab_id) DO NOTHING
         RETURNING vocab_id;
       `;
-      const insertResult = await client.query(insertQuery, [level, notebookId]);
+      // Truyền giá trị status như một tham số
+      const insertResult = await client.query(insertQuery, [level, notebookId, VOCAB_STATUS.NOT_LEARNED]);
       const addedCount = insertResult.rowCount;
-
-      // --- Thao tác 2: Cập nhật lại vocab_count ---
-      // Đếm lại toàn bộ để đảm bảo chính xác
+      
+      // ... (Phần còn lại của hàm không thay đổi)
       const updateCountQuery = `
         UPDATE "Notebooks"
-        SET vocab_count = (
-          SELECT COUNT(*) FROM "NotebookVocabItems" WHERE notebook_id = $1
-        )
-        WHERE id = $1
-        RETURNING vocab_count;
+        SET vocab_count = (SELECT COUNT(*) FROM "NotebookVocabItems" WHERE notebook_id = $1)
+        WHERE id = $1 RETURNING vocab_count;
       `;
       const updateResult = await client.query(updateCountQuery, [notebookId]);
-
-      if (updateResult.rowCount === 0) {
-        throw new Error("Notebook không tồn tại.");
-      }
-
+      if (updateResult.rowCount === 0) throw new Error('Notebook không tồn tại.');
       const newTotalVocabCount = updateResult.rows[0].vocab_count;
-
-      await client.query("COMMIT");
-
+      
+      await client.query('COMMIT');
       return { addedCount, newTotalVocabCount };
+
     } catch (error) {
-      await client.query("ROLLBACK");
-      console.error(
-        "Lỗi trong transaction khi thêm từ vựng theo level:",
-        error
-      );
+      await client.query('ROLLBACK');
+      console.error('Lỗi trong transaction khi thêm từ vựng theo level:', error);
       throw error;
     } finally {
       client.release();
     }
   },
+
+
+
 
   updateByUser: async (notebookId, userId, updateData) => {
     const fieldsToUpdate = Object.keys(updateData);

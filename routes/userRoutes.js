@@ -152,6 +152,13 @@ router.get(
   userController.getUserDetailsAdmin
 );
 
+// Basic user fetch (only core fields) for admin
+router.get(
+  "/admin/users/:userId",
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  userController.fetchUserById
+);
+
 router.put(
   "/admin/users/:userId",
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
