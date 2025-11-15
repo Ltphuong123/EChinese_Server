@@ -108,6 +108,20 @@ const notificationModel = {
     return result.rowCount;
   },
 
+  // Helper: find active comment ban for a user (latest)
+  findActiveBan: async (userId) => {
+    const queryText = `
+      SELECT * FROM "Notifications"
+      WHERE recipient_id = $1
+        AND type = 'comment_ban'
+        AND (expires_at IS NULL OR expires_at > NOW())
+      ORDER BY created_at DESC
+      LIMIT 1;
+    `;
+    const result = await db.query(queryText, [userId]);
+    return result.rows[0] || null;
+  },
+
 };
 
 
