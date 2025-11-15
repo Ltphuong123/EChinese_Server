@@ -9,5 +9,9 @@ router.post('/ai/generate-lesson', authMiddleware.verifyToken, aiController.gene
 router.get('/ai/lessons', authMiddleware.verifyToken, aiController.getMyLessons);
 router.get('/ai/lessons/:lessonId', authMiddleware.verifyToken, aiController.getLessonDetail);
 router.delete('/ai/lessons/:lessonId', authMiddleware.verifyToken, aiController.deleteLesson);
+router.post('/ai/translate', authMiddleware.verifyToken, aiController.translate);
+router.get('/ai/translations', authMiddleware.verifyToken, aiController.getMyTranslations);
+router.delete('/ai/translations/:translationId', authMiddleware.verifyToken, aiController.deleteMyTranslation);
+router.delete('/ai/translations', authMiddleware.verifyToken, aiController.clearMyTranslations);
 
 module.exports = router;
