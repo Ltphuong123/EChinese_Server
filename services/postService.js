@@ -1,15 +1,13 @@
 // file: services/postService.js
 
 const postModel = require("../models/postModel");
-const communityService = require('../services/communityService');
-
+const communityService = require("../services/communityService");
 
 const postService = {
   createPost: async (postData, userId) => {
     // Gán user_id từ token để đảm bảo an toàn
     const dataToCreate = { ...postData, user_id: userId };
-    
-    
+
     // TODO: Có thể thêm logic kiểm duyệt nội dung tự động ở đây
     return await postModel.create(dataToCreate);
   },
@@ -19,12 +17,17 @@ const postService = {
     const offset = (page - 1) * limit;
 
     // `filters` đã chứa `status`, truyền thẳng xuống là được
-    const { posts, totalItems } = await postModel.findAllPublic({ ...filters, offset });
-    
-    const totalPages = Math.ceil(totalItems / limit);
-    return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
-  },
+    const { posts, totalItems } = await postModel.findAllPublic({
+      ...filters,
+      offset,
+    });
 
+    const totalPages = Math.ceil(totalItems / limit);
+    return {
+      data: posts,
+      meta: { total: totalItems, page, limit, totalPages },
+    };
+  },
 
   getPostById: async (postId) => {
     // Tăng lượt xem khi có người xem bài viết
@@ -161,10 +164,17 @@ const postService = {
     const { page, limit } = filters;
     const offset = (page - 1) * limit;
 
-    const { posts, totalItems } = await postModel.findAllByUserId(userId, currentUserId, { limit, offset });
-    
+    const { posts, totalItems } = await postModel.findAllByUserId(
+      userId,
+      currentUserId,
+      { limit, offset }
+    );
+
     const totalPages = Math.ceil(totalItems / limit);
-    return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
+    return {
+      data: posts,
+      meta: { total: totalItems, page, limit, totalPages },
+    };
   },
 
   // --- HÀM MỚI ---
@@ -173,54 +183,60 @@ const postService = {
     const { page, limit } = filters;
     const offset = (page - 1) * limit;
 
-    const { posts, totalItems } = await postModel.findInteractedByUserId(userId, { limit, offset });
-    
-    const totalPages = Math.ceil(totalItems / limit);
-    return { data: posts, meta: { total: totalItems, page, limit, totalPages } };
-  },
+    const { posts, totalItems } = await postModel.findInteractedByUserId(
+      userId,
+      { limit, offset }
+    );
 
+    const totalPages = Math.ceil(totalItems / limit);
+    return {
+      data: posts,
+      meta: { total: totalItems, page, limit, totalPages },
+    };
+  },
 
   removePost: async (postId, user, reason) => {
     // 1. Lấy thông tin bài viết để kiểm tra
     const post = await postModel.findRawById(postId); // Cần 1 hàm lấy dữ liệu thô, không cần join
-    
+
     if (!post) {
       throw new Error("Bài viết không tồn tại.");
     }
 
     if (post.deleted_at) {
-        throw new Error("Bài viết này đã bị gỡ trước đó.");
+      throw new Error("Bài viết này đã bị gỡ trước đó.");
     }
 
     // 2. Logic phân quyền
-    const isAdmin = user.role === 'admin' || user.role === 'super admin';
+    const isAdmin = user.role === "admin" || user.role === "super admin";
     const isOwner = post.user_id === user.id;
 
     if (!isAdmin && !isOwner) {
       // Nếu không phải admin và cũng không phải chủ bài viết -> Từ chối
       throw new Error("Bạn không có quyền gỡ bài viết này.");
     }
-    
+
     // 3. Chuẩn bị dữ liệu để cập nhật (xóa mềm)
     const dataToRemove = {
       deleted_at: new Date(),
       deleted_by: user.id,
-      deleted_reason: reason || (isAdmin ? "Gỡ bởi quản trị viên" : "Gỡ bởi người dùng"),
+      deleted_reason:
+        reason || (isAdmin ? "Gỡ bởi quản trị viên" : "Gỡ bởi người dùng"),
       // Khi gỡ, nên đổi status để nó không còn là 'published'
-      status: 'removed' 
+      status: "removed",
     };
 
     // 4. Gọi model để cập nhật
     await postModel.softDelete(postId, dataToRemove);
-    
+
     // 5. (Tùy chọn) Ghi log hành động của admin
     if (isAdmin && !isOwner) {
       await communityService.createLog({
-        target_type: 'post',
+        target_type: "post",
         target_id: postId,
-        action: 'gỡ', // 'gỡ' là giá trị enum bạn đã định nghĩa
+        action: "gỡ", // 'gỡ' là giá trị enum bạn đã định nghĩa
         reason: reason || "Gỡ bởi quản trị viên",
-        performed_by: user.id
+        performed_by: user.id,
       });
     }
   },
@@ -228,39 +244,35 @@ const postService = {
   removePost2: async (postId, user, reason) => {
     // 1. Lấy thông tin bài viết để kiểm tra
     const post = await postModel.findRawById(postId); // Cần 1 hàm lấy dữ liệu thô, không cần join
-    
+
     if (!post) {
       throw new Error("Bài viết không tồn tại.");
     }
 
     if (post.deleted_at) {
-        throw new Error("Bài viết này đã bị gỡ trước đó.");
+      throw new Error("Bài viết này đã bị gỡ trước đó.");
     }
 
-   
     // 3. Chuẩn bị dữ liệu để cập nhật (xóa mềm)
     const dataToRemove = {
       deleted_at: new Date(),
       deleted_by: null,
-      deleted_reason:  "Gỡ bởi quản AI",
+      deleted_reason: "Gỡ bởi quản AI",
       // Khi gỡ, nên đổi status để nó không còn là 'published'
-      status: 'removed' 
+      status: "removed",
     };
 
     // 4. Gọi model để cập nhật
     await postModel.softDelete(postId, dataToRemove);
-    
-    
-      // await communityService.createLog({
-      //   target_type: 'post',
-      //   target_id: postId,
-      //   action: 'gỡ', // 'gỡ' là giá trị enum bạn đã định nghĩa
-      //   reason: reason || "Gỡ bởi quản AI",
-      //   performed_by: " AI System "
-      // });
-    
-  },
 
+    // await communityService.createLog({
+    //   target_type: 'post',
+    //   target_id: postId,
+    //   action: 'gỡ', // 'gỡ' là giá trị enum bạn đã định nghĩa
+    //   reason: reason || "Gỡ bởi quản AI",
+    //   performed_by: " AI System "
+    // });
+  },
 
   restorePost: async (postId, adminId) => {
     // const post = await postModel.findRawById(postId);
@@ -282,14 +294,19 @@ const postService = {
     //   reason: "Khôi phục bởi quản trị viên",
     //   performed_by: adminId
     // });
-
   },
 
+  // Lấy thông tin user đã like/comment cho 1 post
+  getPostUserInteractions: async (postId, userId) => {
+    const isLiked = await postModel.checkUserLiked(postId, userId);
+    const isCommented = await postModel.checkUserCommented(postId, userId);
+    return { isLiked, isCommented };
+  },
 
-
-
-
-
+  // Lấy thông tin user đã like/comment cho nhiều posts
+  getPostsUserInteractions: async (postIds, userId) => {
+    return await postModel.checkUserInteractionsForPosts(postIds, userId);
+  },
 };
 
 module.exports = postService;

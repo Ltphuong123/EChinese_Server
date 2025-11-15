@@ -726,7 +726,7 @@ const postModel = {
     `;
     await db.query(queryText, [
       deleted_at,
-      typeof deleted_by !== 'undefined' ? deleted_by : null,
+      typeof deleted_by !== "undefined" ? deleted_by : null,
       deleted_reason,
       status,
       postId,
@@ -746,6 +746,67 @@ const postModel = {
       WHERE id = $1;
     `;
     await db.query(queryText, [postId]);
+  },
+
+  // Kiểm tra user có like post này không
+  checkUserLiked: async (postId, userId) => {
+    if (!userId) return false;
+
+    const queryText = `
+      SELECT 1 FROM "PostLikes" 
+      WHERE post_id = $1 AND user_id = $2
+      LIMIT 1;
+    `;
+    const result = await db.query(queryText, [postId, userId]);
+    return result.rows.length > 0;
+  },
+
+  // Kiểm tra user có comment trong post này không
+  checkUserCommented: async (postId, userId) => {
+    if (!userId) return false;
+
+    const queryText = `
+      SELECT 1 FROM "Comments" 
+      WHERE post_id = $1 AND user_id = $2 AND deleted_at IS NULL
+      LIMIT 1;
+    `;
+    const result = await db.query(queryText, [postId, userId]);
+    return result.rows.length > 0;
+  },
+
+  // Kiểm tra nhiều posts cùng lúc cho hiệu suất tốt hơn
+  checkUserInteractionsForPosts: async (postIds, userId) => {
+    if (!userId || !postIds.length) {
+      return postIds.map((id) => ({
+        postId: id,
+        isLiked: false,
+        isCommented: false,
+      }));
+    }
+
+    const placeholders = postIds
+      .map((_, index) => `$${index + 2}::uuid`)
+      .join(",");
+
+    const queryText = `
+      SELECT 
+        p.id as post_id,
+        CASE WHEN pl.post_id IS NOT NULL THEN true ELSE false END as is_liked,
+        CASE WHEN c.post_id IS NOT NULL THEN true ELSE false END as is_commented
+      FROM (SELECT unnest(ARRAY[${placeholders}]) as id) p
+      LEFT JOIN "PostLikes" pl ON pl.post_id = p.id AND pl.user_id = $1
+      LEFT JOIN (
+        SELECT DISTINCT post_id FROM "Comments" 
+        WHERE user_id = $1 AND deleted_at IS NULL
+      ) c ON c.post_id = p.id;
+    `;
+
+    const result = await db.query(queryText, [userId, ...postIds]);
+    return result.rows.map((row) => ({
+      postId: row.post_id,
+      isLiked: row.is_liked,
+      isCommented: row.is_commented,
+    }));
   },
 };
 
