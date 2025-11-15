@@ -1,5 +1,5 @@
 // models/userDailyActivityModel.js
-const db = require('../config/db');
+const db = require("../config/db");
 
 const userDailyActivityModel = {
   upsert: async (userId) => {
@@ -11,6 +11,18 @@ const userDailyActivityModel = {
       DO UPDATE SET login_count = "UserDailyActivity".login_count + 1;
     `;
     await db.query(queryText, [userId, today]);
+  },
+
+  // Lấy dữ liệu hoạt động của user trong khoảng thời gian
+  getActivityInRange: async (userId, startDate, endDate) => {
+    const queryText = `
+      SELECT date, minutes_online, login_count 
+      FROM "UserDailyActivity" 
+      WHERE user_id = $1 AND date >= $2 AND date <= $3 
+      ORDER BY date
+    `;
+    const result = await db.query(queryText, [userId, startDate, endDate]);
+    return result.rows;
   },
 };
 

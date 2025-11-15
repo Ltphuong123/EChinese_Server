@@ -4,6 +4,8 @@ const userModel = require("../models/userModel");
 const refreshTokenModel = require("../models/refreshTokenModel");
 const achievementModel = require("../models/achievementModel");
 const userSubscriptionModel = require("../models/userSubscriptionModel");
+const userDailyActivityModel = require("../models/userDailyActivityModel");
+const userStreaksModel = require("../models/userStreaksModel");
 
 require("dotenv").config();
 const db = require("../config/db");
@@ -17,8 +19,7 @@ const generateAccessToken = (user) => {
       "7b9c3f8a4e9b2c1d0e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6",
     {
       // expiresIn: process.env.JWT_EXPIRATION || "1d",
-      expiresIn:  "1d",
-
+      expiresIn: "1d",
     }
   );
 };
@@ -30,7 +31,7 @@ const generateRefreshToken = (user) => {
       "7b9c3f8a4e9b2c1d0e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6",
     {
       // expiresIn: process.env.JWT_REFRESH_EXPIRATION || "7d",
-       expiresIn:  "7d",
+      expiresIn: "7d",
     }
   );
 };
@@ -38,7 +39,7 @@ const generateRefreshToken = (user) => {
 const userService = {
   fetchUserById: async (userId) => {
     const user = await userModel.findUserDetailsById(userId);
-    if (!user) throw new Error('Người dùng không tồn tại.');
+    if (!user) throw new Error("Người dùng không tồn tại.");
     // Map only required fields
     return {
       id: user.id,
@@ -725,22 +726,20 @@ const userService = {
       sunday.setDate(monday.getDate() + 6);
       sunday.setHours(23, 59, 59, 999);
 
-      // Lấy dữ liệu hoạt động từ DB
-      const activityData = await db.query(
-        `SELECT date, minutes_online, login_count 
-         FROM "UserDailyActivity" 
-         WHERE user_id = $1 AND date >= $2 AND date <= $3 
-         ORDER BY date`,
-        [
-          userId,
-          monday.toISOString().split("T")[0],
-          sunday.toISOString().split("T")[0],
-        ]
+      // Lấy dữ liệu từ UserStreaks
+      const userStreak = await userStreaksModel.findByUserId(userId);
+      const currentStreak = userStreak ? userStreak.current_streak : 0;
+
+      // Lấy dữ liệu hoạt động từ UserDailyActivity
+      const activityData = await userDailyActivityModel.getActivityInRange(
+        userId,
+        monday.toISOString().split("T")[0],
+        sunday.toISOString().split("T")[0]
       );
 
       // Tạo map để tra cứu nhanh
       const activityMap = new Map();
-      activityData.rows.forEach((row) => {
+      activityData.forEach((row) => {
         activityMap.set(row.date, {
           minutes: row.minutes_online || 0,
           loginCount: row.login_count || 0,
@@ -751,8 +750,6 @@ const userService = {
       const dayNames = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
       const weekData = [];
       let totalMinutes = 0;
-      let streak = 0;
-      let currentStreak = 0;
 
       // Lấy ngày hôm nay theo múi giờ local
       const todayLocal = new Date();
@@ -767,7 +764,7 @@ const userService = {
 
         const activity = activityMap.get(dateString);
         const minutes = activity ? activity.minutes : 0;
-        const completed = minutes > 0;
+        const completed = activity ? activity.loginCount > 0 : false; // Completed dựa trên login_count
 
         // So sánh ngày chính xác
         const isToday = currentDate.getTime() === todayLocal.getTime();
@@ -780,18 +777,10 @@ const userService = {
         });
 
         totalMinutes += minutes;
-
-        // Tính streak liên tiếp
-        if (completed) {
-          currentStreak++;
-          streak = Math.max(streak, currentStreak);
-        } else {
-          currentStreak = 0;
-        }
       }
 
       return {
-        streak,
+        streak: currentStreak,
         total_minutes: totalMinutes,
         weekData,
       };
@@ -847,6 +836,50 @@ const userService = {
       console.error("Lỗi khi lấy bảng xếp hạng điểm cộng đồng:", error);
       throw error;
     }
+  },
+  // Ban user
+  banUser: async (userId, { reason, ruleIds, resolution, severity }) => {
+    const user = await userModel.findUserById(userId);
+    if (!user) {
+      throw new Error("Người dùng không tồn tại.");
+    }
+
+    if (!user.is_active) {
+      throw new Error("Người dùng đã bị cấm trước đó.");
+    }
+
+    // Cập nhật is_active = false
+    await db.query(`UPDATE "Users" SET is_active = false WHERE id = $1`, [
+      userId,
+    ]);
+
+    // Tạo violation record - Không có target_type 'user' trong constraint
+    // Nên tạo violation với target_type là 'post' hoặc 'comment' tùy theo ngữ cảnh
+    // Hoặc không tạo violation cho ban user, chỉ ghi log
+    // Ở đây tôi sẽ bỏ qua việc tạo violation vì constraint không hỗ trợ
+
+    // Lấy lại user đã cập nhật
+    return await userModel.findUserDetailsById(userId);
+  },
+
+  // Unban user
+  unbanUser: async (userId, reason) => {
+    const user = await userModel.findUserById(userId);
+    if (!user) {
+      throw new Error("Người dùng không tồn tại.");
+    }
+
+    if (user.is_active) {
+      throw new Error("Người dùng chưa bị cấm.");
+    }
+
+    // Cập nhật is_active = true
+    await db.query(`UPDATE "Users" SET is_active = true WHERE id = $1`, [
+      userId,
+    ]);
+
+    // Lấy lại user đã cập nhật
+    return await userModel.findUserDetailsById(userId);
   },
 };
 
