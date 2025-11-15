@@ -17,6 +17,20 @@ const commentController = {
       }
 
       const newComment = await commentService.createComment(postId, userId, content, parentCommentId);
+
+      // Tự động kiểm duyệt bằng AI (chạy async, không chờ)
+      const autoModerationService = require('../services/autoModerationService');
+      autoModerationService.moderateComment(newComment.id, {
+        content: content,
+        user_id: userId
+      }).then(result => {
+        if (result.removed) {
+          console.log(`Comment ${newComment.id} auto-removed:`, result.reason);
+        }
+      }).catch(error => {
+        console.error('Auto moderation error:', error);
+      });
+
       res.status(210).json({ success: true, message: 'Bình luận thành công.', data: newComment });
     } catch (error) {
       if (error.message.includes('không tồn tại')) {
@@ -105,11 +119,28 @@ const commentController = {
   restoreComment: async (req, res) => {
     try {
       const { commentId } = req.params;
+      const { reason } = req.body;
       const adminId = req.user.id;
 
+      if (!reason) {
+        return res.status(400).json({ success: false, message: 'Lý do khôi phục là bắt buộc.' });
+      }
+
       await commentService.restoreComment(commentId, adminId);
+
+      // Lấy lại comment để gửi thông báo
+      const comment = await commentService.getCommentById(commentId);
       
-      res.status(200).json({ success: true, message: 'Khôi phục bình luận thành công.' });
+      // Gửi thông báo cho user
+      await require('../models/notificationModel').create({
+        recipient_id: comment.user_id,
+        audience: 'user',
+        type: 'community',
+        title: 'Bình luận của bạn đã được khôi phục',
+        content: JSON.stringify({ html: reason }),
+      });
+      
+      res.status(200).json({ success: true, message: 'Khôi phục bình luận thành công.', comment });
     } catch (error) {
       if (error.message.includes('không tồn tại') || error.message.includes('chưa bị gỡ')) {
         return res.status(404).json({ success: false, message: error.message });
@@ -118,7 +149,53 @@ const commentController = {
     }
   },
 
-  
+  // Remove comment with violation (admin only)
+  removeCommentWithViolation: async (req, res) => {
+    try {
+      const { commentId } = req.params;
+      const { reason, ruleIds, resolution, severity } = req.body;
+      const adminId = req.user.id;
+
+      if (!reason || !ruleIds || !severity) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Các trường reason, ruleIds và severity là bắt buộc.' 
+        });
+      }
+
+      const removedComment = await commentService.removeCommentWithViolation(
+        commentId, 
+        adminId, 
+        { reason, ruleIds, resolution, severity }
+      );
+
+      // Gửi thông báo cho user (kiểm tra removedComment có user_id)
+      if (removedComment && removedComment.user_id) {
+        await require('../models/notificationModel').create({
+          recipient_id: removedComment.user_id,
+          audience: 'user',
+          type: 'community',
+          title: 'Bình luận của bạn đã bị gỡ',
+          content: JSON.stringify({ html: reason }),
+        });
+      }
+
+      res.status(200).json({ 
+        success: true, 
+        message: 'Gỡ bình luận thành công.', 
+        comment: removedComment 
+      });
+    } catch (error) {
+      if (error.message.includes('không tồn tại') || error.message.includes('đã bị gỡ')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ 
+        success: false, 
+        message: 'Lỗi khi gỡ bình luận', 
+        error: error.message 
+      });
+    }
+  },
 };
 
 module.exports = commentController;

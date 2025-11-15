@@ -20,6 +20,13 @@ const examController = {
 
       const newExam = await examService.createFullExam(examData, userId);
 
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'CREATE_EXAM',
+        target_id: newExam.id,
+        description: `Tạo bài thi: ${examData.name}`
+      }, userId);
+
       res.status(201).json({
         success: true,
         message: 'Tạo bài thi hoàn chỉnh thành công.',
@@ -92,6 +99,13 @@ const examController = {
       // Gọi service để thực hiện logic cập nhật phức tạp
       const updatedExam = await examService.updateFullExam(id, examData, userId);
 
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'UPDATE_EXAM',
+        target_id: id,
+        description: `Cập nhật bài thi: ${examData.name}`
+      }, userId);
+
       // Trả về dữ liệu bài thi mới đã được cập nhật
       res.status(200).json({
         success: true,
@@ -115,6 +129,13 @@ const examController = {
       const userId = req.user.id; // Người thực hiện hành động sao chép
 
       const duplicatedExam = await examService.duplicateExam(examIdToCopy, userId);
+
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'DUPLICATE_EXAM',
+        target_id: duplicatedExam.id,
+        description: `Sao chép bài thi từ ${examIdToCopy}`
+      }, userId);
 
       res.status(201).json({
         success: true,
@@ -241,8 +262,17 @@ const examController = {
   publishExamAdmin: async (req, res) => {
     try {
       const { id } = req.params;
+      const adminId = req.user.id;
       // Service sẽ trả về cấu trúc đầy đủ của bài thi
       const updatedExam = await examService.setPublishedStatus(id, true);
+      
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'PUBLISH_EXAM',
+        target_id: id,
+        description: `Công bố bài thi`
+      }, adminId);
+      
       res.status(200).json({ success: true, message: 'Công bố bài thi thành công.', data: updatedExam });
     } catch (error) {
       if (error.message.includes('không tồn tại')) {
@@ -260,8 +290,17 @@ const examController = {
   unpublishExamAdmin: async (req, res) => {
     try {
       const { id } = req.params;
+      const adminId = req.user.id;
       // Service sẽ trả về cấu trúc đầy đủ của bài thi
       const updatedExam = await examService.setPublishedStatus(id, false);
+      
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'UNPUBLISH_EXAM',
+        target_id: id,
+        description: `Hủy công bố bài thi`
+      }, adminId);
+      
       res.status(200).json({ success: true, message: 'Hủy công bố bài thi thành công.', data: updatedExam });
     } catch (error) {
       if (error.message.includes('không tồn tại')) {
@@ -279,9 +318,18 @@ const examController = {
   softDeleteExamAdmin: async (req, res) => {
     try {
       const { id } = req.params;
+      const adminId = req.user.id;
       // await examService.setDeletedStatus(id, true);
       // Theo chuẩn REST, DELETE thành công trả về 204 và không có body
            const restoredExam = await examService.setDeletedStatus(id, true);
+      
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'TRASH_EXAM',
+        target_id: id,
+        description: `Xóa mềm bài thi`
+      }, adminId);
+      
       res.status(200).json({ success: true, message: 'Khôi phục bài thi thành công.', data: restoredExam });
 
     } catch (error) {
@@ -300,8 +348,17 @@ const examController = {
   restoreExamAdmin: async (req, res) => {
     try {
       const { id } = req.params;
+      const adminId = req.user.id;
       // Service sẽ trả về cấu trúc đầy đủ của bài thi
       const restoredExam = await examService.setDeletedStatus(id, false);
+      
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'RESTORE_EXAM',
+        target_id: id,
+        description: `Khôi phục bài thi`
+      }, adminId);
+      
       res.status(200).json({ success: true, message: 'Khôi phục bài thi thành công.', data: restoredExam });
     } catch (error)
  {
@@ -316,7 +373,16 @@ const examController = {
   forceDeleteExamAdmin: async (req, res) => {
     try {
       const { id } = req.params;
+      const adminId = req.user.id;
       await examService.forceDeleteExam(id);
+      
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'FORCE_DELETE_EXAM',
+        target_id: id,
+        description: `Xóa vĩnh viễn bài thi`
+      }, adminId);
+      
       res.status(200).send({ success: true, message: 'Thành công' });
     } catch (error) {
       if (error.message.includes('không tồn tại')) {

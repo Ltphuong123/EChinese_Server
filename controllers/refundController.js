@@ -29,6 +29,13 @@ processRefund: async (req, res) => {
             
             const processedRefund = await refundService.processRefundRequest(id, adminId,payload);
 
+            // Log admin action
+            await require('../services/adminLogService').createLog({
+              action_type: 'PROCESS_REFUND',
+              target_id: id,
+              description: `Xử lý yêu cầu hoàn tiền. Trạng thái: ${payload.status || 'N/A'}`
+            }, adminId);
+
             res.status(200).json({
                 success: true,
                 message: `Yêu cầu hoàn tiền đã được xử lý thành công.`,

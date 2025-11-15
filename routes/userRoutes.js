@@ -183,4 +183,17 @@ router.delete(
   userController.deleteUser
 );
 
+// Ban/Unban user
+router.post(
+  "/admin/users/:userId/ban",
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  userController.banUser
+);
+
+router.post(
+  "/admin/users/:userId/unban",
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  userController.unbanUser
+);
+
 module.exports = router;

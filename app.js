@@ -54,6 +54,7 @@ const refundRoutes = require("./routes/refundRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const adminLogRoutes = require("./routes/adminLogRoutes");
 const aiRoutes = require("./routes/aiRoutes");
+const aiModerationRoutes = require("./routes/aiModerationRoutes");
 
 app.use("/api", userRoutes);
 
@@ -82,8 +83,10 @@ app.use("/api", moderationRoutes);
 app.use("/api", userSubscriptionRoutes);
 app.use("/api", refundRoutes);
 app.use("/api", dashboardRoutes);
+
 app.use("/api", adminLogRoutes);
 app.use("/api", aiRoutes);
+app.use("/api", aiModerationRoutes);
 
 app.listen(port, () => {
   console.log(`Server chạy tại http://localhost:${port}`);
