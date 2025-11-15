@@ -62,6 +62,13 @@ router.put(
   postController.restorePost // Đặt hàm controller trong postController
 );
 
+// Moderation endpoint (admin remove/restore + violation logging)
+router.post(
+  `/community/posts/:postId/moderation`,
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  postController.moderatePost
+);
+
 
 
 module.exports = router;

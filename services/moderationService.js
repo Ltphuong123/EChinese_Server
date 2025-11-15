@@ -1,5 +1,8 @@
 // file: services/moderationService.js
 const moderationModel = require('../models/moderationModel');
+const postService = require('./postService');
+const commentService = require('./commentService');
+const notificationService = require('./notificationService');
 
 const moderationService = {
   createReport: (data) => moderationModel.createReport(data),
@@ -59,6 +62,61 @@ const moderationService = {
       
       // 3.4. Gắn ID vi phạm vào đối tượng trả về cho client
       updatedReport.related_violation_id = newViolation.id;
+
+      // 3.5. Thực thi biện pháp xử lý nội dung hoặc cấm bình luận + gửi thông báo
+      const adminUser = { id: data.resolved_by, role: 'admin' };
+      const resolutionReason = data.resolution || 'Nội dung vi phạm quy tắc cộng đồng.';
+      const enforcement = data.enforcement || 'remove_content'; // 'remove_content' | 'ban_comment'
+
+      try {
+        if (enforcement === 'ban_comment') {
+          // Tạo thông báo cấm bình luận có thời hạn
+          const banDays = parseInt(data.ban_days || 7, 10);
+          const expires = new Date(Date.now() + banDays * 24 * 60 * 60 * 1000);
+          await notificationService.createNotification({
+            recipient_id: report.target_user_id,
+            audience: null,
+            type: 'comment_ban',
+            title: 'Cấm bình luận tạm thời',
+            content: `Bạn bị cấm bình luận trong ${banDays} ngày do vi phạm: ${resolutionReason}`,
+            related_type: 'user',
+            related_id: report.target_user_id,
+            data: { report_id: report.id, violation_id: newViolation.id },
+            redirect_url: null,
+            expires_at: expires,
+            priority: 'high',
+            from_system: true,
+          });
+        } else {
+          // Gỡ nội dung vi phạm theo loại mục tiêu
+          if (report.target_type === 'post') {
+            await postService.removePost(report.target_id, adminUser, resolutionReason);
+          } else if (report.target_type === 'comment') {
+            await commentService.removeComment(report.target_id, adminUser, resolutionReason);
+          }
+        }
+
+        // Gửi thông báo kết quả xử lý báo cáo
+        const actionText = enforcement === 'ban_comment'
+          ? 'cấm bình luận tạm thời'
+          : (report.target_type === 'post' ? 'gỡ bài viết' : 'gỡ bình luận');
+        await notificationService.createNotification({
+          recipient_id: report.target_user_id,
+          audience: null,
+          type: 'report_resolved',
+          title: 'Báo cáo đã được xử lý',
+          content: `Hệ thống đã ${actionText} của bạn. Lý do: ${resolutionReason}`,
+          related_type: report.target_type,
+          related_id: report.target_id,
+          data: { report_id: report.id, violation_id: newViolation.id },
+          redirect_url: null,
+          expires_at: null,
+          priority: 'normal',
+          from_system: true,
+        });
+      } catch (enfErr) {
+        console.error('Lỗi khi thực thi biện pháp xử lý/Thông báo:', enfErr);
+      }
     }
     
     return updatedReport;

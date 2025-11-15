@@ -18,4 +18,11 @@ router.get(
   communityController.getModerationLogs
 );
 
+// GET /community/users/:userId/activity
+router.get(
+  '/community/users/:userId/activity',
+  [authMiddleware.verifyToken],
+  communityController.getUserActivity
+);
+
 module.exports = router;
