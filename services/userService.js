@@ -730,19 +730,27 @@ const userService = {
       const userStreak = await userStreaksModel.findByUserId(userId);
       const currentStreak = userStreak ? userStreak.current_streak : 0;
 
-      // Lấy dữ liệu hoạt động từ UserDailyActivity
-      const activityData = await userDailyActivityModel.getActivityInRange(
-        userId,
-        monday.toISOString().split("T")[0],
-        sunday.toISOString().split("T")[0]
+      // Lấy dữ liệu hoạt động từ UserDailyActivity sử dụng query trực tiếp
+      const activityResult = await db.query(
+        `SELECT date, minutes_online, login_count 
+         FROM "UserDailyActivity" 
+         WHERE user_id = $1 AND date >= $2 AND date <= $3 
+         ORDER BY date`,
+        [
+          userId,
+          monday.toISOString().split("T")[0],
+          sunday.toISOString().split("T")[0],
+        ]
       );
 
       // Tạo map để tra cứu nhanh
       const activityMap = new Map();
-      activityData.forEach((row) => {
-        activityMap.set(row.date, {
-          minutes: row.minutes_online || 0,
-          loginCount: row.login_count || 0,
+      activityResult.rows.forEach((row) => {
+        // Convert date to string format for comparison
+        const dateStr = new Date(row.date).toISOString().split("T")[0];
+        activityMap.set(dateStr, {
+          minutes: parseInt(row.minutes_online) || 0,
+          loginCount: parseInt(row.login_count) || 0,
         });
       });
 
