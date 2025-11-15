@@ -1,4 +1,3 @@
-
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -20,8 +19,7 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 
-app.use(express.json({ limit: '100mb' }));
-
+app.use(express.json({ limit: "100mb" }));
 
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -55,6 +53,7 @@ const userSubscriptionRoutes = require("./routes/userSubscriptionRoutes");
 const refundRoutes = require("./routes/refundRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const adminLogRoutes = require("./routes/adminLogRoutes");
+const aiRoutes = require("./routes/aiRoutes");
 
 app.use("/api", userRoutes);
 
@@ -84,6 +83,7 @@ app.use("/api", userSubscriptionRoutes);
 app.use("/api", refundRoutes);
 app.use("/api", dashboardRoutes);
 app.use("/api", adminLogRoutes);
+app.use("/api", aiRoutes);
 
 app.listen(port, () => {
   console.log(`Server chạy tại http://localhost:${port}`);
