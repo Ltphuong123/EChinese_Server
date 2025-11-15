@@ -95,6 +95,36 @@ getDashboardStats: async () => {
     return { logs: logsResult.rows, totalItems };
   },
 
+  findModerationLogsByUserContent: async (userId, { limit, offset }) => {
+    // Logs for posts owned by the given user
+    const countQuery = `
+      SELECT COUNT(*)
+      FROM "ModerationLogs" ml
+      JOIN "Posts" p ON ml.target_type = 'post' AND ml.target_id = p.id
+      WHERE p.user_id = $1;
+    `;
+    const totalResult = await db.query(countQuery, [userId]);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+
+    const selectQuery = `
+      SELECT 
+        ml.id,
+        ml.target_type,
+        ml.target_id,
+        ml.action,
+        ml.reason,
+        ml.performed_by,
+        ml.created_at
+      FROM "ModerationLogs" ml
+      JOIN "Posts" p ON ml.target_type = 'post' AND ml.target_id = p.id
+      WHERE p.user_id = $1
+      ORDER BY ml.created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    const logsResult = await db.query(selectQuery, [userId, limit, offset]);
+    return { logs: logsResult.rows, totalItems };
+  },
+
   createModerationLog: async (logData) => {
     const {
       target_type,

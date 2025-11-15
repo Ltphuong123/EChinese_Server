@@ -3,10 +3,19 @@
 const commentModel = require('../models/commentModel');
 const postModel = require('../models/postModel'); // Để kiểm tra bài viết có tồn tại không
 const communityService = require('../services/communityService');
+const notificationModel = require('../models/notificationModel');
 
 
 const commentService = {
   createComment: async (postId, userId, content, parentCommentId) => {
+    // Kiểm tra cấm bình luận đang hoạt động
+    const activeBan = await notificationModel.findActiveBan(userId);
+    if (activeBan) {
+      const until = activeBan.expires_at ? new Date(activeBan.expires_at) : null;
+      const untilText = until ? until.toLocaleString('vi-VN') : 'khi có thông báo khác';
+      throw new Error(`Bạn đang bị cấm bình luận đến ${untilText}.`);
+    }
+
     // Kiểm tra xem bài viết có tồn tại không
     const postExists = await postModel.findById(postId);
     if (!postExists) {

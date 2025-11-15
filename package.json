@@ -13,6 +13,7 @@
   "description": "",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.901.0",
+    "@google/generative-ai": "^0.21.0",
     "@gradio/client": "^2.0.0-dev.1",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",

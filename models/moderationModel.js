@@ -129,13 +129,67 @@ const moderationModel = {
     const selectQuery = `
       SELECT 
         v.*,
-        u.name as user_name,
+        -- Full user profile
+        jsonb_build_object(
+          'id', u.id,
+          'username', u.username,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'email', u.email,
+          'role', u.role,
+          'is_active', u.is_active,
+          'isVerify', u."isVerify",
+          'community_points', u.community_points,
+          'level', u.level,
+          'badge_level', u.badge_level,
+          'language', u.language,
+          'created_at', u.created_at,
+          'last_login', u.last_login,
+          'provider', u.provider
+        ) as "user",
+        -- Rule details
         (
-          SELECT json_agg(cr.title) 
+          SELECT jsonb_agg(cr.*)
           FROM "ViolationRules" vr 
           JOIN "CommunityRules" cr ON vr.rule_id = cr.id
           WHERE vr.violation_id = v.id
-        ) as rules
+        ) as rules,
+        -- Target content snapshot
+        CASE v.target_type
+          WHEN 'post' THEN (
+            SELECT jsonb_build_object(
+              'id', p.id,
+              'user_id', p.user_id,
+              'title', p.title,
+              'content', p.content,
+              'topic', p.topic,
+              'likes', p.likes,
+              'views', p.views,
+              'created_at', p.created_at,
+              'status', p.status,
+              'is_pinned', p.is_pinned,
+              'is_approved', p.is_approved,
+              'auto_flagged', p.auto_flagged,
+              'deleted_at', p.deleted_at,
+              'deleted_by', p.deleted_by,
+              'deleted_reason', p.deleted_reason
+            ) FROM "Posts" p WHERE p.id = v.target_id
+          )
+          WHEN 'comment' THEN (
+            SELECT jsonb_build_object(
+              'id', c.id,
+              'post_id', c.post_id,
+              'user_id', c.user_id,
+              'content', jsonb_build_object('text', c.content->>'html'),
+              'parent_comment_id', c.parent_comment_id,
+              'created_at', c.created_at,
+              'deleted_at', c.deleted_at,
+              'deleted_by', c.deleted_by,
+              'deleted_reason', c.deleted_reason
+            ) FROM "Comments" c WHERE c.id = v.target_id
+          )
+          ELSE NULL
+        END as "targetContent"
       ${baseQuery}
       ORDER BY v.created_at DESC
       LIMIT $${queryParams.length + 1}
@@ -193,6 +247,79 @@ const moderationModel = {
     return result.rowCount;
   },
 
+  findViolationsByUserDetailed: async (userId) => {
+    const query = `
+      SELECT 
+        v.*,
+        -- Full user profile for violator
+        jsonb_build_object(
+          'id', u.id,
+          'username', u.username,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'email', u.email,
+          'role', u.role,
+          'is_active', u.is_active,
+          'isVerify', u."isVerify",
+          'community_points', u.community_points,
+          'level', u.level,
+          'badge_level', u.badge_level,
+          'language', u.language,
+          'created_at', u.created_at,
+          'last_login', u.last_login,
+          'provider', u.provider
+        ) as "user",
+        -- Rules detailed
+        (
+          SELECT jsonb_agg(cr.*)
+          FROM "ViolationRules" vr 
+          JOIN "CommunityRules" cr ON vr.rule_id = cr.id
+          WHERE vr.violation_id = v.id
+        ) as rules,
+        -- Target content snapshot (only for posts and comments)
+        CASE v.target_type
+          WHEN 'post' THEN (
+            SELECT jsonb_build_object(
+              'id', p.id,
+              'user_id', p.user_id,
+              'title', p.title,
+              'content', p.content,
+              'topic', p.topic,
+              'likes', p.likes,
+              'views', p.views,
+              'created_at', p.created_at,
+              'status', p.status,
+              'is_pinned', p.is_pinned,
+              'is_approved', p.is_approved,
+              'auto_flagged', p.auto_flagged,
+              'deleted_at', p.deleted_at,
+              'deleted_by', p.deleted_by,
+              'deleted_reason', p.deleted_reason
+            ) FROM "Posts" p WHERE p.id = v.target_id
+          )
+          WHEN 'comment' THEN (
+            SELECT jsonb_build_object(
+              'id', c.id,
+              'post_id', c.post_id,
+              'user_id', c.user_id,
+              'content', c.content,
+              'created_at', c.created_at,
+              'deleted_at', c.deleted_at,
+              'deleted_by', c.deleted_by,
+              'deleted_reason', c.deleted_reason
+            ) FROM "Comments" c WHERE c.id = v.target_id
+          )
+          ELSE NULL
+        END as "targetContent"
+      FROM "Violations" v
+      JOIN "Users" u ON v.user_id = u.id
+      WHERE v.user_id = $1
+      ORDER BY v.created_at DESC;
+    `;
+    const result = await db.query(query, [userId]);
+    return result.rows;
+  },
+
   
   // --- Appeals ---
    createAppeal: async (data) => {
@@ -225,6 +352,7 @@ const moderationModel = {
       FROM "Appeals" a
       JOIN "Users" u ON a.user_id = u.id
       JOIN "Violations" v ON a.violation_id = v.id
+      JOIN "Users" vu ON v.user_id = vu.id
       ${where}
     `;
 
@@ -270,6 +398,24 @@ const moderationModel = {
           'created_at', v.created_at,
           'resolved_at', v.resolved_at,
           'resolution', v.resolution,
+          -- violator user object
+          'user', jsonb_build_object(
+            'id', vu.id,
+            'username', vu.username,
+            'name', vu.name,
+            'avatar_url', vu.avatar_url,
+            'email', vu.email,
+            'role', vu.role,
+            'is_active', vu.is_active,
+            'isVerify', vu."isVerify",
+            'community_points', vu.community_points,
+            'level', vu.level,
+            'badge_level', vu.badge_level,
+            'language', vu.language,
+            'created_at', vu.created_at,
+            'last_login', vu.last_login,
+            'provider', vu.provider
+          ),
           
           -- Subquery để lấy các luật liên quan đến vi phạm
           'rules', (
@@ -281,18 +427,64 @@ const moderationModel = {
           
           -- Subquery để lấy 'targetContent' của vi phạm
           'targetContent', (
-              SELECT 
-                CASE v.target_type
-                    WHEN 'post' THEN jsonb_agg(p.*)->0
-                    WHEN 'comment' THEN jsonb_agg(c.*)->0
-                    WHEN 'user' THEN jsonb_agg(target_u.*)->0
-                    ELSE jsonb_build_object('id', v.target_id)
-                END
-              FROM "Posts" p, "Comments" c, "Users" target_u
-              WHERE 
-                (v.target_type = 'post' AND p.id = v.target_id) OR
-                (v.target_type = 'comment' AND c.id = v.target_id) OR
-                (v.target_type = 'user' AND target_u.id = v.target_id)
+            CASE v.target_type
+              WHEN 'post' THEN (
+                SELECT jsonb_build_object(
+                  'id', p.id,
+                  'user_id', p.user_id,
+                  'title', p.title,
+                  'content', jsonb_build_object(
+                    'html', COALESCE(p.content->>'html', p.content->>'content'),
+                    'text', COALESCE(p.content->>'text', regexp_replace(COALESCE(p.content->>'html', p.content->>'content'), '<[^>]*>', '', 'g')),
+                    'images', COALESCE((p.content->'images')::jsonb, '[]'::jsonb)
+                  ),
+                  'topic', p.topic,
+                  'likes', p.likes,
+                  'views', p.views,
+                  'created_at', p.created_at,
+                  'status', p.status,
+                  'is_pinned', p.is_pinned,
+                  'is_approved', p.is_approved,
+                  'auto_flagged', p.auto_flagged,
+                  'deleted_at', p.deleted_at,
+                  'deleted_by', p.deleted_by,
+                  'deleted_reason', p.deleted_reason
+                ) FROM "Posts" p WHERE p.id = v.target_id
+              )
+              WHEN 'comment' THEN (
+                SELECT jsonb_build_object(
+                  'id', c.id,
+                  'post_id', c.post_id,
+                  'user_id', c.user_id,
+                  'content', jsonb_build_object('text', c.content->>'html'),
+                  'parent_comment_id', c.parent_comment_id,
+                  'created_at', c.created_at,
+                  'deleted_at', c.deleted_at,
+                  'deleted_by', c.deleted_by,
+                  'deleted_reason', c.deleted_reason
+                ) FROM "Comments" c WHERE c.id = v.target_id
+              )
+              WHEN 'user' THEN (
+                SELECT jsonb_build_object(
+                  'id', target_u.id,
+                  'username', target_u.username,
+                  'name', target_u.name,
+                  'avatar_url', target_u.avatar_url,
+                  'email', target_u.email,
+                  'role', target_u.role,
+                  'is_active', target_u.is_active,
+                  'isVerify', target_u."isVerify",
+                  'community_points', target_u.community_points,
+                  'level', target_u.level,
+                  'badge_level', target_u.badge_level,
+                  'language', target_u.language,
+                  'created_at', target_u.created_at,
+                  'last_login', target_u.last_login,
+                  'provider', target_u.provider
+                ) FROM "Users" target_u WHERE target_u.id = v.target_id
+              )
+              ELSE jsonb_build_object('id', v.target_id)
+            END
           )
         ) as violation
         

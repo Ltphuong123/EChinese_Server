@@ -111,18 +111,44 @@ const postModel = {
   findById: async (postId) => {
     const queryText = `
       SELECT 
-        p.*,
-        json_build_object(
+        p.*, 
+        -- Full user profile
+        jsonb_build_object(
           'id', u.id,
+          'username', u.username,
           'name', u.name,
-          'avatar_url', u.avatar_url
-        ) as author
+          'avatar_url', u.avatar_url,
+          'email', u.email,
+          'role', u.role,
+          'is_active', u.is_active,
+          'isVerify', u."isVerify",
+          'community_points', u.community_points,
+          'level', u.level,
+          'badge_level', u.badge_level,
+          'language', u.language,
+          'created_at', u.created_at,
+          'last_login', u.last_login,
+          'provider', u.provider
+        ) as "user",
+        -- Badge details
+        jsonb_build_object(
+          'id', bl.id,
+          'level', bl.level,
+          'name', bl.name,
+          'icon', bl.icon,
+          'min_points', bl.min_points,
+          'rule_description', bl.rule_description,
+          'is_active', bl.is_active
+        ) as badge,
+        -- Comment count
+        (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count
       FROM "Posts" p
-      LEFT JOIN "Users" u ON p.user_id = u.id
+      JOIN "Users" u ON p.user_id = u.id
+      LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
       WHERE p.id = $1 AND p.deleted_at IS NULL;
     `;
     const result = await db.query(queryText, [postId]);
-    return result.rows[0];
+    return result.rows[0] || null;
   },
 
   update: async (postId, userId, updateData) => {
@@ -325,6 +351,60 @@ const postModel = {
     return { posts: postsResult.rows, totalItems };
   },
 
+  findAllByUserIdIncludingRemoved: async (userId, { limit, offset }) => {
+    const where = `WHERE p.user_id = $1`;
+    const params = [userId, limit, offset];
+
+    const baseQuery = `
+      FROM "Posts" p
+      JOIN "Users" u ON p.user_id = u.id
+      LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+      ${where}
+    `;
+
+    const countQuery = `SELECT COUNT(p.id) ${baseQuery};`;
+    const totalResult = await db.query(countQuery, [userId]);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+
+    const selectQuery = `
+      SELECT 
+        p.*, 
+        jsonb_build_object(
+          'id', u.id,
+          'username', u.username,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'email', u.email,
+          'role', u.role,
+          'is_active', u.is_active,
+          'isVerify', u."isVerify",
+          'community_points', u.community_points,
+          'level', u.level,
+          'badge_level', u.badge_level,
+          'language', u.language,
+          'created_at', u.created_at,
+          'last_login', u.last_login,
+          'provider', u.provider
+        ) as "user",
+        jsonb_build_object(
+            'id', bl.id,
+            'level', bl.level,
+            'name', bl.name,
+            'icon', bl.icon,
+            'min_points', bl.min_points,
+            'rule_description', bl.rule_description,
+            'is_active', bl.is_active
+        ) as badge,
+        (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count
+      ${baseQuery}
+      ORDER BY p.created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+
+    const postsResult = await db.query(selectQuery, params);
+    return { posts: postsResult.rows, totalItems };
+  },
+
   /**
    * --- HÀM 3: Lấy danh sách bài viết mà người dùng đã tương tác (like hoặc comment) ---
    */
@@ -387,6 +467,216 @@ const postModel = {
       LIMIT $2 OFFSET $3;
     `;
 
+    const postsResult = await db.query(selectQuery, params);
+    return { posts: postsResult.rows, totalItems };
+  },
+
+  findLikedByUserId: async (userId, { limit, offset }) => {
+    const params = [userId, limit, offset];
+    const baseQuery = `
+      FROM "PostLikes" pl
+      JOIN "Posts" p ON p.id = pl.post_id
+      JOIN "Users" u ON p.user_id = u.id
+      LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+      WHERE pl.user_id = $1 AND p.deleted_at IS NULL
+    `;
+    const countQuery = `SELECT COUNT(p.id) ${baseQuery};`;
+    const totalResult = await db.query(countQuery, [userId]);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+    const selectQuery = `
+      SELECT 
+        p.*,
+        jsonb_build_object(
+          'id', u.id,
+          'username', u.username,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'email', u.email,
+          'role', u.role,
+          'is_active', u.is_active,
+          'isVerify', u."isVerify",
+          'community_points', u.community_points,
+          'level', u.level,
+          'badge_level', u.badge_level,
+          'language', u.language,
+          'created_at', u.created_at,
+          'last_login', u.last_login,
+          'provider', u.provider
+        ) as "user",
+        jsonb_build_object(
+            'id', bl.id,
+            'level', bl.level,
+            'name', bl.name,
+            'icon', bl.icon,
+            'min_points', bl.min_points,
+            'rule_description', bl.rule_description,
+            'is_active', bl.is_active
+        ) as badge,
+        (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count
+      ${baseQuery}
+      ORDER BY pl.created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    const postsResult = await db.query(selectQuery, params);
+    return { posts: postsResult.rows, totalItems };
+  },
+
+  findCommentedByUserId: async (userId, { limit, offset }) => {
+    const params = [userId, limit, offset];
+    const baseQuery = `
+      FROM (
+        SELECT DISTINCT c.post_id, MAX(c.created_at) AS last_comment_at
+        FROM "Comments" c
+        WHERE c.user_id = $1 AND c.deleted_at IS NULL
+        GROUP BY c.post_id
+      ) uc
+      JOIN "Posts" p ON p.id = uc.post_id
+      JOIN "Users" u ON p.user_id = u.id
+      LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+      WHERE p.deleted_at IS NULL
+    `;
+    const countQuery = `SELECT COUNT(p.id) ${baseQuery};`;
+    const totalResult = await db.query(countQuery, [userId]);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+    const selectQuery = `
+      SELECT 
+        p.*,
+        jsonb_build_object(
+          'id', u.id,
+          'username', u.username,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'email', u.email,
+          'role', u.role,
+          'is_active', u.is_active,
+          'isVerify', u."isVerify",
+          'community_points', u.community_points,
+          'level', u.level,
+          'badge_level', u.badge_level,
+          'language', u.language,
+          'created_at', u.created_at,
+          'last_login', u.last_login,
+          'provider', u.provider
+        ) as "user",
+        jsonb_build_object(
+            'id', bl.id,
+            'level', bl.level,
+            'name', bl.name,
+            'icon', bl.icon,
+            'min_points', bl.min_points,
+            'rule_description', bl.rule_description,
+            'is_active', bl.is_active
+        ) as badge,
+        (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count
+      ${baseQuery}
+      ORDER BY uc.last_comment_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    const postsResult = await db.query(selectQuery, params);
+    return { posts: postsResult.rows, totalItems };
+  },
+
+  findViewedByUserId: async (userId, { limit, offset }) => {
+    const params = [userId, limit, offset];
+    const baseQuery = `
+      FROM (
+        SELECT post_id, MAX(viewed_at) AS last_viewed_at
+        FROM "PostViews"
+        WHERE user_id = $1
+        GROUP BY post_id
+      ) uv
+      JOIN "Posts" p ON p.id = uv.post_id
+      JOIN "Users" u ON p.user_id = u.id
+      LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+      WHERE p.deleted_at IS NULL
+    `;
+    const countQuery = `SELECT COUNT(p.id) ${baseQuery};`;
+    const totalResult = await db.query(countQuery, [userId]);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+    const selectQuery = `
+      SELECT 
+        p.*,
+        jsonb_build_object(
+          'id', u.id,
+          'username', u.username,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'email', u.email,
+          'role', u.role,
+          'is_active', u.is_active,
+          'isVerify', u."isVerify",
+          'community_points', u.community_points,
+          'level', u.level,
+          'badge_level', u.badge_level,
+          'language', u.language,
+          'created_at', u.created_at,
+          'last_login', u.last_login,
+          'provider', u.provider
+        ) as "user",
+        jsonb_build_object(
+            'id', bl.id,
+            'level', bl.level,
+            'name', bl.name,
+            'icon', bl.icon,
+            'min_points', bl.min_points,
+            'rule_description', bl.rule_description,
+            'is_active', bl.is_active
+        ) as badge,
+        (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count
+      ${baseQuery}
+      ORDER BY uv.last_viewed_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    const postsResult = await db.query(selectQuery, params);
+    return { posts: postsResult.rows, totalItems };
+  },
+
+  findRemovedByUserId: async (userId, { limit, offset }) => {
+    const where = `WHERE p.user_id = $1 AND p.deleted_at IS NOT NULL`;
+    const params = [userId, limit, offset];
+    const baseQuery = `
+      FROM "Posts" p
+      JOIN "Users" u ON p.user_id = u.id
+      LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+      ${where}
+    `;
+    const countQuery = `SELECT COUNT(p.id) ${baseQuery};`;
+    const totalResult = await db.query(countQuery, [userId]);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+    const selectQuery = `
+      SELECT 
+        p.*,
+        jsonb_build_object(
+          'id', u.id,
+          'username', u.username,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'email', u.email,
+          'role', u.role,
+          'is_active', u.is_active,
+          'isVerify', u."isVerify",
+          'community_points', u.community_points,
+          'level', u.level,
+          'badge_level', u.badge_level,
+          'language', u.language,
+          'created_at', u.created_at,
+          'last_login', u.last_login,
+          'provider', u.provider
+        ) as "user",
+        jsonb_build_object(
+            'id', bl.id,
+            'level', bl.level,
+            'name', bl.name,
+            'icon', bl.icon,
+            'min_points', bl.min_points,
+            'rule_description', bl.rule_description,
+            'is_active', bl.is_active
+        ) as badge,
+        (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count
+      ${baseQuery}
+      ORDER BY p.deleted_at DESC NULLS LAST, p.created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
     const postsResult = await db.query(selectQuery, params);
     return { posts: postsResult.rows, totalItems };
   },
