@@ -23,9 +23,7 @@ const moderationModel = {
 
     const baseQuery = `
       FROM "Reports" r
-      -- Join với User để lấy thông tin người báo cáo
       LEFT JOIN "Users" reporter ON r.reporter_id = reporter.id
-      -- Left Join với Posts, Comments, Users để lấy thông tin nội dung bị báo cáo
       LEFT JOIN "Posts" p ON r.target_id = p.id AND r.target_type = 'post'
       LEFT JOIN "Comments" c ON r.target_id = c.id AND r.target_type = 'comment'
       LEFT JOIN "Users" target_user ON r.target_id = target_user.id AND r.target_type = 'user'
@@ -41,26 +39,19 @@ const moderationModel = {
     const selectQuery = `
       SELECT 
         r.*,
-        
-        -- Xây dựng object 'reporter'
         jsonb_build_object(
           'id', reporter.id,
           'name', reporter.name,
           'avatar_url', reporter.avatar_url,
           'email', reporter.email,
           'role', reporter.role
-          -- Thêm các trường khác của reporter nếu cần
         ) as reporter,
-        
-        -- Xây dựng object 'targetContent' một cách linh hoạt
         CASE r.target_type
-          WHEN 'post' THEN jsonb_build_object('id', p.id, 'title', p.title, 'content', p.content, 'author_id', p.user_id)
+          WHEN 'post' THEN jsonb_build_object('id', p.id, 'title', p.title, 'content', p.content, 'author_id', p.user_id, 'status', p.status)
           WHEN 'comment' THEN jsonb_build_object('id', c.id, 'content', c.content, 'author_id', c.user_id, 'post_id', c.post_id)
           WHEN 'user' THEN jsonb_build_object('id', target_user.id, 'name', target_user.name, 'email', target_user.email)
-          -- Các trường hợp 'bug', 'other' không có targetContent trong DB, trả về object chứa thông tin từ report
           ELSE jsonb_build_object('id', r.target_id, 'title', r.reason)
         END as "targetContent"
-        
       ${baseQuery} 
       ORDER BY r.created_at DESC 
       LIMIT $${params.length + 1} OFFSET $${params.length + 2};

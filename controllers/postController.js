@@ -228,25 +228,172 @@ const postController = {
     }
   },
 
+  moderatePost2: async (req, res) => {
+    try {
+      const { postId } = req.params;
+      const payload = req.body || {};
+      const action = payload.action;
+
+      // Lấy lại bài viết (bao gồm cả đã xóa)
+      const existing = await postService.getPostById2(postId);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Bài viết không tồn tại.' });
+      }
+
+      if (action === 'remove') {
+        // Lấy lý do gỡ từ post_update hoặc violation
+        const reason = (payload.post_update && payload.post_update.deleted_reason) || (payload.violation && payload.violation.reason) || 'Gỡ bởi quản trị viên';
+        await postService.removePost2(postId, {}, reason);
+
+        // Tạo vi phạm cho người đăng bài (dùng violation object từ payload nếu có)
+        let userIdToNotify = existing.user_id;
+        if (payload.violation) {
+          const violationInput = {
+            userId: payload.violation.user_id || existing.user_id,
+            targetType: payload.violation.target_type || 'post',
+            targetId: payload.violation.target_id || postId,
+            severity: payload.violation.severity || 'medium',
+            ruleIds: payload.violation.ruleIds || [],
+            detectedBy: 'admin',
+            resolution: payload.violation.resolution || reason
+          };
+          await require('../models/moderationModel').createViolationAuto(violationInput);
+          userIdToNotify = violationInput.userId;
+        } else {
+          // Fallback: create basic violation
+          const violationInput = {
+            userId: existing.user_id,
+            targetType: 'post',
+            targetId: postId,
+            severity: 'medium',
+            ruleIds: [],
+            detectedBy: 'admin',
+            resolution: reason
+          };
+          await require('../models/moderationModel').createViolationAuto(violationInput);
+          userIdToNotify = violationInput.userId;
+        }
+
+        // Gửi thông báo tới user_id từ violation
+        await require('../models/notificationModel').create({
+          recipient_id: userIdToNotify,
+          audience: 'user',
+          type: 'violation',
+          title: 'Bài viết của bạn đã bị gỡ',
+          content: JSON.stringify({ html: reason }),
+        });
+      } else if (action === 'restore') {
+        await postService.restorePost(postId);
+      } else {
+        return res.status(400).json({ success: false, message: 'action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.' });
+      }
+
+      // Lấy lại bài viết sau thay đổi
+      const fresh = await postService.getPostById(postId);
+
+      // Chuẩn hóa content
+      let contentHtml = null, contentText = null, contentImages = [];
+      const rawContent = fresh.content;
+      const stripTags = (html) => (html || '').replace(/<[^>]*>/g, '').trim();
+      if (rawContent && typeof rawContent === 'object') {
+        contentHtml = rawContent.html || rawContent.content || null;
+        contentText = rawContent.text || stripTags(contentHtml);
+        if (Array.isArray(rawContent.images)) contentImages = rawContent.images; else if (rawContent.image) contentImages = [rawContent.image];
+      } else if (typeof rawContent === 'string') {
+        contentHtml = rawContent;
+        contentText = stripTags(rawContent);
+      }
+
+      const response = {
+        id: fresh.id,
+        user_id: fresh.user_id,
+        title: fresh.title,
+        content: { html: contentHtml, text: contentText, images: contentImages },
+        topic: fresh.topic,
+        likes: fresh.likes || 0,
+        views: fresh.views || 0,
+        created_at: fresh.created_at,
+        status: fresh.status,
+        is_pinned: fresh.is_pinned,
+        is_approved: fresh.is_approved,
+        auto_flagged: fresh.auto_flagged,
+        deleted_at: fresh.deleted_at || null,
+        deleted_by: fresh.deleted_by || null,
+        deleted_reason: fresh.deleted_reason || null,
+        user: fresh.user || null,
+        badge: fresh.badge || null,
+        comment_count: fresh.comment_count || 0
+      };
+      
+      return res.status(200).json(response);
+      
+    } catch (error) {
+      if (error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      return res.status(500).json({ success: false, message: 'Lỗi moderation', error: error.message });
+    }
+  },
+
   // --- Moderation (admin) ---
   moderatePost: async (req, res) => {
     try {
       const { postId } = req.params;
       const adminId = req.user.id;
       const payload = req.body || {};
+      const action = payload.action;
 
-      // Lấy bài viết hiện tại
-      const existing = await postService.getPostById(postId);
+      // Lấy lại bài viết (bao gồm cả đã xóa)
+     
+      if (action === 'remove') {
+         const existing = await postService.getPostById2(postId);
       if (!existing) {
         return res.status(404).json({ success: false, message: 'Bài viết không tồn tại.' });
       }
 
-      const action = payload.action;
-
-      if (action === 'remove') {
-        const reason = (payload.post_update && payload.post_update.deleted_reason) || 'Gỡ bởi quản trị viên';
+        // Lấy lý do gỡ từ post_update hoặc violation
+        const reason = (payload.post_update && payload.post_update.deleted_reason) || (payload.violation && payload.violation.reason) || 'Gỡ bởi quản trị viên';
         await postService.removePost(postId, { id: adminId, role: req.user.role }, reason);
-      } else if (action === 'restore') {
+
+        // Tạo vi phạm cho người đăng bài (dùng violation object từ payload nếu có)
+        let userIdToNotify = existing.user_id;
+        if (payload.violation) {
+          const violationInput = {
+            userId: payload.violation.user_id || existing.user_id,
+            targetType: payload.violation.target_type || 'post',
+            targetId: payload.violation.target_id || postId,
+            severity: payload.violation.severity || 'medium',
+            ruleIds: payload.violation.ruleIds || [],
+            detectedBy: 'admin',
+            resolution: payload.violation.resolution || reason
+          };
+          await require('../models/moderationModel').createViolationAuto(violationInput);
+          userIdToNotify = violationInput.userId;
+        } else {
+          // Fallback: create basic violation
+          const violationInput = {
+            userId: existing.user_id,
+            targetType: 'post',
+            targetId: postId,
+            severity: 'medium',
+            ruleIds: [],
+            detectedBy: 'admin',
+            resolution: reason
+          };
+          await require('../models/moderationModel').createViolationAuto(violationInput);
+          userIdToNotify = violationInput.userId;
+        }
+
+        // Gửi thông báo tới user_id từ violation
+        await require('../models/notificationModel').create({
+          recipient_id: userIdToNotify,
+          audience: 'user',
+          type: 'violation',
+          title: 'Bài viết của bạn đã bị gỡ',
+          content: JSON.stringify({ html: reason }),
+        });
+      }
+       else if (action === 'restore') {
         await postService.restorePost(postId, adminId);
       } else {
         return res.status(400).json({ success: false, message: 'action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.' });
@@ -288,8 +435,9 @@ const postController = {
         badge: fresh.badge || null,
         comment_count: fresh.comment_count || 0
       };
-
+      
       return res.status(200).json(response);
+      
     } catch (error) {
       if (error.message.includes('không tồn tại')) {
         return res.status(404).json({ success: false, message: error.message });

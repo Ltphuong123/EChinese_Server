@@ -37,6 +37,12 @@ const postService = {
     return post;
   },
 
+  // Hàm mới: lấy cả bài đã bị xóa mềm
+  getPostById2: async (postId) => {
+    const post = await postModel.findById2(postId);
+    return post || null;
+  },
+
   updatePost: async (postId, userId, updateData) => {
     // Chỉ cho phép cập nhật các trường nhất định
     const allowedUpdates = ["title", "content", "topic"];
@@ -219,27 +225,63 @@ const postService = {
     }
   },
 
-
-  restorePost: async (postId, adminId) => {
-    const post = await postModel.findRawById(postId);
+  removePost2: async (postId, user, reason) => {
+    // 1. Lấy thông tin bài viết để kiểm tra
+    const post = await postModel.findRawById(postId); // Cần 1 hàm lấy dữ liệu thô, không cần join
+    
     if (!post) {
       throw new Error("Bài viết không tồn tại.");
     }
-    if (!post.deleted_at) {
-      throw new Error("Bài viết này chưa bị gỡ nên không thể khôi phục.");
+
+    if (post.deleted_at) {
+        throw new Error("Bài viết này đã bị gỡ trước đó.");
     }
+
+   
+    // 3. Chuẩn bị dữ liệu để cập nhật (xóa mềm)
+    const dataToRemove = {
+      deleted_at: new Date(),
+      deleted_by: null,
+      deleted_reason:  "Gỡ bởi quản AI",
+      // Khi gỡ, nên đổi status để nó không còn là 'published'
+      status: 'removed' 
+    };
+
+    // 4. Gọi model để cập nhật
+    await postModel.softDelete(postId, dataToRemove);
+    
+    
+      // await communityService.createLog({
+      //   target_type: 'post',
+      //   target_id: postId,
+      //   action: 'gỡ', // 'gỡ' là giá trị enum bạn đã định nghĩa
+      //   reason: reason || "Gỡ bởi quản AI",
+      //   performed_by: " AI System "
+      // });
+    
+  },
+
+
+  restorePost: async (postId, adminId) => {
+    // const post = await postModel.findRawById(postId);
+    // if (!post) {
+    //   throw new Error("Bài viết không tồn tại.");
+    // }
+    // if (!post.deleted_at) {
+    //   throw new Error("Bài viết này chưa bị gỡ nên không thể khôi phục.");
+    // }
 
     // Thực hiện khôi phục
     await postModel.restore(postId);
 
     // TODO: Ghi log hành động khôi phục vào ModerationLogs
-    await communityService.createLog({
-      target_type: 'post',
-      target_id: postId,
-      action: 'khôi phục', // 'khôi phục' là giá trị enum bạn đã định nghĩa
-      reason: "Khôi phục bởi quản trị viên",
-      performed_by: adminId
-    });
+    // await communityService.createLog({
+    //   target_type: 'post',
+    //   target_id: postId,
+    //   action: 'khôi phục', // 'khôi phục' là giá trị enum bạn đã định nghĩa
+    //   reason: "Khôi phục bởi quản trị viên",
+    //   performed_by: adminId
+    // });
 
   },
 
