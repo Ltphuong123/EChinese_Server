@@ -55,7 +55,11 @@ const postController = {
         views: newPost.views || 0,
       };
 
-      return res.status(201).json(response);
+      return res.status(201).json({
+        success: true,
+        message: "Tạo bài viết thành công.",
+        data: response,
+      });
     } catch (error) {
       res.status(500).json({
         success: false,
@@ -270,7 +274,11 @@ const postController = {
         isCommented: userInteraction.isCommented,
       };
 
-      return res.status(200).json(response);
+      return res.status(200).json({
+        success: true,
+        message: "Cập nhật bài viết thành công.",
+        data: response,
+      });
     } catch (error) {
       if (
         error.message.includes("không tồn tại") ||
@@ -355,12 +363,10 @@ const postController = {
       } else if (action === "restore") {
         await postService.restorePost(postId);
       } else {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.",
+        });
       }
 
       // Lấy lại bài viết sau thay đổi
@@ -412,13 +418,11 @@ const postController = {
       if (error.message.includes("không tồn tại")) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: "Lỗi moderation",
-          error: error.message,
-        });
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi moderation",
+        error: error.message,
+      });
     }
   },
 
@@ -495,12 +499,10 @@ const postController = {
       } else if (action === "restore") {
         await postService.restorePost(postId, adminId);
       } else {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.",
+        });
       }
 
       // Lấy lại bài viết sau thay đổi
@@ -560,13 +562,11 @@ const postController = {
       if (error.message.includes("không tồn tại")) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: "Lỗi moderation",
-          error: error.message,
-        });
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi moderation",
+        error: error.message,
+      });
     }
   },
 
@@ -704,13 +704,11 @@ const postController = {
       if (error.message.includes("đã bị gỡ")) {
         return res.status(400).json({ success: false, message: error.message });
       }
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: "Lỗi khi gỡ bài viết",
-          error: error.message,
-        });
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi gỡ bài viết",
+        error: error.message,
+      });
     }
   },
 
@@ -731,13 +729,11 @@ const postController = {
       ) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      res
-        .status(500)
-        .json({
-          success: false,
-          message: "Lỗi khi khôi phục bài viết",
-          error: error.message,
-        });
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi khôi phục bài viết",
+        error: error.message,
+      });
     }
   },
 };
