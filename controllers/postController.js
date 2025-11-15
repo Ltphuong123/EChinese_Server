@@ -1,8 +1,8 @@
 // file: controllers/postController.js
 
 const postService = require("../services/postService");
-const moderationModel = require('../models/moderationModel');
-const communityService = require('../services/communityService');
+const moderationModel = require("../models/moderationModel");
+const communityService = require("../services/communityService");
 
 const postController = {
   // CREATE
@@ -22,14 +22,16 @@ const postController = {
       const newPost = await postService.createPost(postData, userId);
 
       // Chuẩn hóa content theo cấu trúc yêu cầu { html, text, images }
-      let contentHtml = null, contentText = null, contentImages = [];
+      let contentHtml = null,
+        contentText = null,
+        contentImages = [];
       const rawContent = postData.content; // dùng dữ liệu gửi lên để bảo toàn html/text/images
-      const stripTags = (html) => (html || '').replace(/<[^>]*>/g, '').trim();
-      if (rawContent && typeof rawContent === 'object') {
+      const stripTags = (html) => (html || "").replace(/<[^>]*>/g, "").trim();
+      if (rawContent && typeof rawContent === "object") {
         contentHtml = rawContent.html || rawContent.content || null;
         contentText = rawContent.text || stripTags(contentHtml);
         if (Array.isArray(rawContent.images)) contentImages = rawContent.images;
-      } else if (typeof rawContent === 'string') {
+      } else if (typeof rawContent === "string") {
         contentHtml = rawContent;
         contentText = stripTags(rawContent);
       }
@@ -39,7 +41,11 @@ const postController = {
         user_id: newPost.user_id,
         title: newPost.title,
         topic: newPost.topic,
-        content: { html: contentHtml, text: contentText, images: contentImages },
+        content: {
+          html: contentHtml,
+          text: contentText,
+          images: contentImages,
+        },
         is_pinned: newPost.is_pinned,
         status: newPost.status,
         is_approved: newPost.is_approved,
@@ -70,17 +76,33 @@ const postController = {
         status: req.query.status,
       };
       const result = await postService.getPublicPosts(filters);
+
+      // Lấy thông tin user đã like/comment cho các posts
+      const postIds = result.data.map((post) => post.id);
+      const userInteractions = await postService.getPostsUserInteractions(
+        postIds,
+        req.user.id
+      );
+
       // Transform posts to required shape
-      const transformed = (result.data || []).map(post => {
+      const transformed = (result.data || []).map((post) => {
+        const interaction = userInteractions.find(
+          (i) => i.postId === post.id
+        ) || { isLiked: false, isCommented: false };
+
         // Build content object
-        let contentHtml = null, contentText = null, contentImages = [];
+        let contentHtml = null,
+          contentText = null,
+          contentImages = [];
         const rawContent = post.content;
-        const stripTags = (html) => (html || '').replace(/<[^>]*>/g, '').trim();
-        if (rawContent && typeof rawContent === 'object') {
+        const stripTags = (html) => (html || "").replace(/<[^>]*>/g, "").trim();
+        if (rawContent && typeof rawContent === "object") {
           contentHtml = rawContent.html || rawContent.content || null;
           contentText = rawContent.text || stripTags(contentHtml);
-          if (Array.isArray(rawContent.images)) contentImages = rawContent.images; else if (rawContent.image) contentImages = [rawContent.image];
-        } else if (typeof rawContent === 'string') {
+          if (Array.isArray(rawContent.images))
+            contentImages = rawContent.images;
+          else if (rawContent.image) contentImages = [rawContent.image];
+        } else if (typeof rawContent === "string") {
           contentHtml = rawContent;
           contentText = stripTags(rawContent);
         }
@@ -88,7 +110,11 @@ const postController = {
           id: post.id,
           user_id: post.user_id,
           title: post.title,
-          content: { html: contentHtml, text: contentText, images: contentImages },
+          content: {
+            html: contentHtml,
+            text: contentText,
+            images: contentImages,
+          },
           topic: post.topic,
           likes: post.likes || 0,
           views: post.views || 0,
@@ -99,7 +125,9 @@ const postController = {
           auto_flagged: post.auto_flagged,
           user: post.user || null,
           badge: post.badge || null,
-          comment_count: post.comment_count || 0
+          comment_count: post.comment_count || 0,
+          isLiked: interaction.isLiked,
+          isCommented: interaction.isCommented,
         };
       });
       res.status(200).json({ data: transformed, meta: result.meta });
@@ -112,24 +140,35 @@ const postController = {
     }
   },
 
-
   // READ (One)
   getPostById: async (req, res) => {
     try {
       const { postId } = req.params;
       const post = await postService.getPostById(postId);
       if (!post) {
-        return res.status(404).json({ success: false, message: 'Bài viết không tồn tại.' });
+        return res
+          .status(404)
+          .json({ success: false, message: "Bài viết không tồn tại." });
       }
+
+      // Lấy thông tin user đã like/comment cho post này
+      const userInteraction = await postService.getPostUserInteractions(
+        postId,
+        req.user.id
+      );
+
       // Transform content similar to list endpoint
-      let contentHtml = null, contentText = null, contentImages = [];
+      let contentHtml = null,
+        contentText = null,
+        contentImages = [];
       const rawContent = post.content;
-      const stripTags = (html) => (html || '').replace(/<[^>]*>/g, '').trim();
-      if (rawContent && typeof rawContent === 'object') {
+      const stripTags = (html) => (html || "").replace(/<[^>]*>/g, "").trim();
+      if (rawContent && typeof rawContent === "object") {
         contentHtml = rawContent.html || rawContent.content || null;
         contentText = rawContent.text || stripTags(contentHtml);
-        if (Array.isArray(rawContent.images)) contentImages = rawContent.images; else if (rawContent.image) contentImages = [rawContent.image];
-      } else if (typeof rawContent === 'string') {
+        if (Array.isArray(rawContent.images)) contentImages = rawContent.images;
+        else if (rawContent.image) contentImages = [rawContent.image];
+      } else if (typeof rawContent === "string") {
         contentHtml = rawContent;
         contentText = stripTags(rawContent);
       }
@@ -138,7 +177,11 @@ const postController = {
         id: post.id,
         user_id: post.user_id,
         title: post.title,
-        content: { html: contentHtml, text: contentText, images: contentImages },
+        content: {
+          html: contentHtml,
+          text: contentText,
+          images: contentImages,
+        },
         topic: post.topic,
         likes: post.likes || 0,
         views: post.views || 0,
@@ -149,7 +192,9 @@ const postController = {
         auto_flagged: post.auto_flagged,
         user: post.user || null,
         badge: post.badge || null,
-        comment_count: post.comment_count || 0
+        comment_count: post.comment_count || 0,
+        isLiked: userInteraction.isLiked,
+        isCommented: userInteraction.isCommented,
       };
       return res.status(200).json(response);
     } catch (error) {
@@ -178,15 +223,25 @@ const postController = {
       );
       // Lấy lại bản ghi đầy đủ để trả về đúng cấu trúc yêu cầu
       const freshPost = await postService.getPostById(postId);
+
+      // Lấy thông tin user đã like/comment
+      const userInteraction = await postService.getPostUserInteractions(
+        postId,
+        userId
+      );
+
       // Chuẩn hóa content giống các endpoint khác
-      let contentHtml = null, contentText = null, contentImages = [];
+      let contentHtml = null,
+        contentText = null,
+        contentImages = [];
       const rawContent = freshPost.content;
-      const stripTags = (html) => (html || '').replace(/<[^>]*>/g, '').trim();
-      if (rawContent && typeof rawContent === 'object') {
+      const stripTags = (html) => (html || "").replace(/<[^>]*>/g, "").trim();
+      if (rawContent && typeof rawContent === "object") {
         contentHtml = rawContent.html || rawContent.content || null;
         contentText = rawContent.text || stripTags(contentHtml);
-        if (Array.isArray(rawContent.images)) contentImages = rawContent.images; else if (rawContent.image) contentImages = [rawContent.image];
-      } else if (typeof rawContent === 'string') {
+        if (Array.isArray(rawContent.images)) contentImages = rawContent.images;
+        else if (rawContent.image) contentImages = [rawContent.image];
+      } else if (typeof rawContent === "string") {
         contentHtml = rawContent;
         contentText = stripTags(rawContent);
       }
@@ -195,7 +250,11 @@ const postController = {
         id: freshPost.id,
         user_id: freshPost.user_id,
         title: freshPost.title,
-        content: { html: contentHtml, text: contentText, images: contentImages },
+        content: {
+          html: contentHtml,
+          text: contentText,
+          images: contentImages,
+        },
         topic: freshPost.topic,
         likes: freshPost.likes || 0,
         views: freshPost.views || 0,
@@ -206,7 +265,9 @@ const postController = {
         auto_flagged: freshPost.auto_flagged,
         user: freshPost.user || null,
         badge: freshPost.badge || null,
-        comment_count: freshPost.comment_count || 0
+        comment_count: freshPost.comment_count || 0,
+        isLiked: userInteraction.isLiked,
+        isCommented: userInteraction.isCommented,
       };
 
       return res.status(200).json(response);
@@ -237,12 +298,17 @@ const postController = {
       // Lấy lại bài viết (bao gồm cả đã xóa)
       const existing = await postService.getPostById2(postId);
       if (!existing) {
-        return res.status(404).json({ success: false, message: 'Bài viết không tồn tại.' });
+        return res
+          .status(404)
+          .json({ success: false, message: "Bài viết không tồn tại." });
       }
 
-      if (action === 'remove') {
+      if (action === "remove") {
         // Lấy lý do gỡ từ post_update hoặc violation
-        const reason = (payload.post_update && payload.post_update.deleted_reason) || (payload.violation && payload.violation.reason) || 'Gỡ bởi quản trị viên';
+        const reason =
+          (payload.post_update && payload.post_update.deleted_reason) ||
+          (payload.violation && payload.violation.reason) ||
+          "Gỡ bởi quản trị viên";
         await postService.removePost2(postId, {}, reason);
 
         // Tạo vi phạm cho người đăng bài (dùng violation object từ payload nếu có)
@@ -250,56 +316,68 @@ const postController = {
         if (payload.violation) {
           const violationInput = {
             userId: payload.violation.user_id || existing.user_id,
-            targetType: payload.violation.target_type || 'post',
+            targetType: payload.violation.target_type || "post",
             targetId: payload.violation.target_id || postId,
-            severity: payload.violation.severity || 'medium',
+            severity: payload.violation.severity || "medium",
             ruleIds: payload.violation.ruleIds || [],
-            detectedBy: 'admin',
-            resolution: payload.violation.resolution || reason
+            detectedBy: "admin",
+            resolution: payload.violation.resolution || reason,
           };
-          await require('../models/moderationModel').createViolationAuto(violationInput);
+          await require("../models/moderationModel").createViolationAuto(
+            violationInput
+          );
           userIdToNotify = violationInput.userId;
         } else {
           // Fallback: create basic violation
           const violationInput = {
             userId: existing.user_id,
-            targetType: 'post',
+            targetType: "post",
             targetId: postId,
-            severity: 'medium',
+            severity: "medium",
             ruleIds: [],
-            detectedBy: 'admin',
-            resolution: reason
+            detectedBy: "admin",
+            resolution: reason,
           };
-          await require('../models/moderationModel').createViolationAuto(violationInput);
+          await require("../models/moderationModel").createViolationAuto(
+            violationInput
+          );
           userIdToNotify = violationInput.userId;
         }
 
         // Gửi thông báo tới user_id từ violation
-        await require('../models/notificationModel').create({
+        await require("../models/notificationModel").create({
           recipient_id: userIdToNotify,
-          audience: 'user',
-          type: 'violation',
-          title: 'Bài viết của bạn đã bị gỡ',
+          audience: "user",
+          type: "violation",
+          title: "Bài viết của bạn đã bị gỡ",
           content: JSON.stringify({ html: reason }),
         });
-      } else if (action === 'restore') {
+      } else if (action === "restore") {
         await postService.restorePost(postId);
       } else {
-        return res.status(400).json({ success: false, message: 'action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.' });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.",
+          });
       }
 
       // Lấy lại bài viết sau thay đổi
       const fresh = await postService.getPostById(postId);
 
       // Chuẩn hóa content
-      let contentHtml = null, contentText = null, contentImages = [];
+      let contentHtml = null,
+        contentText = null,
+        contentImages = [];
       const rawContent = fresh.content;
-      const stripTags = (html) => (html || '').replace(/<[^>]*>/g, '').trim();
-      if (rawContent && typeof rawContent === 'object') {
+      const stripTags = (html) => (html || "").replace(/<[^>]*>/g, "").trim();
+      if (rawContent && typeof rawContent === "object") {
         contentHtml = rawContent.html || rawContent.content || null;
         contentText = rawContent.text || stripTags(contentHtml);
-        if (Array.isArray(rawContent.images)) contentImages = rawContent.images; else if (rawContent.image) contentImages = [rawContent.image];
-      } else if (typeof rawContent === 'string') {
+        if (Array.isArray(rawContent.images)) contentImages = rawContent.images;
+        else if (rawContent.image) contentImages = [rawContent.image];
+      } else if (typeof rawContent === "string") {
         contentHtml = rawContent;
         contentText = stripTags(rawContent);
       }
@@ -308,7 +386,11 @@ const postController = {
         id: fresh.id,
         user_id: fresh.user_id,
         title: fresh.title,
-        content: { html: contentHtml, text: contentText, images: contentImages },
+        content: {
+          html: contentHtml,
+          text: contentText,
+          images: contentImages,
+        },
         topic: fresh.topic,
         likes: fresh.likes || 0,
         views: fresh.views || 0,
@@ -322,16 +404,21 @@ const postController = {
         deleted_reason: fresh.deleted_reason || null,
         user: fresh.user || null,
         badge: fresh.badge || null,
-        comment_count: fresh.comment_count || 0
+        comment_count: fresh.comment_count || 0,
       };
-      
+
       return res.status(200).json(response);
-      
     } catch (error) {
-      if (error.message.includes('không tồn tại')) {
+      if (error.message.includes("không tồn tại")) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      return res.status(500).json({ success: false, message: 'Lỗi moderation', error: error.message });
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message: "Lỗi moderation",
+          error: error.message,
+        });
     }
   },
 
@@ -344,73 +431,99 @@ const postController = {
       const action = payload.action;
 
       // Lấy lại bài viết (bao gồm cả đã xóa)
-     
-      if (action === 'remove') {
-         const existing = await postService.getPostById2(postId);
-      if (!existing) {
-        return res.status(404).json({ success: false, message: 'Bài viết không tồn tại.' });
-      }
+
+      if (action === "remove") {
+        const existing = await postService.getPostById2(postId);
+        if (!existing) {
+          return res
+            .status(404)
+            .json({ success: false, message: "Bài viết không tồn tại." });
+        }
 
         // Lấy lý do gỡ từ post_update hoặc violation
-        const reason = (payload.post_update && payload.post_update.deleted_reason) || (payload.violation && payload.violation.reason) || 'Gỡ bởi quản trị viên';
-        await postService.removePost(postId, { id: adminId, role: req.user.role }, reason);
+        const reason =
+          (payload.post_update && payload.post_update.deleted_reason) ||
+          (payload.violation && payload.violation.reason) ||
+          "Gỡ bởi quản trị viên";
+        await postService.removePost(
+          postId,
+          { id: adminId, role: req.user.role },
+          reason
+        );
 
         // Tạo vi phạm cho người đăng bài (dùng violation object từ payload nếu có)
         let userIdToNotify = existing.user_id;
         if (payload.violation) {
           const violationInput = {
             userId: payload.violation.user_id || existing.user_id,
-            targetType: payload.violation.target_type || 'post',
+            targetType: payload.violation.target_type || "post",
             targetId: payload.violation.target_id || postId,
-            severity: payload.violation.severity || 'medium',
+            severity: payload.violation.severity || "medium",
             ruleIds: payload.violation.ruleIds || [],
-            detectedBy: 'admin',
-            resolution: payload.violation.resolution || reason
+            detectedBy: "admin",
+            resolution: payload.violation.resolution || reason,
           };
-          await require('../models/moderationModel').createViolationAuto(violationInput);
+          await require("../models/moderationModel").createViolationAuto(
+            violationInput
+          );
           userIdToNotify = violationInput.userId;
         } else {
           // Fallback: create basic violation
           const violationInput = {
             userId: existing.user_id,
-            targetType: 'post',
+            targetType: "post",
             targetId: postId,
-            severity: 'medium',
+            severity: "medium",
             ruleIds: [],
-            detectedBy: 'admin',
-            resolution: reason
+            detectedBy: "admin",
+            resolution: reason,
           };
-          await require('../models/moderationModel').createViolationAuto(violationInput);
+          await require("../models/moderationModel").createViolationAuto(
+            violationInput
+          );
           userIdToNotify = violationInput.userId;
         }
 
         // Gửi thông báo tới user_id từ violation
-        await require('../models/notificationModel').create({
+        await require("../models/notificationModel").create({
           recipient_id: userIdToNotify,
-          audience: 'user',
-          type: 'violation',
-          title: 'Bài viết của bạn đã bị gỡ',
+          audience: "user",
+          type: "violation",
+          title: "Bài viết của bạn đã bị gỡ",
           content: JSON.stringify({ html: reason }),
         });
-      }
-       else if (action === 'restore') {
+      } else if (action === "restore") {
         await postService.restorePost(postId, adminId);
       } else {
-        return res.status(400).json({ success: false, message: 'action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.' });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.",
+          });
       }
 
       // Lấy lại bài viết sau thay đổi
       const fresh = await postService.getPostById(postId);
 
+      // Lấy thông tin user đã like/comment
+      const userInteraction = await postService.getPostUserInteractions(
+        postId,
+        adminId
+      );
+
       // Chuẩn hóa content
-      let contentHtml = null, contentText = null, contentImages = [];
+      let contentHtml = null,
+        contentText = null,
+        contentImages = [];
       const rawContent = fresh.content;
-      const stripTags = (html) => (html || '').replace(/<[^>]*>/g, '').trim();
-      if (rawContent && typeof rawContent === 'object') {
+      const stripTags = (html) => (html || "").replace(/<[^>]*>/g, "").trim();
+      if (rawContent && typeof rawContent === "object") {
         contentHtml = rawContent.html || rawContent.content || null;
         contentText = rawContent.text || stripTags(contentHtml);
-        if (Array.isArray(rawContent.images)) contentImages = rawContent.images; else if (rawContent.image) contentImages = [rawContent.image];
-      } else if (typeof rawContent === 'string') {
+        if (Array.isArray(rawContent.images)) contentImages = rawContent.images;
+        else if (rawContent.image) contentImages = [rawContent.image];
+      } else if (typeof rawContent === "string") {
         contentHtml = rawContent;
         contentText = stripTags(rawContent);
       }
@@ -419,7 +532,11 @@ const postController = {
         id: fresh.id,
         user_id: fresh.user_id,
         title: fresh.title,
-        content: { html: contentHtml, text: contentText, images: contentImages },
+        content: {
+          html: contentHtml,
+          text: contentText,
+          images: contentImages,
+        },
         topic: fresh.topic,
         likes: fresh.likes || 0,
         views: fresh.views || 0,
@@ -433,16 +550,23 @@ const postController = {
         deleted_reason: fresh.deleted_reason || null,
         user: fresh.user || null,
         badge: fresh.badge || null,
-        comment_count: fresh.comment_count || 0
+        comment_count: fresh.comment_count || 0,
+        isLiked: userInteraction.isLiked,
+        isCommented: userInteraction.isCommented,
       };
-      
+
       return res.status(200).json(response);
-      
     } catch (error) {
-      if (error.message.includes('không tồn tại')) {
+      if (error.message.includes("không tồn tại")) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      return res.status(500).json({ success: false, message: 'Lỗi moderation', error: error.message });
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message: "Lỗi moderation",
+          error: error.message,
+        });
     }
   },
 
@@ -554,36 +678,41 @@ const postController = {
     }
   },
 
-
-
-  
-  
   removePost: async (req, res) => {
     try {
       const { postId } = req.params;
       const { reason } = req.body; // Lý do gỡ bài, có thể không bắt buộc
-      
+
       // Lấy thông tin người dùng đang thực hiện hành động từ token
       const user = {
-          id: req.user.id,
-          role: req.user.role
+        id: req.user.id,
+        role: req.user.role,
       };
 
       await postService.removePost(postId, user, reason);
 
-      res.status(200).json({ success: true, message: 'Gỡ bài viết thành công.' });
+      res
+        .status(200)
+        .json({ success: true, message: "Gỡ bài viết thành công." });
     } catch (error) {
-      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
+      if (
+        error.message.includes("không tồn tại") ||
+        error.message.includes("không có quyền")
+      ) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      if (error.message.includes('đã bị gỡ')) {
-          return res.status(400).json({ success: false, message: error.message });
+      if (error.message.includes("đã bị gỡ")) {
+        return res.status(400).json({ success: false, message: error.message });
       }
-      res.status(500).json({ success: false, message: 'Lỗi khi gỡ bài viết', error: error.message });
+      res
+        .status(500)
+        .json({
+          success: false,
+          message: "Lỗi khi gỡ bài viết",
+          error: error.message,
+        });
     }
   },
-
-
 
   restorePost: async (req, res) => {
     try {
@@ -591,18 +720,26 @@ const postController = {
       const adminId = req.user.id; // Lấy ID admin từ token
 
       await postService.restorePost(postId, adminId);
-      
-      res.status(200).json({ success: true, message: 'Khôi phục bài viết thành công.' });
+
+      res
+        .status(200)
+        .json({ success: true, message: "Khôi phục bài viết thành công." });
     } catch (error) {
-      if (error.message.includes('không tồn tại') || error.message.includes('chưa bị gỡ')) {
+      if (
+        error.message.includes("không tồn tại") ||
+        error.message.includes("chưa bị gỡ")
+      ) {
         return res.status(404).json({ success: false, message: error.message });
       }
-      res.status(500).json({ success: false, message: 'Lỗi khi khôi phục bài viết', error: error.message });
+      res
+        .status(500)
+        .json({
+          success: false,
+          message: "Lỗi khi khôi phục bài viết",
+          error: error.message,
+        });
     }
   },
-
-
-  
 };
 
 module.exports = postController;
