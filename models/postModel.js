@@ -73,32 +73,23 @@ const postModel = {
     const selectQuery = `
       SELECT 
         p.*, -- Lấy tất cả các trường từ Posts, bao gồm auto_flagged
-        
-        -- Thông tin người dùng (author)
         jsonb_build_object(
           'id', u.id,
           'name', u.name,
           'avatar_url', u.avatar_url,
           'badge_level', u.badge_level,
           'community_points', u.community_points,
-          'level', u.level
-          -- Thêm các trường khác của user nếu cần
+          'level', u.level,
+          'role', u.role
         ) as "user",
-        
-        -- Thông tin huy hiệu (badge)
         jsonb_build_object(
             'level', bl.level,
             'name', bl.name,
             'icon', bl.icon
         ) as badge,
-        
-        -- Đếm số lượng bình luận
         (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count,
-        
-        -- Trạng thái tương tác của người dùng hiện tại
         EXISTS (SELECT 1 FROM "PostLikes" pl WHERE pl.post_id = p.id AND pl.user_id = $1) as "isLiked",
         EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $1 AND c.deleted_at IS NULL) as "isCommented"
-        
       ${baseQuery}
       ORDER BY p.is_pinned DESC, p.created_at DESC
       LIMIT $2 OFFSET $3;
@@ -145,7 +136,38 @@ const postModel = {
       FROM "Posts" p
       JOIN "Users" u ON p.user_id = u.id
       LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
-      WHERE p.id = $1 AND p.deleted_at IS NULL;
+      WHERE p.id = $1 ;
+    `;
+    const result = await db.query(queryText, [postId]);
+    return result.rows[0] || null;
+  },
+
+  // Hàm mới: lấy cả bài đã bị xóa mềm
+  findById2: async (postId) => {
+    const queryText = `
+      SELECT 
+        p.*, 
+        jsonb_build_object(
+          'id', u.id,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'email', u.email,
+          'role', u.role
+        ) as "user",
+        jsonb_build_object(
+          'id', bl.id,
+          'level', bl.level,
+          'name', bl.name,
+          'icon', bl.icon,
+          'min_points', bl.min_points,
+          'rule_description', bl.rule_description,
+          'is_active', bl.is_active
+        ) as badge,
+        (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count
+      FROM "Posts" p
+      JOIN "Users" u ON p.user_id = u.id
+      LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
+      WHERE p.id = $1;
     `;
     const result = await db.query(queryText, [postId]);
     return result.rows[0] || null;
@@ -704,7 +726,7 @@ const postModel = {
     `;
     await db.query(queryText, [
       deleted_at,
-      deleted_by,
+      typeof deleted_by !== 'undefined' ? deleted_by : null,
       deleted_reason,
       status,
       postId,
