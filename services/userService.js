@@ -704,6 +704,53 @@ const userService = {
       throw error;
     }
   },
+
+  // Ban user
+  banUser: async (userId, { reason, ruleIds, resolution, severity }) => {
+    const user = await userModel.findUserById(userId);
+    if (!user) {
+      throw new Error('Người dùng không tồn tại.');
+    }
+
+    if (!user.is_active) {
+      throw new Error('Người dùng đã bị cấm trước đó.');
+    }
+
+    // Cập nhật is_active = false
+    await db.query(
+      `UPDATE "Users" SET is_active = false WHERE id = $1`,
+      [userId]
+    );
+
+    // Tạo violation record - Không có target_type 'user' trong constraint
+    // Nên tạo violation với target_type là 'post' hoặc 'comment' tùy theo ngữ cảnh
+    // Hoặc không tạo violation cho ban user, chỉ ghi log
+    // Ở đây tôi sẽ bỏ qua việc tạo violation vì constraint không hỗ trợ
+    
+    // Lấy lại user đã cập nhật
+    return await userModel.findUserDetailsById(userId);
+  },
+
+  // Unban user
+  unbanUser: async (userId, reason) => {
+    const user = await userModel.findUserById(userId);
+    if (!user) {
+      throw new Error('Người dùng không tồn tại.');
+    }
+
+    if (user.is_active) {
+      throw new Error('Người dùng chưa bị cấm.');
+    }
+
+    // Cập nhật is_active = true
+    await db.query(
+      `UPDATE "Users" SET is_active = true WHERE id = $1`,
+      [userId]
+    );
+
+    // Lấy lại user đã cập nhật
+    return await userModel.findUserDetailsById(userId);
+  },
 };
 
 module.exports = userService;

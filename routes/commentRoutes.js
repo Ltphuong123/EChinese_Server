@@ -36,12 +36,18 @@ router.delete(
   commentController.removeComment
 );
 
-router.put(
+// Remove comment with violation (admin only)
+router.post(
+  '/community/comments/:commentId/remove',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  commentController.removeCommentWithViolation
+);
+
+// Restore comment (admin only)
+router.post(
   '/community/comments/:commentId/restore',
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
   commentController.restoreComment
 );
-
-
 
 module.exports = router;

@@ -263,33 +263,56 @@ const postService = {
 
 
   restorePost: async (postId, adminId) => {
-    // const post = await postModel.findRawById(postId);
-    // if (!post) {
-    //   throw new Error("Bài viết không tồn tại.");
-    // }
-    // if (!post.deleted_at) {
-    //   throw new Error("Bài viết này chưa bị gỡ nên không thể khôi phục.");
-    // }
-
     // Thực hiện khôi phục
     await postModel.restore(postId);
-
-    // TODO: Ghi log hành động khôi phục vào ModerationLogs
-    // await communityService.createLog({
-    //   target_type: 'post',
-    //   target_id: postId,
-    //   action: 'khôi phục', // 'khôi phục' là giá trị enum bạn đã định nghĩa
-    //   reason: "Khôi phục bởi quản trị viên",
-    //   performed_by: adminId
-    // });
-
   },
 
+  // Update post status (for moderation)
+  updatePostStatus: async (postId, statusData) => {
+    const { status, deleted_at, deleted_by, deleted_reason } = statusData;
+    
+    const updateFields = [];
+    const values = [];
+    let paramIndex = 1;
 
+    if (status !== undefined) {
+      updateFields.push(`status = $${paramIndex++}`);
+      values.push(status);
+    }
+    if (deleted_at !== undefined) {
+      updateFields.push(`deleted_at = $${paramIndex++}`);
+      values.push(deleted_at);
+    }
+    if (deleted_by !== undefined) {
+      updateFields.push(`deleted_by = $${paramIndex++}`);
+      values.push(deleted_by);
+    }
+    if (deleted_reason !== undefined) {
+      updateFields.push(`deleted_reason = $${paramIndex++}`);
+      values.push(deleted_reason);
+    }
 
+    if (updateFields.length === 0) {
+      throw new Error('Không có dữ liệu để cập nhật.');
+    }
 
+    values.push(postId);
+    const query = `
+      UPDATE "Posts"
+      SET ${updateFields.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING *;
+    `;
 
+    const db = require('../config/db');
+    const result = await db.query(query, values);
+    
+    if (result.rowCount === 0) {
+      throw new Error('Bài viết không tồn tại.');
+    }
 
+    return result.rows[0];
+  },
 };
 
 module.exports = postService;

@@ -219,6 +219,7 @@ const userController = {
     try {
       const { userId } = req.params;
       const updateData = req.body;
+      const adminId = req.user.id;
 
       // Kiểm tra xem có dữ liệu để cập nhật không
       if (Object.keys(updateData).length === 0) {
@@ -230,6 +231,14 @@ const userController = {
       await userService.updateUserAdmin(userId, updateData);
       // Lấy lại bản ghi đầy đủ với provider sau khi cập nhật
       const fresh = await userService.fetchUserById(userId);
+      
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'UPDATE_USER_INFO',
+        target_id: userId,
+        description: `Cập nhật thông tin người dùng: ${Object.keys(updateData).join(', ')}`
+      }, adminId);
+      
       // Trả về đúng cấu trúc phẳng yêu cầu
       return res.status(200).json(fresh);
     } catch (error) {
@@ -255,6 +264,7 @@ const userController = {
     try {
       const { userId } = req.params;
       const { achievementId, progress } = req.body;
+      const adminId = req.user.id;
 
       // Validation
       if (!achievementId) {
@@ -269,6 +279,13 @@ const userController = {
         achievementId,
         progress,
       });
+
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'GRANT_ACHIEVEMENT',
+        target_id: userId,
+        description: `Gán thành tích ${achievementId} cho người dùng`
+      }, adminId);
 
       res.status(201).json({
         success: true,
@@ -334,6 +351,13 @@ const userController = {
 
       await userService.deleteUserPermanently(userId, adminId);
 
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'DELETE_USER',
+        target_id: userId,
+        description: `Xóa vĩnh viễn người dùng`
+      }, adminId);
+
       res.status(200).send({ success: true, message: "thành công" });
     } catch (error) {
       if (error.message.includes("not found")) {
@@ -357,6 +381,7 @@ const userController = {
     try {
       const { userId } = req.params;
       const { feature } = req.body;
+      const adminId = req.user.id;
 
       if (!feature) {
         return res
@@ -628,6 +653,82 @@ const userController = {
         success: false,
         message: "Lỗi khi lấy bài viết đã tương tác",
         error: error.message,
+      });
+    }
+  },
+
+  // Ban user
+  banUser: async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { reason, ruleIds, resolution, severity } = req.body;
+
+      if (!reason) {
+        return res.status(400).json({ success: false, message: 'Lý do cấm là bắt buộc.' });
+      }
+
+      const bannedUser = await userService.banUser(userId, { reason, ruleIds, resolution, severity });
+
+      // Gửi thông báo cho user
+      await require('../models/notificationModel').create({
+        recipient_id: userId,
+        audience: 'user',
+        type: 'system',
+        title: 'Tài khoản của bạn đã bị cấm',
+        content: JSON.stringify({ html: reason }),
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Cấm người dùng thành công.',
+        user: bannedUser
+      });
+    } catch (error) {
+      if (error.message.includes('không tồn tại') || error.message.includes('đã bị cấm')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi cấm người dùng',
+        error: error.message
+      });
+    }
+  },
+
+  // Unban user
+  unbanUser: async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { reason } = req.body;
+
+      if (!reason) {
+        return res.status(400).json({ success: false, message: 'Lý do bỏ cấm là bắt buộc.' });
+      }
+
+      const unbannedUser = await userService.unbanUser(userId, reason);
+
+      // Gửi thông báo cho user
+      await require('../models/notificationModel').create({
+        recipient_id: userId,
+        audience: 'user',
+        type: 'system',
+        title: 'Tài khoản của bạn đã được khôi phục',
+        content: JSON.stringify({ html: reason }),
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Bỏ cấm người dùng thành công.',
+        user: unbannedUser
+      });
+    } catch (error) {
+      if (error.message.includes('không tồn tại') || error.message.includes('chưa bị cấm')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi bỏ cấm người dùng',
+        error: error.message
       });
     }
   },
