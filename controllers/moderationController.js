@@ -27,10 +27,18 @@ const moderationController = {
   updateReportStatus: async (req, res) => {
     try {
       const { reportId } = req.params;
+      const adminId = req.user.id;
       // Body request có thể chứa: status, resolution, severity
-      const payload = { ...req.body, resolved_by: req.user.id }; // Gán ID admin thực hiện
+      const payload = { ...req.body, resolved_by: adminId }; // Gán ID admin thực hiện
       
       const updatedReport = await moderationService.updateReportStatus(reportId, payload);
+      
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'RESOLVE_REPORT',
+        target_id: reportId,
+        description: `Xử lý báo cáo. Trạng thái: ${payload.status || 'N/A'}`
+      }, adminId);
       
       res.status(200).json({ 
           success: true, 
@@ -63,6 +71,14 @@ const moderationController = {
       }
 
       const newViolation = await moderationService.createViolation(payload, adminId);
+      
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: 'CREATE_VIOLATION',
+        target_id: payload.user_id,
+        description: `Tạo vi phạm. Target: ${payload.target_type} #${payload.target_id}, Severity: ${payload.severity}`
+      }, adminId);
+      
       res.status(201).json({ success: true, message: "Tạo bản ghi vi phạm thành công.", data: newViolation });
     } catch (error) {
       if (error.code === '23503') { // Foreign key constraint
@@ -92,6 +108,7 @@ const moderationController = {
   deleteViolation: async (req, res) => {
     try {
       const { id } = req.params;
+      const adminId = req.user.id;
       
       await moderationService.deleteViolation(id);
 
@@ -176,6 +193,14 @@ const moderationController = {
       if (!action || !['accepted', 'rejected'].includes(action)) return res.status(400).json({ success: false, message: "'action' phải là 'accepted' hoặc 'rejected'."});
 
       const processedAppeal = await moderationService.processAppeal(appealId, adminId, action, notes);
+      
+      // Log admin action
+      await require('../services/adminLogService').createLog({
+        action_type: action === 'accepted' ? 'APPROVE_APPEAL' : 'REJECT_APPEAL',
+        target_id: appealId,
+        description: `${action === 'accepted' ? 'Chấp nhận' : 'Từ chối'} khiếu nại. Ghi chú: ${notes || 'N/A'}`
+      }, adminId);
+      
       res.status(200).json({ success: true, message: `Khiếu nại đã được ${action === 'accepted' ? 'chấp nhận' : 'từ chối'}.`, data: processedAppeal });
     } catch (error) {
         if (error.message.includes('không tồn tại') || error.message.includes('đã được xử lý')) return res.status(404).json({ success: false, message: error.message });

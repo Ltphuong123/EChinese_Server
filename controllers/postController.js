@@ -21,6 +21,19 @@ const postController = {
       // Tạo bài viết (lưu thô xuống DB)
       const newPost = await postService.createPost(postData, userId);
 
+      // Tự động kiểm duyệt bằng AI (chạy async, không chờ)
+      const autoModerationService = require('../services/autoModerationService');
+      autoModerationService.moderatePost(newPost.id, {
+        ...postData,
+        user_id: userId
+      }).then(result => {
+        if (result.removed) {
+          console.log(`Post ${newPost.id} auto-removed:`, result.reason);
+        }
+      }).catch(error => {
+        console.error('Auto moderation error:', error);
+      });
+
       // Chuẩn hóa content theo cấu trúc yêu cầu { html, text, images }
       let contentHtml = null, contentText = null, contentImages = [];
       const rawContent = postData.content; // dùng dữ liệu gửi lên để bảo toàn html/text/images
@@ -343,60 +356,90 @@ const postController = {
       const payload = req.body || {};
       const action = payload.action;
 
+      if (!action || !['remove', 'restore'].includes(action)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.' 
+        });
+      }
+
       // Lấy lại bài viết (bao gồm cả đã xóa)
-     
-      if (action === 'remove') {
-         const existing = await postService.getPostById2(postId);
+      const existing = await postService.getPostById2(postId);
       if (!existing) {
         return res.status(404).json({ success: false, message: 'Bài viết không tồn tại.' });
       }
-
-        // Lấy lý do gỡ từ post_update hoặc violation
-        const reason = (payload.post_update && payload.post_update.deleted_reason) || (payload.violation && payload.violation.reason) || 'Gỡ bởi quản trị viên';
-        await postService.removePost(postId, { id: adminId, role: req.user.role }, reason);
-
-        // Tạo vi phạm cho người đăng bài (dùng violation object từ payload nếu có)
-        let userIdToNotify = existing.user_id;
-        if (payload.violation) {
-          const violationInput = {
-            userId: payload.violation.user_id || existing.user_id,
-            targetType: payload.violation.target_type || 'post',
-            targetId: payload.violation.target_id || postId,
-            severity: payload.violation.severity || 'medium',
-            ruleIds: payload.violation.ruleIds || [],
-            detectedBy: 'admin',
-            resolution: payload.violation.resolution || reason
-          };
-          await require('../models/moderationModel').createViolationAuto(violationInput);
-          userIdToNotify = violationInput.userId;
-        } else {
-          // Fallback: create basic violation
-          const violationInput = {
-            userId: existing.user_id,
-            targetType: 'post',
-            targetId: postId,
-            severity: 'medium',
-            ruleIds: [],
-            detectedBy: 'admin',
-            resolution: reason
-          };
-          await require('../models/moderationModel').createViolationAuto(violationInput);
-          userIdToNotify = violationInput.userId;
+     
+      if (action === 'remove') {
+        // Validate required fields for remove action
+        if (!payload.post_update) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Thiếu thông tin post_update.' 
+          });
         }
 
-        // Gửi thông báo tới user_id từ violation
-        await require('../models/notificationModel').create({
-          recipient_id: userIdToNotify,
-          audience: 'user',
-          type: 'violation',
-          title: 'Bài viết của bạn đã bị gỡ',
-          content: JSON.stringify({ html: reason }),
+        const { post_update, violation } = payload;
+        const deletedBy = post_update.deleted_by || adminId;
+        const isSelfRemove = deletedBy === existing.user_id;
+        
+        // Cập nhật bài viết với thông tin từ post_update
+        await postService.updatePostStatus(postId, {
+          status: post_update.status || 'removed',
+          deleted_at: post_update.deleted_at || new Date(),
+          deleted_by: deletedBy,
+          deleted_reason: post_update.deleted_reason || (violation ? violation.reason : 'Tự gỡ')
         });
-      }
-       else if (action === 'restore') {
-        await postService.restorePost(postId, adminId);
-      } else {
-        return res.status(400).json({ success: false, message: 'action không hợp lệ. Chỉ hỗ trợ remove hoặc restore.' });
+
+        // Chỉ tạo violation và notification nếu KHÔNG phải người dùng tự gỡ
+        if (!isSelfRemove && violation) {
+          // Tạo vi phạm cho người đăng bài
+          const violationInput = {
+            userId: violation.user_id || existing.user_id,
+            targetType: violation.target_type || 'post',
+            targetId: violation.target_id || postId,
+            severity: violation.severity || 'medium',
+            ruleIds: violation.ruleIds || [],
+            detectedBy: 'admin',
+            resolution: violation.resolution || violation.reason
+          };
+          await require('../models/moderationModel').createViolationAuto(violationInput);
+
+          // Gửi thông báo tới người dùng
+          await require('../models/notificationModel').create({
+            recipient_id: violationInput.userId,
+            audience: 'user',
+            type: 'community',
+            title: 'Bài viết của bạn đã bị gỡ',
+            content: JSON.stringify({ html: violation.reason }),
+          });
+        }
+      } else if (action === 'restore') {
+        // Validate required fields for restore action
+        if (!payload.post_update) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Thiếu thông tin post_update.' 
+          });
+        }
+
+        const { post_update } = payload;
+        
+        // Khôi phục bài viết
+        await postService.updatePostStatus(postId, {
+          status: post_update.status || 'published',
+          deleted_at: null,
+          deleted_by: null,
+          deleted_reason: null
+        });
+
+        // Gửi thông báo tới người dùng
+        await require('../models/notificationModel').create({
+          recipient_id: existing.user_id,
+          audience: 'user',
+          type: 'community',
+          title: 'Bài viết của bạn đã được khôi phục',
+          content: JSON.stringify({ html: 'Bài viết của bạn đã được xem xét lại và khôi phục.' }),
+        });
       }
 
       // Lấy lại bài viết sau thay đổi

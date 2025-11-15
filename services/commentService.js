@@ -150,12 +150,63 @@ const commentService = {
       reason: "Khôi phục bởi quản trị viên",
       performed_by: adminId
     });
-
-    
-    // TODO: Ghi log hành động khôi phục vào ModerationLogs
   },
 
-  
+  // Remove comment with violation (admin only)
+  removeCommentWithViolation: async (commentId, adminId, { reason, ruleIds, resolution, severity }) => {
+    const comment = await commentModel.findWithPostOwner(commentId);
+    
+    if (!comment) {
+      throw new Error("Bình luận không tồn tại.");
+    }
+    
+    if (comment.deleted_at) {
+      throw new Error("Bình luận này đã bị gỡ trước đó.");
+    }
+
+    // Lưu user_id trước khi xóa
+    const commentUserId = comment.user_id;
+
+    // Chuẩn bị dữ liệu để xóa mềm
+    const dataToRemove = {
+      deleted_at: new Date(),
+      deleted_by: adminId,
+      deleted_reason: reason || "Gỡ bởi quản trị viên",
+    };
+
+    // Gọi model để cập nhật
+    await commentModel.softDelete(commentId, dataToRemove);
+
+    // Tạo violation record
+    const moderationModel = require('../models/moderationModel');
+    await moderationModel.createViolationAuto({
+      userId: commentUserId,
+      targetType: 'comment',
+      targetId: commentId,
+      severity: severity || 'medium',
+      ruleIds: ruleIds || [],
+      detectedBy: 'admin',
+      resolution: resolution || reason
+    });
+
+    // Ghi log
+    await communityService.createLog({
+      target_type: 'comment',
+      target_id: commentId,
+      action: 'gỡ',
+      reason: reason || "Gỡ bởi quản trị viên",
+      performed_by: adminId
+    });
+
+    // Trả về comment với user_id
+    return {
+      id: commentId,
+      user_id: commentUserId,
+      deleted_at: dataToRemove.deleted_at,
+      deleted_by: dataToRemove.deleted_by,
+      deleted_reason: dataToRemove.deleted_reason
+    };
+  },
 };
 
 module.exports = commentService;
