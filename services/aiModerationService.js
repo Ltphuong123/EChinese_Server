@@ -1,8 +1,11 @@
 // file: services/aiModerationService.js
 
 const axios = require('axios');
+require('dotenv').config();
 
-const HF_TOKEN = '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';
+const HF_TOKEN = process.env.HF_TOKEN;
+const TEXT_MODERATION_API_URL = process.env.TEXT_MODERATION_API_URL || 'https://leohop-text-violation-detection.hf.space';
+const IMAGE_MODERATION_API_URL = process.env.IMAGE_MODERATION_API_URL || 'https://leohop-nsfw-detect.hf.space';
 
 const aiModerationService = {
   /**
@@ -81,7 +84,7 @@ const aiModerationService = {
       console.log('Detecting text violation for:', text);
       
       const result = await aiModerationService.callGradioAPI(
-        'https://leohop-text-violation-detection.hf.space',
+        TEXT_MODERATION_API_URL,
         [text]
       );
 
@@ -138,7 +141,7 @@ const aiModerationService = {
       console.log('Detecting NSFW for image:', imageUrl);
 
       const result = await aiModerationService.callGradioAPI(
-        'https://leohop-nsfw-detect.hf.space',
+        IMAGE_MODERATION_API_URL,
         [imageUrl]
       );
 

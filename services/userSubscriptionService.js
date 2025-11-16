@@ -3,8 +3,9 @@
 const userSubscriptionModel = require('../models/userSubscriptionModel');
 const usageModel = require('../models/usageModel');
 const db = require('../config/db');
+require('dotenv').config();
 
-const FREE_PLAN_ID = 'cc8ee1e7-3ce7-4b60-9ea3-d8e840823514';
+const FREE_PLAN_ID = process
 
 class ValidationError extends Error {
   constructor(message) { super(message); this.name = 'ValidationError'; }

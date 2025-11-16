@@ -5,9 +5,9 @@ require('dotenv').config();
 async function getGeminiModel(modelName) {
   // Dynamic import to work in CommonJS
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
-  const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBHzF0fdJvc8cKRDZDn3pfuGjBiO_Yb60Y';
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error('Thiếu biến môi trường GEMINI_API_KEY');
+    throw new Error('Thiếu biến môi trường GEMINI_API_KEY trong file .env');
   }
   const genAI = new GoogleGenerativeAI(apiKey);
   return genAI.getGenerativeModel({ model: modelName });
