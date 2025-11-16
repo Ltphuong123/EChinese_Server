@@ -3,7 +3,6 @@
 const db = require("../config/db");
 
 const examModel = {
-  
   createFullExam: async (examData, createdById) => {
     const client = await db.pool.connect();
     const promptIdMap = new Map();
@@ -776,7 +775,12 @@ const examModel = {
         e.exam_type_id,
         et.name as exam_type_name,
         e.exam_level_id,
-        el.name as exam_level_name
+        el.name as exam_level_name,
+        (
+          SELECT jsonb_agg(s.name ORDER BY s."order" ASC)
+          FROM "Sections" s
+          WHERE s.exam_id = e.id AND s.is_deleted = false
+        ) as skills
       FROM "Exams" e
       JOIN "Exam_Types" et ON e.exam_type_id = et.id
       JOIN "Exam_Levels" el ON e.exam_level_id = el.id
