@@ -75,6 +75,44 @@ const examLevelController = {
       res.status(500).json({ success: false, message: 'Lỗi khi xóa cấp độ bài thi', error: error.message });
     }
   },
+
+  setExamLevelsOrder: async (req, res) => {
+    try {
+      const { levels } = req.body;
+      
+      // Validation
+      if (!levels || !Array.isArray(levels) || levels.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Trường 'levels' phải là một mảng không rỗng với định dạng [{ id, order }, ...]"
+        });
+      }
+
+      // Validate each item
+      for (const level of levels) {
+        if (!level.id || typeof level.order !== 'number') {
+          return res.status(400).json({
+            success: false,
+            message: "Mỗi phần tử trong 'levels' phải có 'id' và 'order' (số)"
+          });
+        }
+      }
+
+      const updatedLevels = await examLevelService.setExamLevelsOrder(levels);
+      
+      res.status(200).json({
+        success: true,
+        message: 'Cập nhật thứ tự cấp độ bài thi thành công.',
+        data: updatedLevels
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Lỗi khi cập nhật thứ tự cấp độ bài thi', 
+        error: error.message 
+      });
+    }
+  },
 };
 
 module.exports = examLevelController;

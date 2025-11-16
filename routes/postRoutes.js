@@ -70,5 +70,11 @@ router.post(
 );
 
 
+// ⚠️ DANGER ZONE - Xóa TẤT CẢ bài đăng trong hệ thống (chỉ super admin)
+router.delete(
+  `/community/posts/all/permanent`,
+  [authMiddleware.verifyToken, authMiddleware.isSuperAdmin],
+  postController.permanentDeleteAllPosts
+);
 
 module.exports = router;

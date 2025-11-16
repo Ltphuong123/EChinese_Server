@@ -213,6 +213,10 @@ const moderationService = {
     if (!appeal) throw new Error("Khiếu nại không tồn tại.");
     if (appeal.status !== 'pending') throw new Error("Khiếu nại đã được xử lý.");
 
+    // Lấy thông tin violation đầy đủ
+    const violation = await moderationModel.findViolationById(appeal.violation_id);
+    if (!violation) throw new Error("Vi phạm liên quan không tồn tại.");
+
     // Cập nhật trạng thái của appeal
     const processedAppeal = await moderationModel.processAppeal(appealId, {
       status: action,
@@ -222,22 +226,16 @@ const moderationService = {
     
     // Nếu chấp nhận khiếu nại, thực hiện hành động hoàn tác
     if (action === 'accepted') {
-        const violation = appeal.violation_snapshot;
-        
-        // Hoàn tác hành động kiểm duyệt
+        // 1. Khôi phục nội dung bị xóa
         if (violation.target_type === 'post') {
-            // Ví dụ: khôi phục bài viết (bạn cần có hàm này trong postModel)
-            // await postModel.restore(violation.target_id);
+            await postService.restorePost(violation.target_id, adminId);
         } else if (violation.target_type === 'comment') {
-            // Ví dụ: khôi phục bình luận
-            // await commentModel.restore(violation.target_id);
+            await commentService.restoreComment(violation.target_id, adminId);
         }
         
-        // Đồng thời có thể xóa bản ghi vi phạm
+        // 2. Xóa bản ghi vi phạm
         await moderationModel.deleteViolation(violation.id);
     }
-    
-    // TODO: Gửi thông báo đến người dùng về kết quả khiếu nại
     
     return processedAppeal;
   }

@@ -21,6 +21,10 @@ const examLevelService = {
       throw new Error('Cấp độ bài thi không tồn tại.');
     }
   },
+
+  setExamLevelsOrder: async (levels) => {
+    return await examLevelModel.updateOrder(levels);
+  },
 };
 
 module.exports = examLevelService;

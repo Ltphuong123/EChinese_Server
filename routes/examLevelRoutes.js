@@ -23,4 +23,11 @@ router.delete(
   examLevelController.deleteExamLevelAdmin
 );
 
+// Set order for exam levels
+router.put(
+  '/admin/exams/levels/order',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  examLevelController.setExamLevelsOrder
+);
+
 module.exports = router;

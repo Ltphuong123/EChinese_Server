@@ -346,6 +346,27 @@ const postService = {
 
     return result.rows[0];
   },
+
+  /**
+   * Xóa vĩnh viễn TẤT CẢ bài đăng và dữ liệu liên quan trong hệ thống
+   * ⚠️ CỰC KỲ NGUY HIỂM - CHỈ SUPER ADMIN MỚI CÓ QUYỀN
+   */
+  permanentDeleteAllPosts: async (adminId, confirmationCode) => {
+    // Mã xác nhận để tránh xóa nhầm
+    const REQUIRED_CODE =  'DELETE_ALL_POSTS_PERMANENTLY';
+    
+    if (confirmationCode !== REQUIRED_CODE) {
+      throw new Error('Mã xác nhận không đúng. Thao tác bị hủy.');
+    }
+
+    // Thực hiện xóa
+    const stats = await postModel.permanentDeleteAll();
+    
+    return stats;
+  },
 };
 
 module.exports = postService;
+
+
+  

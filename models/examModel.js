@@ -664,7 +664,12 @@ const examModel = {
           JOIN "Subsections" ss ON q.subsection_id = ss.id
           JOIN "Sections" s ON ss.section_id = s.id
           WHERE s.exam_id = e.id
-        ) AS total_questions
+        ) AS total_questions,
+        (
+          SELECT jsonb_agg(jsonb_build_object('name', s.name) ORDER BY s."order" ASC)
+          FROM "Sections" s
+          WHERE s.exam_id = e.id
+        ) as sections
       FROM "Exams" e
       LEFT JOIN "Exam_Types" et ON e.exam_type_id = et.id
       LEFT JOIN "Exam_Levels" el ON e.exam_level_id = el.id

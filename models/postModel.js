@@ -808,6 +808,80 @@ const postModel = {
       isCommented: row.is_commented,
     }));
   },
+
+  
+  /**
+   * Xóa vĩnh viễn TẤT CẢ bài đăng và dữ liệu liên quan trong hệ thống
+   * ⚠️ CỰC KỲ NGUY HIỂM - CHỈ DÙNG KHI CẦN THIẾT
+   */
+  permanentDeleteAll: async () => {
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Đếm số lượng trước khi xóa để báo cáo
+      const countPosts = await client.query('SELECT COUNT(*) FROM "Posts"');
+      const countComments = await client.query('SELECT COUNT(*) FROM "Comments"');
+      const countLikes = await client.query('SELECT COUNT(*) FROM "PostLikes"');
+      const countViews = await client.query('SELECT COUNT(*) FROM "PostViews"');
+      const countReports = await client.query('SELECT COUNT(*) FROM "Reports"');
+      const countViolations = await client.query('SELECT COUNT(*) FROM "Violations"');
+      const countAppeals = await client.query('SELECT COUNT(*) FROM "Appeals"');
+      const countModerationLogs = await client.query('SELECT COUNT(*) FROM "ModerationLogs"');
+      const countViolationRules = await client.query('SELECT COUNT(*) FROM "ViolationRules"');
+
+      const stats = {
+        posts: parseInt(countPosts.rows[0].count, 10),
+        comments: parseInt(countComments.rows[0].count, 10),
+        likes: parseInt(countLikes.rows[0].count, 10),
+        views: parseInt(countViews.rows[0].count, 10),
+        reports: parseInt(countReports.rows[0].count, 10),
+        violations: parseInt(countViolations.rows[0].count, 10),
+        appeals: parseInt(countAppeals.rows[0].count, 10),
+        moderationLogs: parseInt(countModerationLogs.rows[0].count, 10),
+        violationRules: parseInt(countViolationRules.rows[0].count, 10)
+      };
+
+      // 1. Xóa tất cả ViolationRules (liên kết giữa violations và rules)
+      await client.query('DELETE FROM "ViolationRules"');
+
+      // 2. Xóa tất cả Appeals (khiếu nại) - phải xóa trước Violations vì có foreign key
+      await client.query('DELETE FROM "Appeals"');
+
+      // 3. Xóa tất cả Violations (vi phạm) - toàn bộ hệ thống
+      await client.query('DELETE FROM "Violations"');
+
+      // 4. Xóa tất cả Reports (báo cáo) - toàn bộ hệ thống
+      await client.query('DELETE FROM "Reports"');
+
+      // 5. Xóa tất cả ModerationLogs (log kiểm duyệt) - toàn bộ hệ thống
+      await client.query('DELETE FROM "ModerationLogs"');
+
+      // 6. Xóa tất cả comments (bao gồm cả comment của comment)
+      await client.query('DELETE FROM "Comments"');
+
+      // 7. Xóa tất cả likes
+      await client.query('DELETE FROM "PostLikes"');
+
+      // 8. Xóa tất cả views
+      await client.query('DELETE FROM "PostViews"');
+
+      // 9. Cuối cùng, xóa tất cả posts
+      await client.query('DELETE FROM "Posts"');
+
+      await client.query('COMMIT');
+      
+      return stats;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  
 };
 
 module.exports = postModel;
+

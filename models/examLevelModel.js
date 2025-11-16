@@ -55,6 +55,37 @@ const examLevelModel = {
     const result = await db.query(queryText, [id]);
     return result.rowCount;
   },
+
+  updateOrder: async (levels) => {
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const updatedLevels = [];
+      
+      for (const level of levels) {
+        const queryText = `
+          UPDATE "Exam_Levels"
+          SET "order" = $1
+          WHERE id = $2
+          RETURNING *;
+        `;
+        const result = await client.query(queryText, [level.order, level.id]);
+        
+        if (result.rows[0]) {
+          updatedLevels.push(result.rows[0]);
+        }
+      }
+
+      await client.query('COMMIT');
+      return updatedLevels;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
 };
 
 module.exports = examLevelModel;

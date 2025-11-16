@@ -776,6 +776,61 @@ const postController = {
       });
     }
   },
+
+  /**
+   * Xóa vĩnh viễn TẤT CẢ bài đăng và dữ liệu liên quan trong hệ thống
+   * ⚠️ CỰC KỲ NGUY HIỂM - CHỈ SUPER ADMIN MỚI CÓ QUYỀN
+   */
+  permanentDeleteAllPosts: async (req, res) => {
+    try {
+      const adminId = req.user.id;
+      const adminRole = req.user.role;
+      const { confirmationCode } = req.body;
+
+      // Chỉ cho phép super admin
+      if (adminRole !== 'super admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Chỉ Super Admin mới có quyền thực hiện thao tác này.'
+        });
+      }
+
+      // Kiểm tra mã xác nhận
+      if (!confirmationCode) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu mã xác nhận. Vui lòng cung cấp confirmationCode trong body.'
+        });
+      }
+
+      const stats = await postService.permanentDeleteAllPosts(adminId, confirmationCode);
+
+      res.status(200).json({
+        success: true,
+        message: 'Đã xóa vĩnh viễn TẤT CẢ bài đăng và dữ liệu liên quan thành công.',
+        data: {
+          deleted: stats,
+          performed_by: adminId,
+          performed_at: new Date()
+        }
+      });
+    } catch (error) {
+      if (error.message.includes('Mã xác nhận')) {
+        return res.status(400).json({ 
+          success: false, 
+          message: error.message 
+        });
+      }
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi xóa toàn bộ bài đăng',
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = postController;
+
+
+  
