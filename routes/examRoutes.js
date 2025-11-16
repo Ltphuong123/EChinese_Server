@@ -61,6 +61,13 @@ router.put(
     examController.updateFullExamAdmin
 );
 
+// GET /api/admin/exams/:id/check-attempts - Kiểm tra đề thi đã có người làm chưa
+router.get(
+  '/admin/exams/:id/check-attempts',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  examController.checkExamHasAttempts
+);
+
 router.post(
   '/admin/exams/:id/publish',
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
@@ -102,3 +109,6 @@ router.post(
 
 
 module.exports = router;
+
+
+

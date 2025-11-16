@@ -97,20 +97,23 @@ const examController = {
       }
 
       // Gọi service để thực hiện logic cập nhật phức tạp
-      const updatedExam = await examService.updateFullExam(id, examData, userId);
+      const exams = await examService.updateFullExam(id, examData, userId);
 
       // Log admin action
+      const targetId = exams.length > 1 ? exams[1].id : exams[0].id; // Nếu có 2 đề thì log đề mới
       await require('../services/adminLogService').createLog({
         action_type: 'UPDATE_EXAM',
-        target_id: id,
+        target_id: targetId,
         description: `Cập nhật bài thi: ${examData.name}`
       }, userId);
 
-      // Trả về dữ liệu bài thi mới đã được cập nhật
+      // Trả về mảng các đề thi
       res.status(200).json({
         success: true,
-        message: 'Cập nhật bài thi hoàn chỉnh thành công.',
-        data: updatedExam
+        message: exams.length > 1 
+          ? 'Đã tạo bản sao mới (bài thi cũ đã có người làm). Cả 2 bài đều đã unpublish.'
+          : 'Cập nhật bài thi hoàn chỉnh thành công.',
+        data: exams
       });
 
     } catch (error) {
@@ -484,6 +487,34 @@ const examController = {
   },
 
   
+  /**
+   * GET /api/admin/exams/:id/check-attempts
+   * Kiểm tra xem đề thi đã có người làm chưa
+   */
+  checkExamHasAttempts: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const result = await examService.checkExamHasAttempts(id);
+      
+      res.status(200).json({
+        success: true,
+        message: result.has_attempts 
+          ? `Đề thi đã có ${result.unique_users} người làm (${result.total_attempts} lượt)`
+          : 'Đề thi chưa có ai làm',
+        data: result
+      });
+
+    } catch (error) {
+      if (error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ 
+        success: false, 
+        message: 'Lỗi khi kiểm tra đề thi', 
+        error: error.message 
+      });
+    }
+  }
 };
 
 module.exports = examController;

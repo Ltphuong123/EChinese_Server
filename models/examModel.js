@@ -339,10 +339,9 @@ const examModel = {
         e.created_at,
         e.updated_at,
         e.is_deleted,
-        -- THÊM 2 DÒNG NÀY
+        e.version_at,
         e.exam_type_id,
         e.exam_level_id,
-        -- KẾT THÚC THÊM
         et.name AS exam_type_name,
         el.name AS exam_level_name,
         (SELECT COUNT(*) FROM "Sections" s WHERE s.exam_id = e.id) AS section_count,
@@ -362,7 +361,9 @@ const examModel = {
       LEFT JOIN "Exam_Types" et ON e.exam_type_id = et.id
       LEFT JOIN "Exam_Levels" el ON e.exam_level_id = el.id
       ${whereClauses}
-      ORDER BY e.created_at DESC
+      ORDER BY 
+        CASE WHEN e.version_at IS NULL THEN 0 ELSE 1 END,
+        e.created_at DESC
       LIMIT $${queryParams.length + 1}
       OFFSET $${queryParams.length + 2};
     `;
