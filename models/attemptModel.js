@@ -36,8 +36,10 @@ const attemptModel = {
 
   findAttemptByIdAndUser: async (attemptId, userId) => {
     const queryText = `
-      SELECT a.*
+      SELECT a.*, e.exam_type_id, et.name as exam_type_name
       FROM "User_Exam_Attempts" a
+      JOIN "Exams" e ON a.exam_id = e.id
+      JOIN "Exam_Types" et ON e.exam_type_id = et.id
       WHERE a.id = $1 AND a.user_id = $2;
     `;
     const result = await db.query(queryText, [attemptId, userId]);
@@ -93,6 +95,23 @@ const attemptModel = {
       WHERE ua.attempt_id = $1;
     `;
     const result = await db.query(queryText, [attemptId]);
+    return result.rows;
+  },
+
+  getSectionQuestionCounts: async (examId) => {
+    const queryText = `
+      SELECT 
+        s.id as section_id,
+        s.name as section_name,
+        COUNT(q.id) as total_questions
+      FROM "Sections" s
+      JOIN "Subsections" ss ON ss.section_id = s.id
+      JOIN "Questions" q ON q.subsection_id = ss.id
+      WHERE s.exam_id = $1
+      GROUP BY s.id, s.name
+      ORDER BY s."order" ASC;
+    `;
+    const result = await db.query(queryText, [examId]);
     return result.rows;
   },
 

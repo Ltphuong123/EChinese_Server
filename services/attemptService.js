@@ -80,13 +80,16 @@ const attemptService = {
           return { attemptId };
       }
 
-      let totalScore = 0;
-      const sectionScoresMap = new Map();
+      // Lấy thông tin tổng số câu hỏi trong mỗi section
+      const sectionQuestionCounts = await attemptModel.getSectionQuestionCounts(attempt.exam_id);
+      const sectionCountsMap = new Map(
+        sectionQuestionCounts.map(s => [s.section_id, { total: parseInt(s.total_questions), correct: 0 }])
+      );
 
+      // Đếm số câu đúng trong mỗi section
       for (const item of allQuestionsAndAnswers) {
           let isCorrect = false;
           const userResponse = item.user_response;
-          const questionPoints = item.question_points || 0;
           
           if (userResponse) {
               switch (item.question_type_name) {
@@ -113,24 +116,112 @@ const attemptService = {
               }
           }
           
-          if (isCorrect) {
-              totalScore += questionPoints;
-              // Tính điểm từng phần
-              const currentSectionScore = sectionScoresMap.get(item.section_id) || 0;
-              sectionScoresMap.set(item.section_id, currentSectionScore + questionPoints);
+          // Cập nhật số câu đúng trong section
+          if (isCorrect && sectionCountsMap.has(item.section_id)) {
+              const sectionData = sectionCountsMap.get(item.section_id);
+              sectionData.correct += 1;
           }
 
           // Cập nhật is_correct cho từng câu trả lời trong DB
           await attemptModel.updateAnswerResult(item.user_answer_id, isCorrect);
       }
-      
-      const sectionScores = Array.from(sectionScoresMap, ([section_id, score]) => ({ section_id, score }));
 
-      // --- LOGIC ĐÃ ĐƯỢC THAY ĐỔI TẠI ĐÂY ---
-      // Logic cũ: const isPassed = totalScore >= (attempt.exam_passing_score || 0);
-      // Logic mới: Coi là "Đạt" nếu người dùng có điểm lớn hơn 0.
-      // Bạn có thể thay đổi logic này thành `false` nếu muốn tất cả đều là "Không đạt".
-      const isPassed = totalScore > 0;
+      // Tính điểm theo loại bài thi
+      const examTypeName = attempt.exam_type_name;
+      let totalScore = 0;
+      const sectionScores = [];
+      
+      if (examTypeName === 'HSK') {
+          // HSK: Điểm từng phần = (Số câu đúng / Tổng số câu) × 100
+          for (const [section_id, data] of sectionCountsMap.entries()) {
+              const sectionScore = data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0;
+              sectionScores.push({ section_id, score: sectionScore });
+              totalScore += sectionScore;
+          }
+      } else if (examTypeName === 'HSKK') {
+          // HSKK: Điểm từng phần = (Số câu đúng / Tổng số câu) × 100, Tổng = 100
+          for (const [section_id, data] of sectionCountsMap.entries()) {
+              const sectionScore = data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0;
+              sectionScores.push({ section_id, score: sectionScore });
+              totalScore += sectionScore;
+          }
+      } else if (examTypeName === 'TOCFL') {
+          // TOCFL: Điểm từng phần = (Số câu đúng / Tổng số câu) × 80
+          for (const [section_id, data] of sectionCountsMap.entries()) {
+              const sectionScore = data.total > 0 ? Math.round((data.correct / data.total) * 80) : 0;
+              sectionScores.push({ section_id, score: sectionScore });
+              totalScore += sectionScore;
+          }
+      } else {
+          // Mặc định: Tính theo điểm gốc (points) - giống logic cũ
+          const sectionScoresMap = new Map();
+          
+          // Lặp lại để tính điểm theo points
+          for (const item of allQuestionsAndAnswers) {
+              let isCorrect = false;
+              const userResponse = item.user_response;
+              
+              if (userResponse) {
+                  switch (item.question_type_name) {
+                      case 'Đúng/Sai':
+                      case 'Trắc nghiệm (3 đáp án)':
+                      case 'Trắc nghiệm (4 đáp án)':
+                      case 'Trắc nghiệm (5 đáp án - Nối)':
+                          isCorrect = item.options.some(opt => opt.id === userResponse && opt.is_correct);
+                          break;
+                      case 'Sắp xếp từ':
+                      case 'Sắp xếp câu':
+                          isCorrect = item.correct_answers.some(ans => ans.answer === userResponse);
+                          break;
+                      case 'Viết câu trả lời':
+                          if (item.correct_answers.length > 0) {
+                              isCorrect = item.correct_answers.some(ans => ans.answer.toLowerCase() === userResponse.toLowerCase());
+                          } else {
+                              isCorrect = userResponse.trim().length > 0;
+                          }
+                          break;
+                      case 'Trả lời bằng ghi âm':
+                          isCorrect = !!userResponse;
+                          break;
+                  }
+              }
+              
+              if (isCorrect) {
+                  const questionPoints = item.question_points || 0;
+                  totalScore += questionPoints;
+                  const currentScore = sectionScoresMap.get(item.section_id) || 0;
+                  sectionScoresMap.set(item.section_id, currentScore + questionPoints);
+              }
+          }
+          
+          for (const [section_id, score] of sectionScoresMap.entries()) {
+              sectionScores.push({ section_id, score });
+          }
+      }
+
+      // Xác định đạt/không đạt theo loại bài thi
+      let isPassed = false;
+      const numSections = sectionScores.length;
+      
+      if (examTypeName === 'HSK') {
+          // HSK 1-2: ≥120/200 (2 phần), HSK 3-6: ≥180/300 (3 phần)
+          if (numSections === 2) {
+              isPassed = totalScore >= 120;
+          } else if (numSections === 3) {
+              isPassed = totalScore >= 180;
+          } else {
+              isPassed = totalScore > 0;
+          }
+      } else if (examTypeName === 'HSKK') {
+          // HSKK: Tổng ≥60/100
+          isPassed = totalScore >= 60;
+      } else if (examTypeName === 'TOCFL') {
+          // TOCFL: Tổng ≥120/160
+          isPassed = totalScore >= 120;
+      } else {
+          // Mặc định: Có điểm là đạt
+          isPassed = totalScore > 0;
+      }
       
       await attemptModel.finalizeAttempt(attemptId, totalScore, isPassed, sectionScores);
       
