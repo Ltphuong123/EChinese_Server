@@ -5,11 +5,11 @@ yarn-error.log
 package-lock.json  # Nếu bạn dùng npm; bỏ qua nếu dùng yarn
 
 # Environment variables
-# .env
-# .env.local
-# .env.development
-# .env.test
-# .env.production
+.env
+.env.local
+.env.development
+.env.test
+.env.production
 
 # Logs
 logs/

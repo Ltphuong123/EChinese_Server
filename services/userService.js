@@ -15,11 +15,9 @@ const saltRounds = 10;
 const generateAccessToken = (user) => {
   return jwt.sign(
     { id: user.id, role: user.role },
-    process.env.JWT_SECRET ||
-      "7b9c3f8a4e9b2c1d0e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6",
+    process.env.JWT_SECRET,
     {
-      // expiresIn: process.env.JWT_EXPIRATION || "1d",
-      expiresIn: "1d",
+      expiresIn: process.env.JWT_EXPIRATION || "1d",
     }
   );
 };
@@ -27,11 +25,9 @@ const generateAccessToken = (user) => {
 const generateRefreshToken = (user) => {
   return jwt.sign(
     { id: user.id },
-    process.env.JWT_REFRESH_SECRET ||
-      "7b9c3f8a4e9b2c1d0e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6",
+    process.env.JWT_REFRESH_SECRET,
     {
-      // expiresIn: process.env.JWT_REFRESH_EXPIRATION || "7d",
-      expiresIn: "7d",
+      expiresIn: process.env.JWT_REFRESH_EXPIRATION || "7d",
     }
   );
 };

@@ -3,15 +3,10 @@ const express = require("express");
 const cors = require("cors");
 
 const app = express();
-const port = process.env.PORT || 5050;
+const port = process.env.PORT || 5000;
 
 const { generalLimiter } = require("./middlewares/rateLimitMiddleware");
 
-// const corsOptions = {
-//   origin: 'https://echinese-adminweb-fe.onrender.com', // Chỉ cho phép domain này
-//   optionsSuccessStatus: 200
-// };
-// app.use(cors(corsOptions));
 
 app.use(cors());
 const corsOptions = {

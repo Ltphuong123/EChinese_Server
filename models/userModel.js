@@ -1,6 +1,7 @@
 const db = require("../config/db");
 const userSubscriptionService = require("../services/userSubscriptionService");
 const userUsageService = require("../services/usageService");
+require('dotenv').config();
 
 const userModel = {
   getAllUsers: async () => {
@@ -41,7 +42,7 @@ const userModel = {
 
     await userSubscriptionService.addSubscription(
       result.rows[0].id,
-      "cc8ee1e7-3ce7-4b60-9ea3-d8e840823514"
+      process.env.FREE_PLAN_ID
     );
     await userUsageService.resetUsageCounters(result.rows[0].id, ['ai_lesson', 'ai_translate']);
 
