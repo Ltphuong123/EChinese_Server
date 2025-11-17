@@ -1,6 +1,7 @@
 // file: services/aiTranslationService.js
 require("dotenv").config();
 const aiTranslationModel = require("../models/aiTranslationModel");
+const { translateWithExamples } = require("./aiService");
 
 async function getGeminiModel(modelName) {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
@@ -211,10 +212,22 @@ const aiTranslationService = {
     return count;
   },
 
+  // Lấy số lượng dịch AI của user trong ngày hôm nay
+  getTodayAITranslationCount: async (userId) => {
+    const count = await aiTranslationModel.countTodayAITranslations(userId);
+    return count;
+  },
+
   // Lấy số lượng dịch của user trong tuần này
   getWeekTranslationCount: async (userId) => {
     const stats = await aiTranslationModel.getTranslationStats(userId, "week");
     return stats.total || 0;
+  },
+
+  // Lấy số lượng dịch AI của user trong tuần này
+  getWeekAITranslationCount: async (userId) => {
+    const count = await aiTranslationModel.countWeekAITranslations(userId);
+    return count;
   },
 
   // Lấy số lượng dịch của user trong tháng này
@@ -223,10 +236,60 @@ const aiTranslationService = {
     return stats.total || 0;
   },
 
+  // Lấy số lượng dịch AI của user trong tháng này
+  getMonthAITranslationCount: async (userId) => {
+    const count = await aiTranslationModel.countMonthAITranslations(userId);
+    return count;
+  },
+
   // Lấy thống kê lượt dịch theo thời gian
   getTranslationStats: async (userId, period) => {
     const stats = await aiTranslationModel.getTranslationStats(userId, period);
     return stats;
+  },
+
+  // Dịch với câu ví dụ cho từng từ
+  translateWithWordExamples: async ({ text, direction, userId }) => {
+    if (!text || !text.trim()) throw new Error("Thiếu nội dung cần dịch");
+    if (text.length > 1000)
+      throw new Error("Text quá dài cho dịch với ví dụ (>1000 ký tự)");
+
+    try {
+      const result = await translateWithExamples(text, direction);
+      const translationData = result.data;
+
+      // Lưu vào database với thông tin bổ sung
+      const saved = await aiTranslationModel.create({
+        user_id: userId || null,
+        source_text: translationData.source_text,
+        translated_text: translationData.translated_text,
+        source_lang: translationData.source_lang,
+        target_lang: translationData.target_lang,
+        model: result.model,
+        // Lưu word_breakdown như JSON object trực tiếp (không stringify)
+        metadata: {
+          word_breakdown: translationData.word_breakdown,
+          translation_type: "with_examples",
+          ai: true, // Đánh dấu đây là dịch AI với phân tích từ
+        },
+      });
+
+      return {
+        translation: {
+          id: saved.id,
+          source_text: saved.source_text,
+          translated_text: saved.translated_text,
+          source_lang: saved.source_lang,
+          target_lang: saved.target_lang,
+          word_breakdown: translationData.word_breakdown,
+          model: saved.model,
+          created_at: saved.created_at,
+          metadata: saved.metadata, // Trả về metadata đầy đủ
+        },
+      };
+    } catch (error) {
+      throw new Error(`Lỗi dịch với ví dụ: ${error.message}`);
+    }
   },
 };
 
