@@ -250,21 +250,25 @@ const aiController = {
   // API lấy thống kê đầy đủ lượt dịch của ngày, tuần, tháng hiện tại
   getTranslationStats: async (req, res) => {
     try {
-      const authToken = req.headers.authorization?.replace("Bearer ", "");
       const userId = req.user.id;
 
-      // Gọi subscription để lấy giới hạn thực tế
-      const limits = await aiController._getTranslationLimits(
-        userId,
-        authToken
+      // Lấy thống kê cho tất cả các khoảng thời gian
+      const todayCount = await aiTranslationService.getTodayTranslationCount(
+        userId
+      );
+      const weekCount = await aiTranslationService.getWeekTranslationCount(
+        userId
+      );
+      const monthCount = await aiTranslationService.getMonthTranslationCount(
+        userId
       );
 
       return res.status(200).json({
         success: true,
         data: {
-          quota: limits.quota,
-          used: limits.used,
-          remaining: limits.remaining,
+          today: todayCount,
+          week: weekCount,
+          month: monthCount,
         },
       });
     } catch (error) {
