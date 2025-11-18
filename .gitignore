@@ -44,3 +44,6 @@ coverage/
 # Miscellaneous
 *.bak
 *.backup
+
+
+config/firebase-service-account.json
