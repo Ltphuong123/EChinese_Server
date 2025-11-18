@@ -47,8 +47,8 @@ const examService = {
   },
 
   updateFullExam: async (examId, examData, userId) => {
-    const db = require('../config/db');
-    
+    const db = require("../config/db");
+
     // Kiểm tra xem có ai đã làm bài thi này chưa
     const attemptCheckResult = await db.query(
       'SELECT COUNT(*) as count FROM "User_Exam_Attempts" WHERE exam_id = $1',
@@ -60,39 +60,42 @@ const examService = {
       // ===== TRƯỜNG HỢP 1: CHƯA CÓ AI LÀM BÀI =====
       // Unpublish trước khi sửa
       await examModel.updateStatus(examId, { is_published: false });
-      
+
       // Sửa bình thường
-      const updatedExam = await examModel.updateFullExam(examId, examData, userId);
-      
+      const updatedExam = await examModel.updateFullExam(
+        examId,
+        examData,
+        userId
+      );
+
       if (!updatedExam) {
         throw new Error("Bài thi không tồn tại.");
       }
-      
+
       // Thêm version_at vào response
       updatedExam.version_at = null;
-      
+
       // Trả về mảng chỉ có 1 đề thi
       return [updatedExam];
-      
     } else {
       // ===== TRƯỜNG HỢP 2: ĐÃ CÓ NGƯỜI LÀM BÀI =====
       const client = await db.pool.connect();
-      
+
       try {
-        await client.query('BEGIN');
-        
+        await client.query("BEGIN");
+
         // 1. Lấy thông tin bài thi cũ
         const oldExamResult = await client.query(
           'SELECT * FROM "Exams" WHERE id = $1',
           [examId]
         );
-        
+
         if (oldExamResult.rows.length === 0) {
           throw new Error("Bài thi không tồn tại.");
         }
-        
+
         const oldExam = oldExamResult.rows[0];
-        
+
         // 2. Unpublish bài thi cũ và set version_at
         const versionAtTime = new Date();
         await client.query(
@@ -103,11 +106,11 @@ const examService = {
            WHERE id = $1`,
           [examId, versionAtTime]
         );
-        
+
         // 3. Lấy cấu trúc đầy đủ của bài thi cũ
         const oldExamFull = await examModel.findById(examId);
         oldExamFull.version_at = versionAtTime;
-        
+
         // 4. Chuẩn bị dữ liệu cho bài thi mới
         const newExamData = {
           ...examData,
@@ -116,20 +119,19 @@ const examService = {
           exam_level_id: oldExam.exam_level_id,
           is_published: false, // Unpublish bản mới
         };
-        
+
         // 5. Tạo bài thi mới với cấu trúc đã cập nhật
         const newExam = await examModel.createFullExam(newExamData, userId);
-        
-        await client.query('COMMIT');
-        
+
+        await client.query("COMMIT");
+
         // Thêm version_at vào response
         newExam.version_at = null;
-        
+
         // Trả về mảng gồm 2 đề thi: [đề cũ, đề mới]
         return [oldExamFull, newExam];
-        
       } catch (error) {
-        await client.query('ROLLBACK');
+        await client.query("ROLLBACK");
         throw error;
       } finally {
         client.release();
@@ -547,8 +549,8 @@ const examService = {
    * @returns {Promise<object>} Thông tin về số lượng người đã làm
    */
   checkExamHasAttempts: async (examId) => {
-    const db = require('../config/db');
-    
+    const db = require("../config/db");
+
     // Kiểm tra đề thi có tồn tại không
     const examExists = await examModel.findExamById(examId);
     if (!examExists) {
@@ -576,7 +578,7 @@ const examService = {
       total_attempts: parseInt(stats.total_attempts),
       unique_users: parseInt(stats.unique_users),
       first_attempt_at: stats.first_attempt_at,
-      last_attempt_at: stats.last_attempt_at
+      last_attempt_at: stats.last_attempt_at,
     };
   },
 };
