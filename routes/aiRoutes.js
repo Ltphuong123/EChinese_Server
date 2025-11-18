@@ -35,6 +35,7 @@ router.post(
   authMiddleware.verifyToken,
   aiController.translateWithExamples
 );
+
 router.get(
   "/ai/translations",
   authMiddleware.verifyToken,

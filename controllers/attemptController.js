@@ -138,7 +138,46 @@ const attemptController = {
 //           }
 //            res.status(500).json({ success: false, message: 'Lỗi khi lấy kết quả chi tiết', error: error.message });
 //       }
-//   }
+//   },
+
+  /**
+   * GET /api/attempts/history/by-exam-info
+   * Lấy lịch sử làm bài theo exam_type_id + exam_level_id + name
+   */
+  getAttemptHistoryByExamInfo: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { exam_type_id, exam_level_id, exam_name } = req.query;
+
+      // Validation
+      if (!exam_type_id || !exam_level_id || !exam_name) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu tham số: exam_type_id, exam_level_id, exam_name là bắt buộc'
+        });
+      }
+
+      const history = await attemptService.getAttemptHistoryByExamInfo(
+        userId,
+        exam_type_id,
+        exam_level_id,
+        exam_name
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Lấy lịch sử làm bài thành công',
+        data: history
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi lấy lịch sử làm bài',
+        error: error.message
+      });
+    }
+  }
 };
 
 module.exports = attemptController;

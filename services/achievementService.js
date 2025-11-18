@@ -194,8 +194,34 @@ const achievementService = {
           progress: { current: currentValue, required: requiredValue }
         });
 
-        // TODO: Gửi thông báo cho người dùng
-        // notificationService.createNotification({ ... });
+        // 🔔 GỬI THÔNG BÁO ĐẠT THÀNH TÍCH
+        try {
+          const notificationService = require('./notificationService');
+          await notificationService.createNotification({
+            recipient_id: userId,
+            audience: 'user',
+            type: 'achievement',
+            title: `🏆 Chúc mừng! Bạn đã đạt thành tích mới`,
+            content: { 
+              message: `Bạn đã đạt thành tích "${achievement.name}" và nhận được ${achievement.points || 0} điểm!` 
+            },
+            redirect_type: 'achievement',
+            data: { 
+              achievement_id: achievement.id,
+              achievement_name: achievement.name,
+              achievement_description: achievement.description || '',
+              achievement_icon: achievement.icon || '🏆',
+              points: String(achievement.points || 0),
+              achieved_at: new Date().toISOString(),
+              progress_current: String(currentValue),
+              progress_required: String(requiredValue)
+            },
+            priority: 2,
+            from_system: true
+          });
+        } catch (error) {
+          console.error('❌ Error sending achievement notification:', error);
+        }
         
       } else {
         // 4. CHƯA ĐỦ ĐIỀU KIỆN -> Cập nhật tiến độ

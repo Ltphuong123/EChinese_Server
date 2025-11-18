@@ -156,7 +156,22 @@ const attemptModel = {
                 SELECT jsonb_agg(jsonb_build_object(
                     'section_id', s.id,
                     'section_name', s.name,
-                    'score', uss.score
+                    'score', uss.score,
+                    'correct_count', (
+                        SELECT COUNT(*)
+                        FROM "User_Answers" ua
+                        JOIN "Questions" q ON ua.question_id = q.id
+                        JOIN "Subsections" ss ON q.subsection_id = ss.id
+                        WHERE ss.section_id = s.id 
+                        AND ua.attempt_id = a.id 
+                        AND ua.is_correct = true
+                    ),
+                    'total_questions', (
+                        SELECT COUNT(*)
+                        FROM "Questions" q
+                        JOIN "Subsections" ss ON q.subsection_id = ss.id
+                        WHERE ss.section_id = s.id
+                    )
                 ))
                 FROM "User_Section_Scores" uss
                 JOIN "Sections" s ON uss.section_id = s.id

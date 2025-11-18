@@ -3,6 +3,7 @@ require("dotenv").config();
 const aiTranslationModel = require("../models/aiTranslationModel");
 const { translateWithExamples } = require("./aiService");
 
+
 async function getGeminiModel(modelName) {
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const apiKey =
@@ -230,6 +231,7 @@ const aiTranslationService = {
     return count;
   },
 
+
   // Lấy số lượng dịch của user trong tháng này
   getMonthTranslationCount: async (userId) => {
     const stats = await aiTranslationModel.getTranslationStats(userId, "month");
@@ -241,6 +243,7 @@ const aiTranslationService = {
     const count = await aiTranslationModel.countMonthAITranslations(userId);
     return count;
   },
+
 
   // Lấy thống kê lượt dịch theo thời gian
   getTranslationStats: async (userId, period) => {

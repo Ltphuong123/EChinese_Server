@@ -6,8 +6,10 @@ let ensured = false;
 async function ensureTable() {
   if (ensured) return;
 
+
   // Tạo table nếu chưa tồn tại
   const createTableSql = `
+
     CREATE TABLE IF NOT EXISTS "AITranslations" (
       id UUID PRIMARY KEY,
       user_id UUID NULL,
@@ -54,7 +56,6 @@ async function ensureTable() {
   } catch (err) {
     // Ignore error if index already exists
   }
-
   ensured = true;
 }
 
@@ -67,12 +68,15 @@ const aiTranslationModel = {
     target_lang,
     model,
     metadata,
+
   }) => {
     await ensureTable();
     const id = uuidv4();
     const query = `
+
       INSERT INTO "AITranslations" (id, user_id, source_text, translated_text, source_lang, target_lang, model, metadata)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+
       RETURNING *;
     `;
     const values = [
@@ -83,7 +87,9 @@ const aiTranslationModel = {
       source_lang,
       target_lang,
       model || null,
+
       metadata || null,
+
     ];
     const result = await db.query(query, values);
     return result.rows[0];
@@ -95,6 +101,7 @@ const aiTranslationModel = {
     const totalItems = parseInt(totalResult.rows[0].count, 10);
     const selectQ = `
       SELECT id, source_text, translated_text, source_lang, target_lang, model, metadata, created_at
+
       FROM "AITranslations"
       WHERE user_id = $1
       ORDER BY created_at DESC

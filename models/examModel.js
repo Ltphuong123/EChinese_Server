@@ -3,6 +3,7 @@
 const db = require("../config/db");
 
 const examModel = {
+
   createFullExam: async (examData, createdById) => {
     const client = await db.pool.connect();
     const promptIdMap = new Map();
@@ -338,10 +339,16 @@ const examModel = {
         e.created_at,
         e.updated_at,
         e.is_deleted,
+<<<<<<< HEAD
         -- THÊM 2 DÒNG NÀY
         e.exam_type_id,
         e.exam_level_id,
         -- KẾT THÚC THÊM
+=======
+        e.version_at,
+        e.exam_type_id,
+        e.exam_level_id,
+>>>>>>> main
         et.name AS exam_type_name,
         el.name AS exam_level_name,
         (SELECT COUNT(*) FROM "Sections" s WHERE s.exam_id = e.id) AS section_count,
@@ -361,7 +368,13 @@ const examModel = {
       LEFT JOIN "Exam_Types" et ON e.exam_type_id = et.id
       LEFT JOIN "Exam_Levels" el ON e.exam_level_id = el.id
       ${whereClauses}
+<<<<<<< HEAD
       ORDER BY e.created_at DESC
+=======
+      ORDER BY 
+        CASE WHEN e.version_at IS NULL THEN 0 ELSE 1 END,
+        e.created_at DESC
+>>>>>>> main
       LIMIT $${queryParams.length + 1}
       OFFSET $${queryParams.length + 2};
     `;
@@ -775,12 +788,16 @@ const examModel = {
         e.exam_type_id,
         et.name as exam_type_name,
         e.exam_level_id,
+<<<<<<< HEAD
         el.name as exam_level_name,
         (
           SELECT jsonb_agg(s.name ORDER BY s."order" ASC)
           FROM "Sections" s
           WHERE s.exam_id = e.id AND s.is_deleted = false
         ) as skills
+=======
+        el.name as exam_level_name
+>>>>>>> main
       FROM "Exams" e
       JOIN "Exam_Types" et ON e.exam_type_id = et.id
       JOIN "Exam_Levels" el ON e.exam_level_id = el.id

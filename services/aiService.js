@@ -1,13 +1,14 @@
 // file: services/aiService.js
 
-require("dotenv").config();
+
+require('dotenv').config();
 
 async function getGeminiModel(modelName) {
   // Dynamic import to work in CommonJS
-  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("Thiếu biến môi trường GEMINI_API_KEY trong file .env");
+    throw new Error('Thiếu biến môi trường GEMINI_API_KEY trong file .env');
   }
   const genAI = new GoogleGenerativeAI(apiKey);
   return genAI.getGenerativeModel({ model: modelName });
@@ -15,9 +16,10 @@ async function getGeminiModel(modelName) {
 
 async function generateChineseLesson(theme, level) {
   const candidates = [
-    process.env.GEMINI_MODEL || "gemini-2.0-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-pro-latest",
+
+    process.env.GEMINI_MODEL || 'gemini-2.0-flash',
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro-latest'
   ];
 
   const prompt = `
@@ -89,31 +91,28 @@ async function generateChineseLesson(theme, level) {
   `;
 
   const parseJsonOutput = (raw) => {
-    if (!raw || typeof raw !== "string") throw new Error("Phản hồi rỗng từ AI");
+    if (!raw || typeof raw !== 'string') throw new Error('Phản hồi rỗng từ AI');
     let text = raw.trim();
     // Remove Markdown code fences if present
-    if (text.startsWith("```")) {
+    if (text.startsWith('```')) {
       // Strip opening fence with optional language and closing fence
-      text = text.replace(/^```[a-zA-Z]*\s*/i, "").replace(/\s*```\s*$/, "");
+      text = text.replace(/^```[a-zA-Z]*\s*/i, '').replace(/\s*```\s*$/, '');
     }
     // First attempt direct parse
-    try {
-      return JSON.parse(text);
-    } catch (_) {}
+    try { return JSON.parse(text); } catch (_) {}
     // Try extracting the largest JSON object by braces
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
     if (start !== -1 && end !== -1 && end > start) {
       const slice = text.slice(start, end + 1);
-      try {
-        return JSON.parse(slice);
-      } catch (_) {}
+      try { return JSON.parse(slice); } catch (_) {}
     }
     // As a final attempt, remove trailing commas (common in LLM output)
     try {
       const noTrailingCommas = text
-        .replace(/,\s*}/g, "}")
-        .replace(/,\s*]/g, "]");
+
+        .replace(/,\s*}/g, '}')
+        .replace(/,\s*]/g, ']');
       return JSON.parse(noTrailingCommas);
     } catch (e) {
       throw new Error(`Gemini trả về JSON không hợp lệ`);
@@ -125,14 +124,18 @@ async function generateChineseLesson(theme, level) {
     try {
       const model = await getGeminiModel(name);
       const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" },
+
+        contents: [
+          { role: 'user', parts: [{ text: prompt }] }
+        ],
+        generationConfig: { responseMimeType: 'application/json' }
       });
       const text = result.response.text();
       const parsed = parseJsonOutput(text);
       return { data: parsed, model: name };
     } catch (err) {
-      const msg = err && err.message ? err.message : "";
+
+      const msg = (err && err.message) ? err.message : '';
       if (/not found|unsupported|404/i.test(msg)) {
         lastErr = err;
         continue;

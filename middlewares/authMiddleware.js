@@ -13,7 +13,17 @@ const authMiddleware = {
       req.user = decoded;
       next();
     } catch (error) {
-      return res.status(403).json({ message: 'Token không hợp lệ' });
+      // Phân biệt lỗi hết hạn và lỗi khác
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ 
+          message: 'Token đã hết hạn',
+          expiredAt: error.expiredAt 
+        });
+      }
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(403).json({ message: 'Token không hợp lệ' });
+      }
+      return res.status(403).json({ message: 'Lỗi xác thực token', error: error.message });
     }
   },
 

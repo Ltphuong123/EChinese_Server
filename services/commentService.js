@@ -4,7 +4,7 @@ const commentModel = require('../models/commentModel');
 const postModel = require('../models/postModel'); // Để kiểm tra bài viết có tồn tại không
 const communityService = require('../services/communityService');
 const notificationModel = require('../models/notificationModel');
-
+const userModel = require('../models/userModel');
 
 const commentService = {
   createComment: async (postId, userId, content, parentCommentId) => {
@@ -25,12 +25,79 @@ const commentService = {
     // Đóng gói content vào object JSON
     const contentObject = { html: content }; // Giả sử content là chuỗi HTML
 
-    return await commentModel.create({
+
+    const newComment = await commentModel.create({
       post_id: postId,
       user_id: userId,
       content: contentObject,
       parent_comment_id: parentCommentId
     });
+
+    const notificationService = require('./notificationService');
+    const userModel = require('../models/userModel');
+    const commenter = await userModel.findUserById(userId);
+    const commenterName = commenter?.username || 'Ai đó';
+    const commentPreview = content.substring(0, 100).replace(/<[^>]*>/g, ''); // Remove HTML tags
+
+    // 🔔 THÔNG BÁO 1: Comment bài viết (gửi cho chủ bài viết)
+    if (postExists.user_id !== userId) {
+      try {
+        await notificationService.createNotification({
+          recipient_id: postExists.user_id,
+          audience: 'user',
+          type: 'community',
+          title: `💬 ${commenterName} đã bình luận bài viết của bạn`,
+          content: { 
+            message: `${commenterName} đã bình luận: "${commentPreview}..."` 
+          },
+          redirect_type: 'post_comment',
+          data: { 
+            post_id: postId,
+            comment_id: newComment.id,
+            commenter_id: userId,
+            commenter_name: commenterName,
+            commenter_avatar: commenter?.avatar || '',
+            comment_preview: commentPreview
+          },
+          priority: 1
+        });
+      } catch (error) {
+        console.error('❌ Error sending comment notification:', error);
+      }
+    }
+
+    // 🔔 THÔNG BÁO 2: Reply comment (gửi cho chủ comment cha)
+    if (parentCommentId) {
+      try {
+        const parentComment = await commentModel.findByIdWithDetails(parentCommentId);
+        if (parentComment && parentComment.user_id !== userId) {
+          await notificationService.createNotification({
+            recipient_id: parentComment.user_id,
+            audience: 'user',
+            type: 'community',
+            title: `↩️ ${commenterName} đã phản hồi bình luận của bạn`,
+            content: { 
+              message: `${commenterName} đã phản hồi: "${commentPreview}..."` 
+            },
+            redirect_type: 'post_comment',
+            data: { 
+              post_id: postId,
+              comment_id: newComment.id,
+              parent_comment_id: parentCommentId,
+              replier_id: userId,
+              replier_name: commenterName,
+              replier_avatar: commenter?.avatar || '',
+              reply_preview: commentPreview
+            },
+            priority: 1
+          });
+        }
+      } catch (error) {
+        console.error('❌ Error sending reply notification:', error);
+      }
+    }
+
+    return newComment;
   },
 
   getCommentsForPost: async (postId) => {
