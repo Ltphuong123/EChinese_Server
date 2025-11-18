@@ -77,14 +77,20 @@ const moderationService = {
             recipient_id: report.target_user_id,
             audience: null,
             type: 'comment_ban',
-            title: 'Cấm bình luận tạm thời',
-            content: `Bạn bị cấm bình luận trong ${banDays} ngày do vi phạm: ${resolutionReason}`,
-            related_type: 'user',
-            related_id: report.target_user_id,
-            data: { report_id: report.id, violation_id: newViolation.id },
-            redirect_url: null,
+            title: '⚠️ Bạn đã bị cấm bình luận tạm thời',
+            content: { 
+              message: `Bạn bị cấm bình luận trong ${banDays} ngày do vi phạm: ${resolutionReason}` 
+            },
+            redirect_type: 'community_rules',
+            data: { 
+              ban_days: String(banDays),
+              reason: resolutionReason,
+              report_id: report.id, 
+              violation_id: newViolation.id,
+              expires_at: expires.toISOString()
+            },
             expires_at: expires,
-            priority: 'high',
+            priority: 3,
             from_system: true,
           });
         } else {
@@ -103,15 +109,24 @@ const moderationService = {
         await notificationService.createNotification({
           recipient_id: report.target_user_id,
           audience: null,
-          type: 'report_resolved',
-          title: 'Báo cáo đã được xử lý',
-          content: `Hệ thống đã ${actionText} của bạn. Lý do: ${resolutionReason}`,
-          related_type: report.target_type,
-          related_id: report.target_id,
-          data: { report_id: report.id, violation_id: newViolation.id },
-          redirect_url: null,
+          type: 'moderation',
+          title: '🗑️ Nội dung của bạn đã bị gỡ',
+          content: { 
+            message: `Hệ thống đã ${actionText} của bạn. Lý do: ${resolutionReason}` 
+          },
+          redirect_type: 'community_rules',
+          data: { 
+            target_type: report.target_type,
+            target_id: report.target_id,
+            action: actionText,
+            reason: resolutionReason,
+            report_id: report.id, 
+            violation_id: newViolation.id,
+            removed_by: 'admin',
+            removed_at: new Date().toISOString()
+          },
           expires_at: null,
-          priority: 'normal',
+          priority: 2,
           from_system: true,
         });
       } catch (enfErr) {

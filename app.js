@@ -50,6 +50,8 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 const adminLogRoutes = require("./routes/adminLogRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const aiModerationRoutes = require("./routes/aiModerationRoutes");
+const deviceTokenRoutes = require("./routes/deviceTokenRoutes");
+const simpleNotificationRoutes = require("./routes/simpleNotificationRoutes");
 
 app.use("/api", userRoutes);
 
@@ -82,6 +84,8 @@ app.use("/api", dashboardRoutes);
 app.use("/api", adminLogRoutes);
 app.use("/api", aiRoutes);
 app.use("/api", aiModerationRoutes);
+app.use("/api/users", deviceTokenRoutes);
+app.use("/api", simpleNotificationRoutes);
 
 app.listen(port, () => {
   console.log(`Server chạy tại http://localhost:${port}`);

@@ -28,50 +28,75 @@ const notificationModel = {
   // CREATE
   create: async (data) => {
     const {
-      recipient_id, audience, type, title, content, related_type,
-      related_id, data: jsonData, redirect_url, expires_at, priority, from_system
+      recipient_id, audience, type, title, content, redirect_type,
+      data: jsonData, expires_at, priority, from_system
     } = data;
+    
+    // Validate: Tất cả values trong data phải là string
+    if (jsonData && typeof jsonData === 'object') {
+      Object.keys(jsonData).forEach(key => {
+        if (jsonData[key] !== null && typeof jsonData[key] !== 'string') {
+          jsonData[key] = String(jsonData[key]);
+        }
+      });
+    }
+    
     const queryText = `
       INSERT INTO "Notifications" (
-        recipient_id, audience, type, title, content, related_type, 
-        related_id, data, redirect_url, expires_at, priority, from_system
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        recipient_id, audience, type, title, content, redirect_type,
+        data, expires_at, priority, from_system
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *;
     `;
     const values = [
-      recipient_id, audience, type, title, content, related_type,
-      related_id, jsonData, redirect_url, expires_at, priority, from_system
+      recipient_id, audience, type, title, content, redirect_type,
+      jsonData, expires_at, priority, from_system
     ];
     const result = await db.query(queryText, values);
     return result.rows[0];
   },
 
   // READ (Paginated)
-  findAll: async ({ userId, role, limit, offset }) => {
-    // Chỉ lấy các thông báo:
-    // 1. Dành cho tất cả mọi người (audience = 'all')
-    // 2. Dành cho vai trò admin (audience = 'admin' và user là admin)
-    // 3. Gửi đích danh cho user đó (recipient_id = userId)
-    // 4. Chưa hết hạn
-    const whereClauses = `
+  findAll: async ({ userId, role, limit, offset, type, unreadOnly }) => {
+    // Base WHERE clause
+    let whereClauses = `
       WHERE (
         (audience = 'all') OR
         (audience = 'admin' AND $1 = ANY(ARRAY['admin', 'super admin'])) OR
         (recipient_id = $2)
       ) AND (expires_at IS NULL OR expires_at > NOW())
     `;
-    const queryParams = [role, userId];
 
+    const queryParams = [role, userId];
+    let paramIndex = 3;
+
+    // Filter by type
+    if (type) {
+      whereClauses += ` AND type = $${paramIndex}`;
+      queryParams.push(type);
+      paramIndex++;
+    }
+
+    // Filter by unread only
+    if (unreadOnly) {
+      whereClauses += ` AND read_at IS NULL`;
+    }
+
+    // Count query
     const countQuery = `SELECT COUNT(*) FROM "Notifications" ${whereClauses}`;
     const totalResult = await db.query(countQuery, queryParams);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
 
+    // Select query
     const selectQuery = `
       SELECT * FROM "Notifications" ${whereClauses}
-      ORDER BY created_at DESC
-      LIMIT $3 OFFSET $4;
+      ORDER BY 
+        priority DESC,
+        created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1};
     `;
     const result = await db.query(selectQuery, [...queryParams, limit, offset]);
+
     return { notifications: result.rows, totalItems };
   },
 

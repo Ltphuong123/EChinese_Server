@@ -13,6 +13,24 @@ router.post("/auth/login", userController.login);
 router.post("/auth/google-login", userController.googleLogin);
 router.post("/auth/refresh-token", userController.refreshToken);
 router.post("/auth/logout", userController.logout);
+// Debug endpoint - xóa sau khi debug xong
+router.get("/auth/debug-token", authMiddleware.verifyToken, (req, res) => {
+  const jwt = require('jsonwebtoken');
+  const token = req.headers.authorization?.split(' ')[1];
+  const decoded = jwt.decode(token, { complete: true });
+  const now = Math.floor(Date.now() / 1000);
+  const timeLeft = decoded.payload.exp - now;
+  
+  res.json({
+    issuedAt: new Date(decoded.payload.iat * 1000).toISOString(),
+    expiresAt: new Date(decoded.payload.exp * 1000).toISOString(),
+    timeLeftSeconds: timeLeft,
+    timeLeftHours: (timeLeft / 3600).toFixed(2),
+    timeLeftDays: (timeLeft / 86400).toFixed(2),
+    userId: decoded.payload.id,
+    role: decoded.payload.role
+  });
+});
 router.post(
   "/auth/reset-password",
   authMiddleware.verifyToken,

@@ -133,6 +133,65 @@ const refundService = {
                 }
             }
 
+            // 🔔 GỬI THÔNG BÁO KẾT QUẢ XỬ LÝ HOÀN TIỀN
+            try {
+                const notificationService = require('./notificationService');
+                const paymentInfo = await paymentModel.findById(refundRequest.payment_id);
+                
+                if (action === 'approve') {
+                    // Thông báo chấp nhận hoàn tiền
+                    await notificationService.createNotification({
+                        recipient_id: refundRequest.user_id,
+                        audience: 'user',
+                        type: 'refund_approved',
+                        title: '✅ Yêu cầu hoàn tiền đã được chấp nhận',
+                        content: { 
+                            message: `Yêu cầu hoàn tiền cho gói ${paymentInfo?.package_name || 'đăng ký'} đã được chấp nhận. Tiền sẽ được hoàn về trong 3-5 ngày làm việc.` 
+                        },
+                        redirect_type: 'refund_detail',
+                        data: { 
+                            refund_id: refundId,
+                            subscription_id: paymentInfo?.subscription_id || '',
+                            package_name: paymentInfo?.package_name || '',
+                            refund_amount: String(amount),
+                            currency: 'VND',
+                            refund_method: method,
+                            approved_by: 'admin',
+                            approved_at: new Date().toISOString(),
+                            estimated_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString()
+                        },
+                        priority: 2,
+                        from_system: true
+                    });
+                } else {
+                    // Thông báo từ chối hoàn tiền
+                    await notificationService.createNotification({
+                        recipient_id: refundRequest.user_id,
+                        audience: 'user',
+                        type: 'refund_rejected',
+                        title: '❌ Yêu cầu hoàn tiền đã bị từ chối',
+                        content: { 
+                            message: `Yêu cầu hoàn tiền cho gói ${paymentInfo?.package_name || 'đăng ký'} không được chấp nhận. Lý do: ${notes || 'Không đủ điều kiện hoàn tiền'}` 
+                        },
+                        redirect_type: 'refund_detail',
+                        data: { 
+                            refund_id: refundId,
+                            subscription_id: paymentInfo?.subscription_id || '',
+                            package_name: paymentInfo?.package_name || '',
+                            refund_amount: String(refundRequest.amount || 0),
+                            currency: 'VND',
+                            reason: notes || 'Không đủ điều kiện hoàn tiền',
+                            rejected_by: 'admin',
+                            rejected_at: new Date().toISOString()
+                        },
+                        priority: 2,
+                        from_system: true
+                    });
+                }
+            } catch (error) {
+                console.error('❌ Error sending refund notification:', error);
+            }
+
             return updatedRefund;
 
         } catch (error) {

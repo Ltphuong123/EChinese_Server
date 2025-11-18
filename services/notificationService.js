@@ -2,6 +2,8 @@
 
 const notificationModel = require('../models/notificationModel');
 
+const fcmService = require('./fcmService');
+
 const notificationService = {
   
   getUnreadNotificationCount: async (userId) => {
@@ -9,19 +11,84 @@ const notificationService = {
     return count;
   },
 
-  createNotification: async (payload) => {
-    // TODO: Add validation for payload
-    return await notificationModel.create(payload);
+  createNotification: async (payload, autoPush = true) => {
+    // Tạo notification record
+    const notification = await notificationModel.create(payload);
+
+    // Tự động gửi push notification nếu autoPush = true
+    if (autoPush) {
+      await notificationService.sendPushNotification(notification);
+    }
+
+    return notification;
+  },
+
+  /**
+   * Gửi push notification dựa trên notification record
+   */
+  sendPushNotification: async (notification) => {
+    try {
+      const { recipient_id, audience, title, content, data, redirect_type } = notification;
+
+      // Chuẩn bị payload với format mới
+      const payload = {
+        title,
+        body: content?.message || JSON.stringify(content),
+        data: {
+          notification_id: notification.id,
+          type: notification.type,
+          redirect_type: redirect_type || 'none',
+          ...data, // data đã chứa tất cả thông tin cần thiết
+        },
+      };
+
+      // Gửi theo audience
+      if (audience === 'all') {
+        // Broadcast đến tất cả users
+        await fcmService.sendToAll(payload);
+      } else if (recipient_id) {
+        // Gửi đến user cụ thể
+        await fcmService.sendToUser(recipient_id, payload);
+      }
+
+      // Đánh dấu đã gửi push
+      await notificationModel.publishByIds([notification.id]);
+
+      console.log(`✅ Push notification sent for: ${notification.id}`);
+    } catch (error) {
+      console.error('❌ Error sending push notification:', error);
+    }
   },
 
   getNotificationsForUser: async (options) => {
-    const { userId, role, page, limit } = options;
+    const { userId, role, page, limit, type, unreadOnly } = options;
     const offset = (page - 1) * limit;
 
-    const { notifications, totalItems } = await notificationModel.findAll({ userId, role, limit, offset });
-    
+    // Lấy notifications
+    const { notifications, totalItems } = await notificationModel.findAll({
+      userId,
+      role,
+      limit,
+      offset,
+      type,
+      unreadOnly
+    });
+
+    // Lấy số lượng thông báo chưa đọc
+    const unreadCount = await notificationModel.countUnread(userId);
+
     const totalPages = Math.ceil(totalItems / limit);
-    return { data: notifications, meta: { total: totalItems, page, limit, totalPages } };
+
+    return {
+      data: notifications,
+      meta: {
+        total: totalItems,
+        page,
+        limit,
+        totalPages
+      },
+      unreadCount
+    };
   },
 
   publishNotifications: async (ids) => {
