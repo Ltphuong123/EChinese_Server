@@ -124,6 +124,19 @@ const notificationService = {
     return result;
   },
 
+  /**
+   * Lấy chi tiết một thông báo
+   */
+  getNotificationById: async (notificationId, userId) => {
+    const notification = await notificationModel.findById(notificationId, userId);
+    
+    if (!notification) {
+      throw new Error('Thông báo không tồn tại hoặc bạn không có quyền xem.');
+    }
+
+    return notification;
+  },
+
 };
 
 module.exports = notificationService;

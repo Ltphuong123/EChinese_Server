@@ -10,6 +10,12 @@ const BASE_PATH = '/notifications';
 // --- User Routes (yêu cầu đăng nhập) ---
 router.get(BASE_PATH, authMiddleware.verifyToken, notificationController.getNotifications);
 
+router.get(
+  '/notifications/:id',
+  authMiddleware.verifyToken,
+  notificationController.getNotificationById
+);
+
 router.post(
   '/notifications/mark-read',
   authMiddleware.verifyToken,

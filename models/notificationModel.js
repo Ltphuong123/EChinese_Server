@@ -150,6 +150,41 @@ const notificationModel = {
   },
 
   /**
+   * Lấy chi tiết một thông báo cụ thể
+   * @param {string} notificationId - ID của thông báo
+   * @param {string} userId - ID của user đang xem
+   * @returns {object} Thông tin chi tiết thông báo
+   */
+  findById: async (notificationId, userId) => {
+    const queryText = `
+      SELECT 
+        n.*,
+        sender.id as sender_id,
+        sender.username as sender_username,
+        sender.name as sender_name,
+        sender.email as sender_email,
+        sender.avatar_url as sender_avatar,
+        recipient.id as recipient_id,
+        recipient.username as recipient_username,
+        recipient.name as recipient_name,
+        recipient.email as recipient_email,
+        recipient.avatar_url as recipient_avatar
+      FROM "Notifications" n
+      LEFT JOIN "Users" sender ON n.created_by = sender.id
+      LEFT JOIN "Users" recipient ON n.recipient_id = recipient.id
+      WHERE n.id = $1
+        AND (
+          n.recipient_id = $2 OR 
+          n.audience = 'all' OR 
+          (n.audience = 'admin' AND $2 IN (SELECT id FROM "Users" WHERE role IN ('admin', 'super admin')))
+        );
+    `;
+    
+    const result = await db.query(queryText, [notificationId, userId]);
+    return result.rows[0] || null;
+  },
+
+  /**
    * Lấy tất cả thông báo đã gửi và đã nhận của admin
    * @param {string} adminId - ID của admin
    * @param {object} options - { page, limit }

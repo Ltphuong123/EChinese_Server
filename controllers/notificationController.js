@@ -298,6 +298,83 @@ const notificationController = {
   },
 
   /**
+   * GET /api/notifications/:id
+   * Lấy chi tiết một thông báo
+   * 
+   * Path params:
+   * - id: uuid (notification ID)
+   * 
+   * Response:
+   * - success: boolean
+   * - data: notification object with full details
+   */
+  getNotificationById: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      const notification = await notificationService.getNotificationById(id, userId);
+
+      // Tự động đánh dấu đã đọc khi xem chi tiết
+      if (!notification.read_at) {
+        await notificationService.markNotificationsAsRead([id], userId, true);
+        notification.read_at = new Date();
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Lấy chi tiết thông báo thành công',
+        data: {
+          id: notification.id,
+          type: notification.type,
+          title: notification.title,
+          content: notification.content,
+          redirect_type: notification.redirect_type || 'none',
+          data: notification.data || {},
+          priority: notification.priority,
+          is_read: !!notification.read_at,
+          read_at: notification.read_at,
+          created_at: notification.created_at,
+          expires_at: notification.expires_at,
+          from_system: notification.from_system,
+          audience: notification.audience,
+          is_push_sent: notification.is_push_sent,
+          // Thông tin người gửi (nếu có)
+          sender: notification.sender_id ? {
+            id: notification.sender_id,
+            username: notification.sender_username,
+            name: notification.sender_name,
+            email: notification.sender_email,
+            avatar_url: notification.sender_avatar
+          } : null,
+          // Thông tin người nhận (nếu có)
+          recipient: notification.recipient_id ? {
+            id: notification.recipient_id,
+            username: notification.recipient_username,
+            name: notification.recipient_name,
+            email: notification.recipient_email,
+            avatar_url: notification.recipient_avatar
+          } : null
+        }
+      });
+
+    } catch (error) {
+      if (error.message.includes('không tồn tại') || error.message.includes('không có quyền')) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+      console.error('Error getting notification detail:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi lấy chi tiết thông báo',
+        error: error.message
+      });
+    }
+  },
+
+  /**
    * GET /api/admin/notifications/all
    * Lấy tất cả thông báo đã gửi và đã nhận của admin
    * 
