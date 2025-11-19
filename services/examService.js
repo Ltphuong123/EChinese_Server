@@ -11,7 +11,9 @@ const examService = {
     // Ví dụ: kiểm tra xem exam_type_id có tồn tại không, v.v.
     // Hiện tại, chúng ta chỉ cần truyền dữ liệu xuống.
     const newExam = await examModel.createFullExam(examData, userId);
-    return newExam;
+    // Trả về format đơn giản
+    const simpleFormat = await examModel.findByIdSimpleFormat(newExam.id);
+    return simpleFormat;
   },
 
   getExamById: async (id) => {
@@ -58,9 +60,6 @@ const examService = {
 
     if (!hasAttempts) {
       // ===== TRƯỜNG HỢP 1: CHƯA CÓ AI LÀM BÀI =====
-      // Unpublish trước khi sửa
-      await examModel.updateStatus(examId, { is_published: false });
-
       // Sửa bình thường
       const updatedExam = await examModel.updateFullExam(
         examId,
@@ -72,11 +71,14 @@ const examService = {
         throw new Error("Bài thi không tồn tại.");
       }
 
-      // Thêm version_at vào response
-      updatedExam.version_at = null;
+      // Publish bài thi luôn
+      await examModel.updateStatus(examId, { is_published: true });
+
+      // Lấy lại thông tin theo format đơn giản sau khi publish
+      const publishedExam = await examModel.findByIdSimpleFormat(examId);
 
       // Trả về mảng chỉ có 1 đề thi
-      return [updatedExam];
+      return [publishedExam];
     } else {
       // ===== TRƯỜNG HỢP 2: ĐÃ CÓ NGƯỜI LÀM BÀI =====
       const client = await db.pool.connect();
@@ -96,20 +98,18 @@ const examService = {
 
         const oldExam = oldExamResult.rows[0];
 
-        // 2. Unpublish bài thi cũ và set version_at
-        const versionAtTime = new Date();
+        // 2. Unpublish bài thi cũ và set version_at = updated_at
         await client.query(
           `UPDATE "Exams" 
            SET is_published = false, 
-               version_at = $2,
+               version_at = created_at,
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $1`,
-          [examId, versionAtTime]
+          [examId]
         );
 
-        // 3. Lấy cấu trúc đầy đủ của bài thi cũ
-        const oldExamFull = await examModel.findById(examId);
-        oldExamFull.version_at = versionAtTime;
+        // 3. Lấy cấu trúc đơn giản của bài thi cũ (sau khi update)
+        const oldExamSimple = await examModel.findByIdSimpleFormat(examId);
 
         // 4. Chuẩn bị dữ liệu cho bài thi mới
         const newExamData = {
@@ -117,7 +117,7 @@ const examService = {
           name: oldExam.name, // Giữ nguyên tên cũ
           exam_type_id: oldExam.exam_type_id,
           exam_level_id: oldExam.exam_level_id,
-          is_published: false, // Unpublish bản mới
+          is_published: true, // Publish bản mới
         };
 
         // 5. Tạo bài thi mới với cấu trúc đã cập nhật
@@ -125,11 +125,11 @@ const examService = {
 
         await client.query("COMMIT");
 
-        // Thêm version_at vào response
-        newExam.version_at = null;
+        // Lấy format đơn giản của bài thi mới
+        const newExamSimple = await examModel.findByIdSimpleFormat(newExam.id);
 
         // Trả về mảng gồm 2 đề thi: [đề cũ, đề mới]
-        return [oldExamFull, newExam];
+        return [oldExamSimple, newExamSimple];
       } catch (error) {
         await client.query("ROLLBACK");
         throw error;
@@ -218,7 +218,9 @@ const examService = {
     // Tái sử dụng hàm createFullExam một cách hoàn hảo
     const duplicatedExam = await examModel.createFullExam(newExamData, userId);
 
-    return duplicatedExam;
+    // Trả về format đơn giản
+    const simpleFormat = await examModel.findByIdSimpleFormat(duplicatedExam.id);
+    return simpleFormat;
   },
 
   /////////////user
@@ -394,10 +396,10 @@ const examService = {
       throw new Error("Bài thi không tồn tại.");
     }
 
-    // Bước 2: Lấy lại toàn bộ cấu trúc bài thi bằng hàm findById đã có
-    const fullExamStructure = await examModel.findById(examId);
+    // Bước 2: Lấy lại format đơn giản
+    const simpleFormat = await examModel.findByIdSimpleFormat(examId);
 
-    return fullExamStructure;
+    return simpleFormat;
   },
 
   /**
@@ -425,8 +427,8 @@ const examService = {
       throw new Error("Bài thi không tồn tại.");
     }
 
-    const fullExamStructure = await examModel.findById(examId);
-    return fullExamStructure;
+    const simpleFormat = await examModel.findByIdSimpleFormat(examId);
+    return simpleFormat;
   },
 
   forceDeleteExam: async (examId) => {

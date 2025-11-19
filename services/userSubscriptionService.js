@@ -427,6 +427,141 @@ const userSubscriptionService = {
 
 
 
+  /**
+   * Kiểm tra và gửi thông báo cho các gói đăng ký sắp hết hạn hoặc đã hết hạn
+   * Hàm này nên được gọi bởi cron job hàng ngày
+   */
+  checkAndNotifyExpiringSubscriptions: async () => {
+    try {
+      const now = new Date();
+      const threeDaysLater = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+      
+      // Lấy tất cả gói đang active và có expiry_date
+      const expiringSubscriptions = await db.query(`
+        SELECT 
+          us.id as user_subscription_id,
+          us.user_id,
+          us.subscription_id,
+          us.expiry_date,
+          us.auto_renew,
+          s.name as subscription_name,
+          s.price,
+          s.duration_months,
+          u.name as user_name,
+          u.email as user_email
+        FROM "UserSubscriptions" us
+        JOIN "Subscriptions" s ON us.subscription_id = s.id
+        JOIN "Users" u ON us.user_id = u.id
+        WHERE us.is_active = true 
+          AND us.expiry_date IS NOT NULL
+          AND us.expiry_date <= $1
+        ORDER BY us.expiry_date ASC
+      `, [threeDaysLater]);
+
+      const notificationService = require('./notificationService');
+      let expiredCount = 0;
+      let expiringCount = 0;
+
+      for (const sub of expiringSubscriptions.rows) {
+        const expiryDate = new Date(sub.expiry_date);
+        const daysUntilExpiry = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+
+        // Gói đã hết hạn
+        if (daysUntilExpiry <= 0) {
+          // Hủy gói và chuyển về Free
+          const client = await db.pool.connect();
+          try {
+            await client.query('BEGIN');
+            
+            // Hủy gói hiện tại
+            await userSubscriptionModel.update(sub.user_subscription_id, {
+              is_active: false,
+              auto_renew: false
+            }, client);
+            
+            // Chuyển về gói Free
+            await userSubscriptionService._assignAndResetQuotasForPlan(
+              sub.user_id, 
+              FREE_PLAN_ID, 
+              client
+            );
+            
+            await client.query('COMMIT');
+            
+            // Gửi thông báo hết hạn
+            await notificationService.createNotification({
+              recipient_id: sub.user_id,
+              audience: 'user',
+              type: 'system',
+              title: '⏰ Gói đăng ký của bạn đã hết hạn',
+              content: {
+                message: `Gói "${sub.subscription_name}" của bạn đã hết hạn. Bạn đã được chuyển về gói Miễn phí. Gia hạn ngay để tiếp tục sử dụng các tính năng cao cấp.`,
+                action: 'subscription_expired',
+                subscription_name: sub.subscription_name,
+                expired_date: expiryDate.toISOString()
+              },
+              redirect_type: 'subscription',
+              data: {
+                subscription_id: sub.subscription_id,
+                subscription_name: sub.subscription_name,
+                expired_date: expiryDate.toISOString(),
+                was_auto_renew: sub.auto_renew,
+                price: sub.price,
+                duration_months: sub.duration_months
+              },
+              priority: 2,
+              from_system: true
+            }, true); // auto push = true
+            
+            expiredCount++;
+          } catch (error) {
+            await client.query('ROLLBACK');
+            console.error(`Error processing expired subscription for user ${sub.user_id}:`, error);
+          } finally {
+            client.release();
+          }
+        }
+        // Gói sắp hết hạn (còn 1-3 ngày)
+        else if (daysUntilExpiry <= 3 && daysUntilExpiry > 0) {
+          await notificationService.createNotification({
+            recipient_id: sub.user_id,
+            audience: 'user',
+            type: 'system',
+            title: `⏰ Gói đăng ký sắp hết hạn trong ${daysUntilExpiry} ngày`,
+            content: {
+              message: `Gói "${sub.subscription_name}" của bạn sẽ hết hạn vào ${expiryDate.toLocaleDateString('vi-VN')}. Gia hạn ngay để không bị gián đoạn dịch vụ.`,
+              action: 'subscription_expiring_soon',
+              subscription_name: sub.subscription_name,
+              days_remaining: daysUntilExpiry,
+              expiry_date: expiryDate.toISOString()
+            },
+            redirect_type: 'subscription',
+            data: {
+              subscription_id: sub.subscription_id,
+              subscription_name: sub.subscription_name,
+              expiry_date: expiryDate.toISOString(),
+              days_remaining: daysUntilExpiry,
+              auto_renew: sub.auto_renew,
+              price: sub.price,
+              duration_months: sub.duration_months
+            },
+            priority: 2,
+            from_system: true
+          }, true); // auto push = true
+          
+          expiringCount++;
+        }
+      }
+
+      console.log(`✅ Subscription expiry check completed: ${expiredCount} expired, ${expiringCount} expiring soon`);
+      return { expiredCount, expiringCount };
+      
+    } catch (error) {
+      console.error('❌ Error checking expiring subscriptions:', error);
+      throw error;
+    }
+  },
+
 };
 
 module.exports = userSubscriptionService;

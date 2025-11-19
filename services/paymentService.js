@@ -37,7 +37,6 @@ const paymentService = {
         throw new Error('This plan is free and does not require payment.');
     }
 
-
     // **QUAN TRỌNG**: Thông tin này nên được lưu trong biến môi trường (.env)
     // thay vì hard-code để dễ dàng thay đổi và bảo mật.
     const bankInfo = {
@@ -46,6 +45,35 @@ const paymentService = {
       accountName: process.env.BANK_ACCOUNT_NAME || "NGUYEN VAN A",
       branch: process.env.BANK_BRANCH || "Chi nhánh Hà Nội"
     };
+
+    // Gửi thông báo hướng dẫn thanh toán
+    try {
+      const notificationService = require('./notificationService');
+      await notificationService.createNotification({
+        recipient_id: userId,
+        audience: 'user',
+        type: 'system',
+        title: '💳 Hướng dẫn thanh toán',
+        content: {
+          message: `Vui lòng chuyển khoản ${subscription.price}đ để kích hoạt gói "${subscription.name}". Sau khi chuyển khoản, vui lòng chờ xác nhận từ hệ thống.`,
+          action: 'payment_instruction',
+          subscription_name: subscription.name,
+          amount: subscription.price
+        },
+        redirect_type: 'subscription',
+        data: {
+          subscription_id: subscriptionId,
+          subscription_name: subscription.name,
+          amount: subscription.price,
+          payment_method: paymentMethod,
+          bank_info: bankInfo,
+          created_at: new Date().toISOString()
+        }
+      }, true); // auto push = true
+    } catch (notifError) {
+      console.error('Error sending payment instruction notification:', notifError);
+      // Không throw để không ảnh hưởng đến việc tạo yêu cầu thanh toán
+    }
 
     return {
       transferInfo: {
@@ -127,6 +155,62 @@ const paymentService = {
       // Nếu xác nhận thành công, kích hoạt gói cho người dùng
       if (status === 'manual_confirmed') {
         await activateSubscriptionForPayment(updatedPayment, client);
+        
+        // Lấy thông tin gói đăng ký
+        const subscription = await subscriptionModel.findById(updatedPayment.subscription_id);
+        
+        // Gửi thông báo xác nhận thanh toán thành công
+        const notificationService = require('./notificationService');
+        await notificationService.createNotification({
+          recipient_id: updatedPayment.user_id,
+          audience: 'user',
+          type: 'system',
+          title: '✅ Thanh toán đã được xác nhận',
+          content: {
+            message: `Thanh toán của bạn đã được xác nhận thành công. Gói "${subscription?.name || 'Premium'}" đã được kích hoạt.`,
+            action: 'payment_confirmed',
+            payment_amount: updatedPayment.amount,
+            subscription_name: subscription?.name || 'Premium'
+          },
+          redirect_type: 'subscription',
+          data: {
+            payment_id: updatedPayment.id,
+            subscription_id: updatedPayment.subscription_id,
+            subscription_name: subscription?.name || 'Premium',
+            amount: updatedPayment.amount,
+            payment_method: updatedPayment.payment_method,
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: adminId
+          }
+        }, true); // auto push = true
+      } else if (status === 'failed') {
+        // Lấy thông tin gói đăng ký
+        const subscription = await subscriptionModel.findById(updatedPayment.subscription_id);
+        
+        // Gửi thông báo thanh toán bị từ chối
+        const notificationService = require('./notificationService');
+        await notificationService.createNotification({
+          recipient_id: updatedPayment.user_id,
+          audience: 'user',
+          type: 'system',
+          title: '❌ Thanh toán bị từ chối',
+          content: {
+            message: `Thanh toán của bạn cho gói "${subscription?.name || 'Premium'}" đã bị từ chối. Vui lòng kiểm tra lại thông tin thanh toán hoặc liên hệ hỗ trợ.`,
+            action: 'payment_failed',
+            payment_amount: updatedPayment.amount,
+            subscription_name: subscription?.name || 'Premium'
+          },
+          redirect_type: 'subscription',
+          data: {
+            payment_id: updatedPayment.id,
+            subscription_id: updatedPayment.subscription_id,
+            subscription_name: subscription?.name || 'Premium',
+            amount: updatedPayment.amount,
+            payment_method: updatedPayment.payment_method,
+            failed_at: new Date().toISOString(),
+            rejected_by: adminId
+          }
+        }, true); // auto push = true
       }
       
       await client.query('COMMIT');

@@ -20,4 +20,8 @@ router.put(`${basePath}/:id`, userSubscriptionController.updateDetails);
 
 router.post(basePath, userSubscriptionController.addSubscription);
 
+// POST /api/monetization/user-subscriptions/check-expiring
+// Endpoint để admin trigger kiểm tra gói hết hạn thủ công
+router.post(`${basePath}/check-expiring`, userSubscriptionController.checkExpiringSubscriptions);
+
 module.exports = router;

@@ -89,7 +89,8 @@ const postModel = {
         ) as badge,
         (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count,
         EXISTS (SELECT 1 FROM "PostLikes" pl WHERE pl.post_id = p.id AND pl.user_id = $1) as "isLiked",
-        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $1 AND c.deleted_at IS NULL) as "isCommented"
+        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $1 AND c.deleted_at IS NULL) as "isCommented",
+        EXISTS (SELECT 1 FROM "PostViews" pv WHERE pv.post_id = p.id AND pv.user_id = $1) as "isViewed"
       ${baseQuery}
       ORDER BY p.is_pinned DESC, p.created_at DESC
       LIMIT $2 OFFSET $3;
@@ -362,7 +363,8 @@ const postModel = {
         
         -- Trạng thái tương tác của người dùng hiện tại
         EXISTS (SELECT 1 FROM "PostLikes" pl WHERE pl.post_id = p.id AND pl.user_id = $2) as "isLiked",
-        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $2 AND c.deleted_at IS NULL) as "isCommented"
+        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $2 AND c.deleted_at IS NULL) as "isCommented",
+        EXISTS (SELECT 1 FROM "PostViews" pv WHERE pv.post_id = p.id AND pv.user_id = $2) as "isViewed"
         
       ${baseQuery}
       ORDER BY p.created_at DESC
@@ -482,7 +484,8 @@ const postModel = {
         
         -- Trạng thái tương tác của người dùng hiện tại
         EXISTS (SELECT 1 FROM "PostLikes" pl WHERE pl.post_id = p.id AND pl.user_id = $1) as "isLiked",
-        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $1 AND c.deleted_at IS NULL) as "isCommented"
+        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $1 AND c.deleted_at IS NULL) as "isCommented",
+        EXISTS (SELECT 1 FROM "PostViews" pv WHERE pv.post_id = p.id AND pv.user_id = $1) as "isViewed"
         
       ${baseQuery}
       ORDER BY p.created_at DESC
@@ -768,6 +771,19 @@ const postModel = {
     const queryText = `
       SELECT 1 FROM "Comments" 
       WHERE post_id = $1 AND user_id = $2 AND deleted_at IS NULL
+      LIMIT 1;
+    `;
+    const result = await db.query(queryText, [postId, userId]);
+    return result.rows.length > 0;
+  },
+
+  // Kiểm tra user đã xem post này chưa
+  checkUserViewed: async (postId, userId) => {
+    if (!userId) return false;
+
+    const queryText = `
+      SELECT 1 FROM "PostViews" 
+      WHERE post_id = $1 AND user_id = $2
       LIMIT 1;
     `;
     const result = await db.query(queryText, [postId, userId]);

@@ -88,40 +88,6 @@ const postService = {
       // Nếu chưa like -> Thêm like
       await postModel.addLike(postId, userId);
       action = "liked";
-
-      // 🔔 GỬI THÔNG BÁO KHI LIKE (chỉ khi không phải tự like bài của mình)
-      if (postExists.user_id !== userId) {
-        const notificationService = require('./notificationService');
-        const userModel = require('../models/userModel');
-        
-        try {
-          const liker = await userModel.findUserById(userId);
-          const likerName = liker?.username || 'Ai đó';
-          const postTitle = postExists.title?.substring(0, 50) || 'của bạn';
-          
-          await notificationService.createNotification({
-            recipient_id: postExists.user_id,
-            audience: 'user',
-            type: 'community',
-            title: `❤️ ${likerName} đã thích bài viết của bạn`,
-            content: { 
-              message: `${likerName} đã thích bài viết "${postTitle}"` 
-            },
-            redirect_type: 'post',
-            data: { 
-              post_id: postId,
-              post_title: postTitle,
-              liker_id: userId,
-              liker_name: likerName,
-              liker_avatar: liker?.avatar || ''
-            },
-            priority: 1
-          });
-        } catch (error) {
-          console.error('❌ Error sending like notification:', error);
-          // Không throw error để không ảnh hưởng đến chức năng like
-        }
-      }
     }
 
     // Cập nhật lại số lượng like trong bảng Posts
@@ -322,11 +288,12 @@ const postService = {
     // });
   },
 
-  // Lấy thông tin user đã like/comment cho 1 post
+  // Lấy thông tin user đã like/comment/view cho 1 post
   getPostUserInteractions: async (postId, userId) => {
     const isLiked = await postModel.checkUserLiked(postId, userId);
     const isCommented = await postModel.checkUserCommented(postId, userId);
-    return { isLiked, isCommented };
+    const isViewed = await postModel.checkUserViewed(postId, userId);
+    return { isLiked, isCommented, isViewed };
   },
 
   // Lấy thông tin user đã like/comment cho nhiều posts

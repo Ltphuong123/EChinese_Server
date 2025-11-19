@@ -464,9 +464,51 @@ const userModel = {
   },
 
   updateUserBadge: async (userId, newBadgeLevel) => {
-    const queryText = `UPDATE "Users" SET badge_level = $1 WHERE id = $2 RETURNING id, username, badge_level;`;
+    const queryText = `UPDATE "Users" SET badge_level = $1 WHERE id = $2 RETURNING id, username, badge_level, community_points;`;
     const result = await db.query(queryText, [newBadgeLevel, userId]);
-    return result.rows[0];
+    const updatedUser = result.rows[0];
+
+    // Gửi thông báo khi nhận huy hiệu mới
+    try {
+      const badgeQuery = `SELECT * FROM "BadgeLevels" WHERE level = $1`;
+      const badgeResult = await db.query(badgeQuery, [newBadgeLevel]);
+      const badge = badgeResult.rows[0];
+      
+      if (badge) {
+        const notificationService = require('../services/notificationService');
+        await notificationService.createNotification({
+          recipient_id: userId,
+          audience: 'user',
+          type: 'system',
+          title: '🎖️ Bạn đã nhận huy hiệu mới!',
+          content: {
+            message: `Chúc mừng! Bạn đã đạt huy hiệu "${badge.name}". ${badge.rule_description || ''}`,
+            action: 'badge_unlocked',
+            badge_name: badge.name,
+            badge_level: badge.level,
+            min_points: badge.min_points
+          },
+          redirect_type: 'profile',
+          data: {
+            badge_id: badge.id,
+            badge_level: badge.level,
+            badge_name: badge.name,
+            badge_icon: badge.icon,
+            badge_description: badge.rule_description,
+            min_points: badge.min_points,
+            current_points: updatedUser.community_points,
+            unlocked_at: new Date().toISOString()
+          },
+          priority: 2,
+          from_system: true
+        }, true); // auto push = true
+      }
+    } catch (notifError) {
+      console.error('Error sending badge notification:', notifError);
+      // Không throw để không ảnh hưởng đến việc cập nhật badge
+    }
+
+    return updatedUser;
   },
 
   addAchievement: async (options) => {
@@ -502,7 +544,46 @@ const userModel = {
 
       await client.query("COMMIT");
 
-      return insertResult.rows[0];
+      const userAchievement = insertResult.rows[0];
+
+      // Gửi thông báo khi đạt achievement
+      try {
+        const achievementModel = require('./achievementModel');
+        const achievement = await achievementModel.findById(achievementId);
+        
+        if (achievement) {
+          const notificationService = require('../services/notificationService');
+          await notificationService.createNotification({
+            recipient_id: userId,
+            audience: 'user',
+            type: 'system',
+            title: '🏆 Bạn đã đạt thành tích mới!',
+            content: {
+              message: `Chúc mừng! Bạn đã đạt thành tích "${achievement.name}". ${achievement.description || ''}`,
+              action: 'achievement_unlocked',
+              achievement_name: achievement.name,
+              points_earned: pointsToAdd || achievement.points || 0
+            },
+            redirect_type: 'achievement',
+            data: {
+              achievement_id: achievementId,
+              achievement_name: achievement.name,
+              achievement_description: achievement.description,
+              achievement_icon: achievement.icon,
+              points_earned: pointsToAdd || achievement.points || 0,
+              progress: progress,
+              unlocked_at: new Date().toISOString()
+            },
+            priority: 2,
+            from_system: true
+          }, true); // auto push = true
+        }
+      } catch (notifError) {
+        console.error('Error sending achievement notification:', notifError);
+        // Không throw để không ảnh hưởng đến việc gán achievement
+      }
+
+      return userAchievement;
     } catch (error) {
       await client.query("ROLLBACK");
       console.error("Lỗi trong transaction khi gán thành tích:", error);

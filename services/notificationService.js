@@ -45,7 +45,7 @@ const notificationService = {
       };
 
       // Gửi theo audience
-      if (audience === 'all') {
+      if (audience === 'all'|| audience === 'admin'|| audience === 'user') {
         // Broadcast đến tất cả users
         await fcmService.sendToAll(payload);
       } else if (recipient_id) {
@@ -114,6 +114,14 @@ const notificationService = {
     
     // Bạn có thể trả về số lượng đã cập nhật nếu cần
     return updatedCount;
+  },
+
+  /**
+   * Lấy tất cả thông báo đã gửi và đã nhận của admin
+   */
+  getAdminNotifications: async (adminId, options) => {
+    const result = await notificationModel.findAdminNotifications(adminId, options);
+    return result;
   },
 
 };

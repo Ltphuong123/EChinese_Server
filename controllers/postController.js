@@ -28,9 +28,39 @@ const postController = {
           ...postData,
           user_id: userId,
         })
-        .then((result) => {
+        .then(async (result) => {
           if (result.removed) {
             console.log(`Post ${newPost.id} auto-removed:`, result.reason);
+            
+            // Gửi thông báo cho người dùng khi AI gỡ bài
+            const notificationModel = require("../models/notificationModel");
+            const contentPreview = typeof postData.content === 'string' 
+              ? postData.content.substring(0, 100) 
+              : (postData.content?.text || postData.content?.html || '').substring(0, 100);
+            
+            const notificationService = require("../services/notificationService");
+            await notificationService.createNotification({
+              recipient_id: userId,
+              audience: "user",
+              type: "violation",
+              title: "🤖 Bài viết của bạn đã bị gỡ tự động",
+              content: {
+                message: result.reason || "Bài viết vi phạm quy định cộng đồng",
+                violation_severity: result.severity || "medium",
+                violation_type: "post",
+                detected_by: "AI"
+              },
+              redirect_type: "post",
+              data: {
+                post_id: newPost.id,
+                post_title: postData.title,
+                post_preview: contentPreview,
+                violation_reason: result.reason,
+                severity: result.severity || "medium",
+                flagged_content: result.flaggedContent || null,
+                auto_detected: true
+              }
+            }, true); // auto push = true
           }
         })
         .catch((error) => {
@@ -148,6 +178,7 @@ const postController = {
           comment_count: post.comment_count || 0,
           isLiked: interaction.isLiked,
           isCommented: interaction.isCommented,
+          isViewed: interaction.isViewed,
         };
       });
       res.status(200).json({ data: transformed, meta: result.meta });
@@ -215,6 +246,7 @@ const postController = {
         comment_count: post.comment_count || 0,
         isLiked: userInteraction.isLiked,
         isCommented: userInteraction.isCommented,
+        isViewed: userInteraction.isViewed,
       };
       return res.status(200).json(response);
     } catch (error) {
@@ -288,6 +320,7 @@ const postController = {
         comment_count: freshPost.comment_count || 0,
         isLiked: userInteraction.isLiked,
         isCommented: userInteraction.isCommented,
+        isViewed: userInteraction.isViewed,
       };
 
       return res.status(200).json({
@@ -505,14 +538,54 @@ const postController = {
             violationInput
           );
 
-          // Gửi thông báo tới người dùng
-          await require("../models/notificationModel").create({
+          // Tạo preview của nội dung bài viết
+          const contentPreview = typeof existing.content === 'string' 
+            ? existing.content.substring(0, 100) 
+            : (existing.content?.text || existing.content?.html || '').substring(0, 100);
+
+          // Lấy thông tin chi tiết các rule bị vi phạm
+          const db = require("../config/db");
+          let violatedRulesDetail = [];
+          if (violationInput.ruleIds && violationInput.ruleIds.length > 0) {
+            const rulesResult = await db.query(
+              `SELECT id, title, description, severity_default FROM "CommunityRules" WHERE id = ANY($1::uuid[])`,
+              [violationInput.ruleIds]
+            );
+            violatedRulesDetail = rulesResult.rows.map(r => ({
+              id: r.id,
+              title: r.title,
+              description: r.description,
+              severity: r.severity_default
+            }));
+          }
+
+          // Gửi thông báo vi phạm chi tiết với thông tin bài viết
+          const notificationService = require("../services/notificationService");
+          await notificationService.createNotification({
             recipient_id: violationInput.userId,
             audience: "user",
-            type: "community",
-            title: "Bài viết của bạn đã bị gỡ",
-            content: JSON.stringify({ html: violation.reason }),
-          });
+            type: "violation",
+            title: "⚠️ Bài viết của bạn đã bị gỡ do vi phạm",
+            content: {
+              message: violation.reason,
+              violation_severity: violationInput.severity,
+              violation_type: "post",
+              detected_by: "admin",
+              violated_rules_count: violatedRulesDetail.length
+            },
+            redirect_type: "post",
+            data: {
+              post_id: postId,
+              post_title: existing.title,
+              post_preview: contentPreview,
+              violation_reason: violation.reason,
+              severity: violationInput.severity,
+              violated_rules: violatedRulesDetail,
+              removed_by: deletedBy,
+              removed_at: new Date().toISOString(),
+              resolution: violation.resolution || violation.reason
+            }
+          }, true); // auto push = true
         }
       } else if (action === "restore") {
         // Validate required fields for restore action
@@ -523,7 +596,9 @@ const postController = {
           });
         }
 
-        const { post_update } = payload;
+        const { post_update, restore_reason } = payload;
+        const isAdminRestore = adminId !== existing.user_id;
+        const restoreReason = restore_reason || post_update.restore_reason || "Bài viết đã được xem xét lại và khôi phục.";
 
         // Khôi phục bài viết
         await postService.updatePostStatus(postId, {
@@ -533,16 +608,49 @@ const postController = {
           deleted_reason: null,
         });
 
-        // Gửi thông báo tới người dùng
-        await require("../models/notificationModel").create({
-          recipient_id: existing.user_id,
-          audience: "user",
-          type: "community",
-          title: "Bài viết của bạn đã được khôi phục",
-          content: JSON.stringify({
-            html: "Bài viết của bạn đã được xem xét lại và khôi phục.",
-          }),
-        });
+        // Chỉ gửi thông báo và xóa vi phạm nếu admin/super admin khôi phục bài của người khác
+        if (isAdminRestore) {
+          // Tìm và xóa vi phạm liên quan đến bài viết này (nếu có)
+          const moderationModel = require("../models/moderationModel");
+          const violations = await moderationModel.findViolationsByTarget("post", postId);
+          
+          if (violations && violations.length > 0) {
+            // Xóa tất cả vi phạm liên quan đến bài viết này
+            for (const violation of violations) {
+              await moderationModel.deleteViolation(violation.id);
+            }
+          }
+
+          // Tạo preview của nội dung bài viết
+          const contentPreview = typeof existing.content === 'string' 
+            ? existing.content.substring(0, 100) 
+            : (existing.content?.text || existing.content?.html || '').substring(0, 100);
+
+          // Gửi thông báo chi tiết tới người dùng với lý do khôi phục
+          const notificationService = require("../services/notificationService");
+          await notificationService.createNotification({
+            recipient_id: existing.user_id,
+            audience: "user",
+            type: "community",
+            title: "✅ Bài viết của bạn đã được khôi phục",
+            content: {
+              message: restoreReason,
+              action: "post_restored",
+              violations_removed: violations ? violations.length : 0,
+              restore_reason: restoreReason
+            },
+            redirect_type: "post",
+            data: {
+              post_id: postId,
+              post_title: existing.title,
+              post_preview: contentPreview,
+              restored_by: adminId,
+              restored_at: new Date().toISOString(),
+              violations_cleared: violations ? violations.length : 0,
+              restore_reason: restoreReason
+            }
+          }, true); // auto push = true
+        }
       }
 
       // Lấy lại bài viết sau thay đổi
@@ -595,6 +703,7 @@ const postController = {
         comment_count: fresh.comment_count || 0,
         isLiked: userInteraction.isLiked,
         isCommented: userInteraction.isCommented,
+        isViewed: userInteraction.isViewed,
       };
 
       return res.status(200).json(response);
@@ -615,7 +724,54 @@ const postController = {
       const { postId } = req.params;
       const userId = req.user.id; // Lấy từ token
 
+      // Lấy thông tin bài viết để biết chủ bài viết
+      const post = await postService.getPostById(postId);
+      if (!post) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "Bài viết không tồn tại." 
+        });
+      }
+
       const result = await postService.toggleLike(postId, userId);
+
+      // Gửi thông báo khi có người like (không phải tự like)
+      if (result.action === "liked" && userId !== post.user_id) {
+        const notificationModel = require("../models/notificationModel");
+        const userModel = require("../models/userModel");
+        
+        // Lấy thông tin người like
+        const liker = await userModel.findUserById(userId);
+        
+        // Tạo preview của nội dung bài viết
+        const contentPreview = typeof post.content === 'string' 
+          ? post.content.substring(0, 100) 
+          : (post.content?.text || post.content?.html || '').substring(0, 100);
+        
+        const notificationService = require("../services/notificationService");
+        await notificationService.createNotification({
+          recipient_id: post.user_id,
+          audience: "user",
+          type: "community",
+          title: "❤️ Có người thích bài viết của bạn",
+          content: {
+            message: `${liker?.name || 'Một người dùng'} đã thích bài viết "${post.title}" của bạn.`,
+            action: "post_liked",
+            liker_name: liker?.name || 'Người dùng'
+          },
+          redirect_type: "post",
+          data: {
+            post_id: postId,
+            post_title: post.title,
+            post_preview: contentPreview,
+            liker_id: userId,
+            liker_name: liker?.name || 'Người dùng',
+            liker_avatar: liker?.avatar_url || null,
+            total_likes: result.likes,
+            liked_at: new Date().toISOString()
+          }
+        }, true); // auto push = true
+      }
 
       res.status(200).json({
         success: true,

@@ -238,6 +238,16 @@ const moderationModel = {
     return result.rowCount;
   },
 
+  findViolationsByTarget: async (targetType, targetId) => {
+    const query = `
+      SELECT * FROM "Violations" 
+      WHERE target_type = $1 AND target_id = $2
+      ORDER BY created_at DESC;
+    `;
+    const result = await db.query(query, [targetType, targetId]);
+    return result.rows;
+  },
+
   findViolationsByUserDetailed: async (userId) => {
     const query = `
       SELECT 

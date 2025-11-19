@@ -120,13 +120,15 @@ const notificationController = {
         type,
         title,
         content,
-        redirect_type = 'none',
         data = {},
         expires_at,
         priority = 1,
         from_system = false,
         auto_push = true
       } = req.body;
+
+      // Admin tạo thông báo thì redirect_type luôn là "admin"
+      const redirect_type = 'admin';
 
       // Validation
       if (!audience) {
@@ -191,7 +193,8 @@ const notificationController = {
         data: data,
         expires_at: expires_at || null,
         priority: Math.min(Math.max(priority, 1), 3), // Giới hạn 1-3
-        from_system
+        from_system,
+        created_by: req.user.id // Lưu ID của admin tạo thông báo
       };
 
       // Tạo notification
@@ -291,6 +294,84 @@ const notificationController = {
 
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi cập nhật thông báo', error: error.message });
+    }
+  },
+
+  /**
+   * GET /api/admin/notifications/all
+   * Lấy tất cả thông báo đã gửi và đã nhận của admin
+   * 
+   * Query params:
+   * - page: number (default: 1)
+   * - limit: number (default: 20)
+   * 
+   * Response:
+   * - success: boolean
+   * - data: { sent: [], received: [] }
+   * - meta: { page, limit, totalSent, totalReceived, totalPagesSent, totalPagesReceived }
+   */
+  getAdminAllNotifications: async (req, res) => {
+    try {
+      const adminId = req.user.id;
+      const { page = 1, limit = 20 } = req.query;
+
+      // Validation
+      const pageNum = Math.max(parseInt(page) || 1, 1);
+      const limitNum = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+
+      const result = await notificationService.getAdminNotifications(adminId, {
+        page: pageNum,
+        limit: limitNum
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Lấy danh sách thông báo thành công',
+        data: {
+          sent: result.sent.map(n => ({
+            id: n.id,
+            recipient_id: n.recipient_id,
+            recipient_username: n.recipient_username,
+            recipient_email: n.recipient_email,
+            audience: n.audience,
+            type: n.type,
+            title: n.title,
+            content: n.content,
+            redirect_type: n.redirect_type,
+            data: n.data,
+            priority: n.priority,
+            is_push_sent: n.is_push_sent,
+            created_at: n.created_at,
+            expires_at: n.expires_at
+          })),
+          received: result.received.map(n => ({
+            id: n.id,
+            sender_id: n.created_by,
+            sender_username: n.sender_username,
+            sender_email: n.sender_email,
+            type: n.type,
+            title: n.title,
+            content: n.content,
+            redirect_type: n.redirect_type,
+            data: n.data,
+            priority: n.priority,
+            is_read: !!n.read_at,
+            read_at: n.read_at,
+            created_at: n.created_at,
+            expires_at: n.expires_at,
+            from_system: n.from_system
+          }))
+        },
+        meta: result.meta
+      });
+
+    } catch (error) {
+      console.error('Error getting admin notifications:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi lấy danh sách thông báo',
+        error: error.message
+      });
     }
   },
 

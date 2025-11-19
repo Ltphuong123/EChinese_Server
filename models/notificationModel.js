@@ -29,7 +29,7 @@ const notificationModel = {
   create: async (data) => {
     const {
       recipient_id, audience, type, title, content, redirect_type,
-      data: jsonData, expires_at, priority, from_system
+      data: jsonData, expires_at, priority, from_system, created_by
     } = data;
     
     // Validate: Tất cả values trong data phải là string
@@ -44,13 +44,13 @@ const notificationModel = {
     const queryText = `
       INSERT INTO "Notifications" (
         recipient_id, audience, type, title, content, redirect_type,
-        data, expires_at, priority, from_system
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        data, expires_at, priority, from_system, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *;
     `;
     const values = [
       recipient_id, audience, type, title, content, redirect_type,
-      jsonData, expires_at, priority, from_system
+      jsonData, expires_at, priority, from_system, created_by
     ];
     const result = await db.query(queryText, values);
     return result.rows[0];
@@ -147,6 +147,84 @@ const notificationModel = {
     `;
     const result = await db.query(queryText, [userId]);
     return result.rows[0] || null;
+  },
+
+  /**
+   * Lấy tất cả thông báo đã gửi và đã nhận của admin
+   * @param {string} adminId - ID của admin
+   * @param {object} options - { page, limit }
+   * @returns {object} { sent, received, meta }
+   */
+  findAdminNotifications: async (adminId, options) => {
+    const { page = 1, limit = 20 } = options;
+    const offset = (page - 1) * limit;
+
+    // 1. Lấy thông báo đã GỬI (created_by = adminId)
+    const sentQuery = `
+      SELECT 
+        n.*,
+        u.username as recipient_username,
+        u.email as recipient_email
+      FROM "Notifications" n
+      LEFT JOIN "Users" u ON n.recipient_id = u.id
+      WHERE n.created_by = $1
+      ORDER BY n.created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    const sentResult = await db.query(sentQuery, [adminId, limit, offset]);
+
+    // Đếm tổng số thông báo đã gửi
+    const sentCountQuery = `
+      SELECT COUNT(*) FROM "Notifications"
+      WHERE created_by = $1;
+    `;
+    const sentCountResult = await db.query(sentCountQuery, [adminId]);
+    const totalSent = parseInt(sentCountResult.rows[0].count, 10);
+
+    // 2. Lấy thông báo đã NHẬN (recipient_id = adminId hoặc audience = 'admin' hoặc 'all')
+    const receivedQuery = `
+      SELECT 
+        n.*,
+        sender.username as sender_username,
+        sender.email as sender_email
+      FROM "Notifications" n
+      LEFT JOIN "Users" sender ON n.created_by = sender.id
+      WHERE (
+        n.recipient_id = $1 OR 
+        n.audience = 'admin' OR 
+        n.audience = 'all'
+      )
+      AND (n.expires_at IS NULL OR n.expires_at > NOW())
+      ORDER BY n.created_at DESC
+      LIMIT $2 OFFSET $3;
+    `;
+    const receivedResult = await db.query(receivedQuery, [adminId, limit, offset]);
+
+    // Đếm tổng số thông báo đã nhận
+    const receivedCountQuery = `
+      SELECT COUNT(*) FROM "Notifications"
+      WHERE (
+        recipient_id = $1 OR 
+        audience = 'admin' OR 
+        audience = 'all'
+      )
+      AND (expires_at IS NULL OR expires_at > NOW());
+    `;
+    const receivedCountResult = await db.query(receivedCountQuery, [adminId]);
+    const totalReceived = parseInt(receivedCountResult.rows[0].count, 10);
+
+    return {
+      sent: sentResult.rows,
+      received: receivedResult.rows,
+      meta: {
+        page,
+        limit,
+        totalSent,
+        totalReceived,
+        totalPagesSent: Math.ceil(totalSent / limit),
+        totalPagesReceived: Math.ceil(totalReceived / limit)
+      }
+    };
   },
 
 };

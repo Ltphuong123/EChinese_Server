@@ -1375,6 +1375,50 @@ const examModel = {
 
     return result.rows[0];
   },
+
+  /**
+   * Lấy thông tin exam theo format đơn giản (giống getAllExamsAdmin)
+   * Dùng cho các API trả về exam đơn lẻ
+   */
+  findByIdSimpleFormat: async (id) => {
+    const selectQuery = `
+      SELECT
+        e.id,
+        e.name,
+        e.description,
+        e.instructions,
+        e.total_time_minutes,
+        e.is_published,
+        e.created_at,
+        e.updated_at,
+        e.is_deleted,
+        e.version_at,
+        e.exam_type_id,
+        e.exam_level_id,
+        et.name AS exam_type_name,
+        el.name AS exam_level_name,
+        (SELECT COUNT(*) FROM "Sections" s WHERE s.exam_id = e.id) AS section_count,
+        (
+          SELECT COUNT(*) 
+          FROM "Questions" q
+          JOIN "Subsections" ss ON q.subsection_id = ss.id
+          JOIN "Sections" s ON ss.section_id = s.id
+          WHERE s.exam_id = e.id
+        ) AS total_questions,
+        (
+          SELECT jsonb_agg(jsonb_build_object('name', s.name) ORDER BY s."order" ASC)
+          FROM "Sections" s
+          WHERE s.exam_id = e.id
+        ) as sections
+      FROM "Exams" e
+      LEFT JOIN "Exam_Types" et ON e.exam_type_id = et.id
+      LEFT JOIN "Exam_Levels" el ON e.exam_level_id = el.id
+      WHERE e.id = $1;
+    `;
+
+    const result = await db.query(selectQuery, [id]);
+    return result.rows[0] || null;
+  },
 };
 
 module.exports = examModel;

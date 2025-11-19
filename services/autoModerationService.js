@@ -172,16 +172,53 @@ const autoModerationService = {
           resolution: removalReason
         });
 
-        // Gửi thông báo cho người dùng
-        await notificationModel.create({
+        // Tạo preview của nội dung bài viết
+        const contentPreview = typeof postData.content === 'string' 
+          ? postData.content.substring(0, 100) 
+          : (postData.content?.text || postData.content?.html || '').substring(0, 100);
+
+        // Lấy thông tin chi tiết các rule bị vi phạm
+        const violatedRules = await db.query(
+          `SELECT id, title, description, severity_default FROM "CommunityRules" WHERE id = ANY($1::uuid[])`,
+          [ruleIds]
+        );
+
+        // Gửi thông báo chi tiết cho người dùng với auto push
+        const notificationService = require('./notificationService');
+        await notificationService.createNotification({
           recipient_id: postData.user_id,
           audience: 'user',
-          type: 'community',
-          title: 'Bài viết của bạn đã bị gỡ tự động',
-          content: JSON.stringify({ 
-            html: `Bài viết của bạn vi phạm quy tắc cộng đồng: ${removalReason}. Nội dung đã được hệ thống AI tự động phát hiện và gỡ bỏ.` 
-          }),
-        });
+          type: 'violation',
+          title: '🤖 Bài viết của bạn đã bị gỡ tự động',
+          content: {
+            message: `Bài viết của bạn vi phạm quy tắc cộng đồng: ${removalReason}. Nội dung đã được hệ thống AI tự động phát hiện và gỡ bỏ.`,
+            violation_severity: severity,
+            violation_type: 'post',
+            detected_by: 'AI',
+            violations_detail: violations.map(v => ({
+              type: v.type,
+              label: v.label,
+              confidence: v.confidence
+            }))
+          },
+          redirect_type: 'post',
+          data: {
+            post_id: postId,
+            post_title: postData.title,
+            post_preview: contentPreview,
+            violation_reason: removalReason,
+            severity: severity,
+            violated_rules: violatedRules.rows.map(r => ({
+              id: r.id,
+              title: r.title,
+              description: r.description,
+              severity: r.severity_default
+            })),
+            violations: violations,
+            auto_detected: true,
+            removed_at: new Date().toISOString()
+          }
+        }, true); // auto push = true
 
         return {
           moderated: true,
@@ -276,16 +313,53 @@ const autoModerationService = {
           resolution: removalReason
         });
 
-        // Gửi thông báo cho người dùng
-        await notificationModel.create({
+        // Tạo preview của comment
+        const commentPreview = typeof commentData.content === 'string' 
+          ? commentData.content.substring(0, 100) 
+          : (commentData.content?.text || commentData.content?.html || '').substring(0, 100);
+
+        // Lấy thông tin chi tiết các rule bị vi phạm
+        const violatedRules = await db.query(
+          `SELECT id, title, description, severity_default FROM "CommunityRules" WHERE id = ANY($1::uuid[])`,
+          [ruleIds]
+        );
+
+        // Gửi thông báo chi tiết cho người dùng với auto push
+        const notificationService = require('./notificationService');
+        await notificationService.createNotification({
           recipient_id: commentData.user_id,
           audience: 'user',
-          type: 'community',
-          title: 'Bình luận của bạn đã bị gỡ tự động',
-          content: JSON.stringify({ 
-            html: `Bình luận của bạn vi phạm quy tắc cộng đồng: ${removalReason}. Nội dung đã được hệ thống AI tự động phát hiện và gỡ bỏ.` 
-          }),
-        });
+          type: 'violation',
+          title: '🤖 Bình luận của bạn đã bị gỡ tự động',
+          content: {
+            message: `Bình luận của bạn vi phạm quy tắc cộng đồng: ${removalReason}. Nội dung đã được hệ thống AI tự động phát hiện và gỡ bỏ.`,
+            violation_severity: severity,
+            violation_type: 'comment',
+            detected_by: 'AI',
+            violations_detail: violations.map(v => ({
+              type: v.type,
+              label: v.label,
+              confidence: v.confidence
+            }))
+          },
+          redirect_type: 'post_comment',
+          data: {
+            post_id: commentData.post_id,
+            comment_id: commentId,
+            comment_preview: commentPreview,
+            violation_reason: removalReason,
+            severity: severity,
+            violated_rules: violatedRules.rows.map(r => ({
+              id: r.id,
+              title: r.title,
+              description: r.description,
+              severity: r.severity_default
+            })),
+            violations: violations,
+            auto_detected: true,
+            removed_at: new Date().toISOString()
+          }
+        }, true); // auto push = true
 
         return {
           moderated: true,

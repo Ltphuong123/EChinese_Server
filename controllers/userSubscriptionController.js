@@ -90,6 +90,32 @@ updateDetails: async (req, res) => {
     }
   },
 
+  /**
+   * Kiểm tra và xử lý các gói đăng ký hết hạn (Admin only)
+   * POST /api/admin/subscriptions/check-expiring
+   */
+  checkExpiringSubscriptions: async (req, res) => {
+    try {
+      const result = await userSubscriptionService.checkAndNotifyExpiringSubscriptions();
+      
+      res.status(200).json({
+        success: true,
+        message: 'Kiểm tra gói hết hạn thành công.',
+        data: {
+          expired_count: result.expiredCount,
+          expiring_soon_count: result.expiringCount,
+          checked_at: new Date().toISOString()
+        }
+      });
+    } catch (error) {
+      console.error('Error checking expiring subscriptions:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Lỗi khi kiểm tra gói hết hạn.', 
+        error: error.message 
+      });
+    }
+  },
 
 };
 

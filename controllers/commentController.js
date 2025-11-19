@@ -22,7 +22,8 @@ const commentController = {
       const autoModerationService = require('../services/autoModerationService');
       autoModerationService.moderateComment(newComment.id, {
         content: content,
-        user_id: userId
+        user_id: userId,
+        post_id: postId
       }).then(result => {
         if (result.removed) {
           console.log(`Comment ${newComment.id} auto-removed:`, result.reason);
@@ -31,7 +32,88 @@ const commentController = {
         console.error('Auto moderation error:', error);
       });
 
-      res.status(210).json({ success: true, message: 'Bình luận thành công.', data: newComment });
+      // Gửi thông báo cho chủ bài viết (nếu không phải tự comment)
+      try {
+        const postService = require('../services/postService');
+        const post = await postService.getPostById(postId);
+        
+        if (post && post.user_id !== userId) {
+          const userModel = require('../models/userModel');
+          const commenter = await userModel.findUserById(userId);
+          
+          // Tạo preview của comment
+          const commentPreview = typeof content === 'string' 
+            ? content.substring(0, 100) 
+            : (content?.text || content?.html || '').substring(0, 100);
+          
+          const notificationService = require('../services/notificationService');
+          await notificationService.createNotification({
+            recipient_id: post.user_id,
+            audience: 'user',
+            type: 'community',
+            title: '💬 Có người bình luận bài viết của bạn',
+            content: {
+              message: `${commenter?.name || 'Một người dùng'} đã bình luận vào bài viết "${post.title}" của bạn.`,
+              action: 'post_commented',
+              commenter_name: commenter?.name || 'Người dùng'
+            },
+            redirect_type: 'post_comment',
+            data: {
+              post_id: postId,
+              post_title: post.title,
+              comment_id: newComment.id,
+              comment_preview: commentPreview,
+              commenter_id: userId,
+              commenter_name: commenter?.name || 'Người dùng',
+              commenter_avatar: commenter?.avatar_url || null,
+              commented_at: new Date().toISOString(),
+              is_reply: !!parentCommentId
+            }
+          }, true); // auto push = true
+        }
+
+        // Nếu là reply, gửi thông báo cho người được reply
+        if (parentCommentId) {
+          const parentComment = await commentService.getCommentById(parentCommentId);
+          if (parentComment && parentComment.user_id !== userId) {
+            const userModel = require('../models/userModel');
+            const commenter = await userModel.findUserById(userId);
+            
+            const commentPreview = typeof content === 'string' 
+              ? content.substring(0, 100) 
+              : (content?.text || content?.html || '').substring(0, 100);
+            
+            const notificationService = require('../services/notificationService');
+            await notificationService.createNotification({
+              recipient_id: parentComment.user_id,
+              audience: 'user',
+              type: 'community',
+              title: '↩️ Có người trả lời bình luận của bạn',
+              content: {
+                message: `${commenter?.name || 'Một người dùng'} đã trả lời bình luận của bạn.`,
+                action: 'comment_replied',
+                commenter_name: commenter?.name || 'Người dùng'
+              },
+              redirect_type: 'post_comment',
+              data: {
+                post_id: postId,
+                comment_id: newComment.id,
+                parent_comment_id: parentCommentId,
+                comment_preview: commentPreview,
+                commenter_id: userId,
+                commenter_name: commenter?.name || 'Người dùng',
+                commenter_avatar: commenter?.avatar_url || null,
+                replied_at: new Date().toISOString()
+              }
+            }, true); // auto push = true
+          }
+        }
+      } catch (notifError) {
+        console.error('Error sending comment notification:', notifError);
+        // Không throw error để không ảnh hưởng đến việc tạo comment
+      }
+
+      res.status(201).json({ success: true, message: 'Bình luận thành công.', data: newComment });
     } catch (error) {
       if (error.message.includes('không tồn tại')) {
           return res.status(404).json({ success: false, message: error.message });
@@ -130,15 +212,45 @@ const commentController = {
 
       // Lấy lại comment để gửi thông báo
       const comment = await commentService.getCommentById(commentId);
+      const moderationModel = require("../models/moderationModel");
       
-      // Gửi thông báo cho user
-      await require('../models/notificationModel').create({
+      // Tìm và xóa vi phạm liên quan đến comment này (nếu có)
+      const violations = await moderationModel.findViolationsByTarget("comment", commentId);
+      if (violations && violations.length > 0) {
+        for (const violation of violations) {
+          await moderationModel.deleteViolation(violation.id);
+        }
+      }
+      
+      // Tạo preview của comment
+      const commentPreview = typeof comment.content === 'string' 
+        ? comment.content.substring(0, 100) 
+        : (comment.content?.text || comment.content?.html || '').substring(0, 100);
+      
+      // Gửi thông báo chi tiết cho user với lý do khôi phục
+      const restoreReason = reason || 'Bình luận của bạn đã được xem xét lại và khôi phục.';
+      const notificationService = require('../services/notificationService');
+      await notificationService.createNotification({
         recipient_id: comment.user_id,
         audience: 'user',
         type: 'community',
-        title: 'Bình luận của bạn đã được khôi phục',
-        content: JSON.stringify({ html: reason }),
-      });
+        title: '✅ Bình luận của bạn đã được khôi phục',
+        content: {
+          message: restoreReason,
+          action: 'comment_restored',
+          violations_removed: violations ? violations.length : 0,
+          restore_reason: restoreReason
+        },
+        redirect_type: 'post_comment',
+        data: {
+          post_id: comment.post_id,
+          comment_id: commentId,
+          comment_preview: commentPreview,
+          restored_at: new Date().toISOString(),
+          violations_cleared: violations ? violations.length : 0,
+          restore_reason: restoreReason
+        }
+      }, true); // auto push = true
       
       res.status(200).json({ success: true, message: 'Khôi phục bình luận thành công.', comment });
     } catch (error) {
@@ -169,15 +281,55 @@ const commentController = {
         { reason, ruleIds, resolution, severity }
       );
 
-      // Gửi thông báo cho user (kiểm tra removedComment có user_id)
+      // Gửi thông báo chi tiết cho user (kiểm tra removedComment có user_id)
       if (removedComment && removedComment.user_id) {
-        await require('../models/notificationModel').create({
+        // Tạo preview của comment
+        const commentPreview = typeof removedComment.content === 'string' 
+          ? removedComment.content.substring(0, 100) 
+          : (removedComment.content?.text || removedComment.content?.html || '').substring(0, 100);
+        
+        // Lấy thông tin chi tiết các rule bị vi phạm
+        const db = require("../config/db");
+        let violatedRulesDetail = [];
+        if (ruleIds && ruleIds.length > 0) {
+          const rulesResult = await db.query(
+            `SELECT id, title, description, severity_default FROM "CommunityRules" WHERE id = ANY($1::uuid[])`,
+            [ruleIds]
+          );
+          violatedRulesDetail = rulesResult.rows.map(r => ({
+            id: r.id,
+            title: r.title,
+            description: r.description,
+            severity: r.severity_default
+          }));
+        }
+        
+        const notificationService = require('../services/notificationService');
+        await notificationService.createNotification({
           recipient_id: removedComment.user_id,
           audience: 'user',
-          type: 'community',
-          title: 'Bình luận của bạn đã bị gỡ',
-          content: JSON.stringify({ html: reason }),
-        });
+          type: 'violation',
+          title: '⚠️ Bình luận của bạn đã bị gỡ do vi phạm',
+          content: {
+            message: reason,
+            violation_severity: severity || 'medium',
+            violation_type: 'comment',
+            detected_by: 'admin',
+            violated_rules_count: violatedRulesDetail.length
+          },
+          redirect_type: 'post_comment',
+          data: {
+            post_id: removedComment.post_id,
+            comment_id: commentId,
+            comment_preview: commentPreview,
+            violation_reason: reason,
+            severity: severity,
+            violated_rules: violatedRulesDetail,
+            removed_by: adminId,
+            removed_at: new Date().toISOString(),
+            resolution: resolution || reason
+          }
+        }, true); // auto push = true
       }
 
       res.status(200).json({ 

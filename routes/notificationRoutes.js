@@ -21,17 +21,26 @@ router.get(
   authMiddleware.verifyToken, // Yêu cầu phải đăng nhập
   notificationController.getUnreadCount
 );
+
 // --- Admin Routes (yêu cầu quyền admin) ---
+router.get(
+    '/admin/notifications/all',
+    [authMiddleware.verifyToken, authMiddleware.isAdmin],
+    notificationController.getAdminAllNotifications
+);
+
 router.post(
     BASE_PATH,
     [authMiddleware.verifyToken, authMiddleware.isAdmin],
     notificationController.createNotification
 );
+
 router.post(
     `${BASE_PATH}/publish`,
     [authMiddleware.verifyToken, authMiddleware.isAdmin],
     notificationController.publishNotifications
 );
+
 router.post(
     `${BASE_PATH}/delete`,
     [authMiddleware.verifyToken, authMiddleware.isAdmin],
