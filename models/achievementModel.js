@@ -384,10 +384,35 @@ const achievementModel = {
     }
   },
 
+  getGlobalStatistics: async () => {
+    const query = `
+      SELECT 
+        COUNT(DISTINCT a.id) as total_achievements,
+        COUNT(DISTINCT CASE WHEN a.is_active = true THEN a.id END) as active_achievements,
+        COUNT(DISTINCT ua.user_id) as total_users_with_achievements,
+        COUNT(ua.id) as total_achievements_granted,
+        COALESCE(SUM(a.points), 0) as total_points_distributed
+      FROM "Achievements" a
+      LEFT JOIN "UserAchievements" ua ON a.id = ua.achievement_id AND ua.achieved_at IS NOT NULL;
+    `;
+    const result = await db.query(query);
+    
+    // Lấy top 5 achievements phổ biến nhất
+    const topQuery = `
+      SELECT a.id, a.name, a.icon, COUNT(ua.user_id) as user_count
+      FROM "Achievements" a
+      LEFT JOIN "UserAchievements" ua ON a.id = ua.achievement_id AND ua.achieved_at IS NOT NULL
+      GROUP BY a.id, a.name, a.icon
+      ORDER BY user_count DESC
+      LIMIT 5;
+    `;
+    const topResult = await db.query(topQuery);
 
-
-
-
+    return {
+      ...result.rows[0],
+      most_popular_achievements: topResult.rows
+    };
+  },
 
 };
 

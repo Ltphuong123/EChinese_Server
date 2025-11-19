@@ -267,6 +267,56 @@ const achievementService = {
     }
   },
 
+  getAchievementById: async (id) => {
+    const achievement = await achievementModel.findById(id);
+    if (!achievement) {
+      throw new Error('Thành tích không tồn tại.');
+    }
+    return achievement;
+  },
+
+  getUserStatistics: async (userId) => {
+    const [achieved, unachieved] = await Promise.all([
+      achievementModel.findAchievedByUserId2(userId),
+      achievementModel.findAllUnachievedByUser(userId)
+    ]);
+
+    const totalPoints = achieved.reduce((sum, ach) => sum + (ach.points || 0), 0);
+    const totalAchievements = achieved.length + unachieved.length;
+    const completionRate = totalAchievements > 0 
+      ? ((achieved.length / totalAchievements) * 100).toFixed(2) 
+      : 0;
+
+    return {
+      total_achievements: totalAchievements,
+      achieved_count: achieved.length,
+      unachieved_count: unachieved.length,
+      total_points: totalPoints,
+      completion_rate: parseFloat(completionRate),
+      recent_achievements: achieved.slice(0, 5) // 5 thành tích gần nhất
+    };
+  },
+
+  getAlmostAchieved: async (userId, threshold = 0.7) => {
+    const progressList = await achievementService.getProgressForUser(userId);
+    
+    return progressList.filter(item => {
+      const current = item.progress?.current || 0;
+      const required = item.criteria?.value || 1;
+      const percentage = current / required;
+      return percentage >= threshold && percentage < 1;
+    }).sort((a, b) => {
+      const percentA = (a.progress?.current || 0) / (a.criteria?.value || 1);
+      const percentB = (b.progress?.current || 0) / (b.criteria?.value || 1);
+      return percentB - percentA; // Sắp xếp từ cao đến thấp
+    });
+  },
+
+  getAdminStatistics: async () => {
+    const stats = await achievementModel.getGlobalStatistics();
+    return stats;
+  },
+
   //////////////////
   updateProgress: async (userId, criteriaType, value) => {
     // 1. Lấy tất cả các thành tích có cùng loại tiêu chí mà người dùng này CHƯA đạt được

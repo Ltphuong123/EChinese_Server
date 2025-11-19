@@ -46,4 +46,3 @@ coverage/
 *.backup
 
 
-config/firebase-service-account.json

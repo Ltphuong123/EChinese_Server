@@ -127,22 +127,25 @@ const achievementController = {
     }
   },
 
-  getUserAchievements: async (req, res) => {
-    try {
-      const userId = req.user.id; // Lấy từ token
-      const achievements = await achievementService.getAllWithUserProgress(userId);
-      res.status(200).json({ success: true, data: achievements });
-    } catch (error) {
-      res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách thành tựu.', error: error.message });
-    }
-  },
-
   getPublicAchievements: async (req, res) => {
     try {
       const achievements = await achievementService.getAllPublicAchievements();
       res.status(200).json({ success: true, data: achievements });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách thành tích', error: error.message });
+    }
+  },
+
+  getAchievementById: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const achievement = await achievementService.getAchievementById(id);
+      res.status(200).json({ success: true, data: achievement });
+    } catch (error) {
+      if (error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy thông tin thành tích', error: error.message });
     }
   },
 
@@ -197,6 +200,59 @@ const achievementController = {
       } catch (error) {
         res.status(500).json({ success: false, message: 'Lỗi khi cập nhật tiến độ', error: error.message });
       }
+  },
+
+  getUserAchievementStatistics: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const statistics = await achievementService.getUserStatistics(userId);
+      res.status(200).json({ success: true, data: statistics });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy thống kê thành tích', error: error.message });
+    }
+  },
+
+  getAlmostAchievedAchievements: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const threshold = parseFloat(req.query.threshold) || 0.7; // Mặc định 70%
+      const achievements = await achievementService.getAlmostAchieved(userId, threshold);
+      res.status(200).json({ success: true, data: achievements });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy thành tích sắp đạt được', error: error.message });
+    }
+  },
+
+  toggleAchievementStatus: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { is_active } = req.body;
+
+      if (typeof is_active !== 'boolean') {
+        return res.status(400).json({ success: false, message: "Trường 'is_active' phải là boolean." });
+      }
+
+      const updatedAchievement = await achievementService.updateAchievement(id, { is_active });
+      res.status(200).json({
+        success: true,
+        message: `Thành tích đã được ${is_active ? 'kích hoạt' : 'vô hiệu hóa'}.`,
+        data: updatedAchievement
+      });
+    } catch (error) {
+      if (error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ success: false, message: 'Lỗi khi cập nhật trạng thái thành tích', error: error.message });
+    }
+  },
+
+  getAdminStatistics: async (req, res) => {
+    try {
+      const statistics = await achievementService.getAdminStatistics();
+      res.status(200).json({ success: true, data: statistics });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy thống kê admin', error: error.message });
+    }
   },
 
 

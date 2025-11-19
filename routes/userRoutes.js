@@ -100,13 +100,7 @@ router.get(
   userController.getCommunityLeaderboard
 );
 
-// --- ACHIEVEMENT ROUTES FOR ANY USER ---
-
-// GET /api/users/:userId/achievements (Xem thành tích của người dùng khác)
-router.get(
-  "/users/:userId/achievements",
-  achievementController.getPublicUserAchievements
-);
+// Achievement routes đã được chuyển sang achievementRoutes.js
 
 // Cập nhật thông tin cá nhân của người dùng đang đăng nhập
 router.put(
@@ -138,11 +132,7 @@ router.get(
   userController.getCurrentSubscriptionInfo
 );
 
-router.get(
-  "/user/achievements",
-  authMiddleware.verifyToken,
-  achievementController.getUserAchievements
-);
+// Achievement routes đã được chuyển sang achievementRoutes.js
 
 router.get(
   "/users/me/posts",
