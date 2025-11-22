@@ -183,6 +183,14 @@ const autoModerationService = {
           [ruleIds]
         );
 
+        const rulesText = violatedRules.rows.map((r, i) => 
+          `${i+1}. ${r.title} (${r.severity_default}): ${r.description}`
+        ).join('\n');
+
+        const violationsText = violations.map((v, i) => 
+          `${i+1}. Loại: ${v.type}, Nhãn: ${v.label}, Độ tin cậy: ${(v.confidence * 100).toFixed(1)}%`
+        ).join('\n');
+
         // Gửi thông báo chi tiết cho người dùng với auto push
         const notificationService = require('./notificationService');
         await notificationService.createNotification({
@@ -191,32 +199,19 @@ const autoModerationService = {
           type: 'violation',
           title: '🤖 Bài viết của bạn đã bị gỡ tự động',
           content: {
-            message: `Bài viết của bạn vi phạm quy tắc cộng đồng: ${removalReason}. Nội dung đã được hệ thống AI tự động phát hiện và gỡ bỏ.`,
-            violation_severity: severity,
-            violation_type: 'post',
-            detected_by: 'AI',
-            violations_detail: violations.map(v => ({
-              type: v.type,
-              label: v.label,
-              confidence: v.confidence
-            }))
+            html: `<p>Bài viết <strong>"${postData.title}"</strong> của bạn đã bị hệ thống AI tự động phát hiện và gỡ bỏ do vi phạm quy tắc cộng đồng.</p>
+<p><strong>Lý do:</strong> ${removalReason}<br>
+<strong>Độ nghiêm trọng:</strong> <span class="badge-${severity}">${severity}</span><br>
+<strong>Phát hiện bởi:</strong> AI tự động</p>
+${violatedRules.rows.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRules.rows.map(r => `<li><strong>${r.title}</strong> (${r.severity_default}): ${r.description}</li>`).join('')}</ul>` : ''}
+<p><strong>Chi tiết phát hiện:</strong></p><ul>${violations.map(v => `<li>Loại: ${v.type}, Nhãn: ${v.label}, Độ tin cậy: ${(v.confidence * 100).toFixed(1)}%</li>`).join('')}</ul>
+<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p>
+<p><small>Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
           },
           redirect_type: 'post',
           data: {
-            post_id: postId,
-            post_title: postData.title,
-            post_preview: contentPreview,
-            violation_reason: removalReason,
-            severity: severity,
-            violated_rules: violatedRules.rows.map(r => ({
-              id: r.id,
-              title: r.title,
-              description: r.description,
-              severity: r.severity_default
-            })),
-            violations: violations,
-            auto_detected: true,
-            removed_at: new Date().toISOString()
+            id: postId,
+            data: `Bài viết: ${postData.title}\nLý do: ${removalReason}\nĐộ nghiêm trọng: ${severity}\nPhát hiện bởi: AI tự động\nThời gian: ${new Date().toLocaleString('vi-VN')}\n\nQuy tắc vi phạm:\n${rulesText}\n\nChi tiết:\n${violationsText}\n\nNội dung: ${contentPreview}...`
           }
         }, true); // auto push = true
 
@@ -324,6 +319,14 @@ const autoModerationService = {
           [ruleIds]
         );
 
+        const rulesText = violatedRules.rows.map((r, i) => 
+          `${i+1}. ${r.title} (${r.severity_default}): ${r.description}`
+        ).join('\n');
+
+        const violationsText = violations.map((v, i) => 
+          `${i+1}. Loại: ${v.type}, Nhãn: ${v.label}, Độ tin cậy: ${(v.confidence * 100).toFixed(1)}%`
+        ).join('\n');
+
         // Gửi thông báo chi tiết cho người dùng với auto push
         const notificationService = require('./notificationService');
         await notificationService.createNotification({
@@ -332,32 +335,19 @@ const autoModerationService = {
           type: 'violation',
           title: '🤖 Bình luận của bạn đã bị gỡ tự động',
           content: {
-            message: `Bình luận của bạn vi phạm quy tắc cộng đồng: ${removalReason}. Nội dung đã được hệ thống AI tự động phát hiện và gỡ bỏ.`,
-            violation_severity: severity,
-            violation_type: 'comment',
-            detected_by: 'AI',
-            violations_detail: violations.map(v => ({
-              type: v.type,
-              label: v.label,
-              confidence: v.confidence
-            }))
+            html: `<p>Bình luận của bạn đã bị hệ thống AI tự động phát hiện và gỡ bỏ do vi phạm quy tắc cộng đồng.</p>
+<p><strong>Lý do:</strong> ${removalReason}<br>
+<strong>Độ nghiêm trọng:</strong> <span class="badge-${severity}">${severity}</span><br>
+<strong>Phát hiện bởi:</strong> AI tự động</p>
+${violatedRules.rows.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRules.rows.map(r => `<li><strong>${r.title}</strong> (${r.severity_default}): ${r.description}</li>`).join('')}</ul>` : ''}
+<p><strong>Chi tiết phát hiện:</strong></p><ul>${violations.map(v => `<li>Loại: ${v.type}, Nhãn: ${v.label}, Độ tin cậy: ${(v.confidence * 100).toFixed(1)}%</li>`).join('')}</ul>
+<p><em>Nội dung bình luận:</em> "${commentPreview}..."</p>
+<p><small>Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
           },
-          redirect_type: 'post_comment',
+          redirect_type: 'comment',
           data: {
-            post_id: commentData.post_id,
-            comment_id: commentId,
-            comment_preview: commentPreview,
-            violation_reason: removalReason,
-            severity: severity,
-            violated_rules: violatedRules.rows.map(r => ({
-              id: r.id,
-              title: r.title,
-              description: r.description,
-              severity: r.severity_default
-            })),
-            violations: violations,
-            auto_detected: true,
-            removed_at: new Date().toISOString()
+            id: commentId,
+            data: `Bình luận trong bài viết ID: ${commentData.post_id}\nLý do: ${removalReason}\nĐộ nghiêm trọng: ${severity}\nPhát hiện bởi: AI tự động\nThời gian: ${new Date().toLocaleString('vi-VN')}\n\nQuy tắc vi phạm:\n${rulesText}\n\nChi tiết:\n${violationsText}\n\nNội dung: ${commentPreview}...`
           }
         }, true); // auto push = true
 

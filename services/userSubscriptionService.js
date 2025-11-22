@@ -495,19 +495,12 @@ const userSubscriptionService = {
               type: 'system',
               title: '⏰ Gói đăng ký của bạn đã hết hạn',
               content: {
-                message: `Gói "${sub.subscription_name}" của bạn đã hết hạn. Bạn đã được chuyển về gói Miễn phí. Gia hạn ngay để tiếp tục sử dụng các tính năng cao cấp.`,
-                action: 'subscription_expired',
-                subscription_name: sub.subscription_name,
-                expired_date: expiryDate.toISOString()
+                message: `Gói "${sub.subscription_name}" của bạn đã hết hạn vào ${expiryDate.toLocaleString('vi-VN')}. Bạn đã được tự động chuyển về gói Miễn phí. Gia hạn ngay để tiếp tục sử dụng các tính năng cao cấp.\n\nThời hạn gói: ${sub.duration_months} tháng\nGiá: ${sub.price} VNĐ`
               },
               redirect_type: 'subscription',
               data: {
-                subscription_id: sub.subscription_id,
-                subscription_name: sub.subscription_name,
-                expired_date: expiryDate.toISOString(),
-                was_auto_renew: sub.auto_renew,
-                price: sub.price,
-                duration_months: sub.duration_months
+                id: sub.subscription_id,
+                data: `Gói: ${sub.subscription_name}\nThời hạn: ${sub.duration_months} tháng\nGiá: ${sub.price} VNĐ\nHết hạn: ${expiryDate.toLocaleString('vi-VN')}\nTrạng thái: Đã chuyển về gói Miễn phí`
               },
               priority: 2,
               from_system: true
@@ -529,21 +522,12 @@ const userSubscriptionService = {
             type: 'system',
             title: `⏰ Gói đăng ký sắp hết hạn trong ${daysUntilExpiry} ngày`,
             content: {
-              message: `Gói "${sub.subscription_name}" của bạn sẽ hết hạn vào ${expiryDate.toLocaleDateString('vi-VN')}. Gia hạn ngay để không bị gián đoạn dịch vụ.`,
-              action: 'subscription_expiring_soon',
-              subscription_name: sub.subscription_name,
-              days_remaining: daysUntilExpiry,
-              expiry_date: expiryDate.toISOString()
+              message: `Gói "${sub.subscription_name}" của bạn sẽ hết hạn vào ${expiryDate.toLocaleDateString('vi-VN')} (còn ${daysUntilExpiry} ngày). Gia hạn ngay để không bị gián đoạn dịch vụ.\n\nThông tin gói:\n- Tên gói: ${sub.subscription_name}\n- Giá: ${sub.price} VNĐ\n- Thời hạn: ${sub.duration_months} tháng\n- Tự động gia hạn: ${sub.auto_renew ? 'Có' : 'Không'}\n- Ngày hết hạn: ${expiryDate.toLocaleDateString('vi-VN')}`
             },
             redirect_type: 'subscription',
             data: {
-              subscription_id: sub.subscription_id,
-              subscription_name: sub.subscription_name,
-              expiry_date: expiryDate.toISOString(),
-              days_remaining: daysUntilExpiry,
-              auto_renew: sub.auto_renew,
-              price: sub.price,
-              duration_months: sub.duration_months
+              id: sub.subscription_id,
+              data: `Gói: ${sub.subscription_name}\nGiá: ${sub.price} VNĐ\nThời hạn: ${sub.duration_months} tháng\nCòn lại: ${daysUntilExpiry} ngày\nHết hạn: ${expiryDate.toLocaleDateString('vi-VN')}\nTự động gia hạn: ${sub.auto_renew ? 'Có' : 'Không'}`
             },
             priority: 2,
             from_system: true

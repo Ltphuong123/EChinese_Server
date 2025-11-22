@@ -38,6 +38,12 @@ const badgeLevelModel = {
     const result = await db.query(queryText);
     return result.rows;
   },
+
+  findAllActive: async () => {
+    const queryText = `SELECT * FROM "BadgeLevels" WHERE is_active = true ORDER BY level ASC;`;
+    const result = await db.query(queryText);
+    return result.rows;
+  },
   
   findAllDesc: async () => {
     // Dùng cho resync, cần sắp xếp giảm dần

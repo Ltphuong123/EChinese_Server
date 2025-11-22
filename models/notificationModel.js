@@ -149,6 +149,19 @@ const notificationModel = {
     return result.rows[0] || null;
   },
 
+  // Helper: find recent notifications to prevent duplicates
+  findRecent: async (recipientId, type, withinSeconds = 2) => {
+    const queryText = `
+      SELECT * FROM "Notifications"
+      WHERE recipient_id = $1
+        AND type = $2
+        AND created_at > NOW() - INTERVAL '${withinSeconds} seconds'
+      ORDER BY created_at DESC;
+    `;
+    const result = await db.query(queryText, [recipientId, type]);
+    return result.rows;
+  },
+
   /**
    * Lấy chi tiết một thông báo cụ thể
    * @param {string} notificationId - ID của thông báo
@@ -185,80 +198,231 @@ const notificationModel = {
   },
 
   /**
-   * Lấy tất cả thông báo đã gửi và đã nhận của admin
-   * @param {string} adminId - ID của admin
-   * @param {object} options - { page, limit }
-   * @returns {object} { sent, received, meta }
+   * Xóa tất cả thông báo trong database
+   * @returns {number} Số lượng thông báo đã xóa
    */
-  findAdminNotifications: async (adminId, options) => {
-    const { page = 1, limit = 20 } = options;
+  deleteAll: async () => {
+    const queryText = `DELETE FROM "Notifications";`;
+    const result = await db.query(queryText);
+    return result.rowCount;
+  },
+
+  /**
+   * Lấy thông tin các cột trong bảng Notifications
+   * @returns {array} Danh sách các cột với thông tin chi tiết
+   */
+  getTableColumns: async () => {
+    const queryText = `
+      SELECT 
+        column_name,
+        data_type,
+        character_maximum_length,
+        is_nullable,
+        column_default
+      FROM information_schema.columns
+      WHERE table_name = 'Notifications'
+      ORDER BY ordinal_position;
+    `;
+    const result = await db.query(queryText);
+    return result.rows;
+  },
+
+  /**
+   * Lấy danh sách thông báo đã tạo của admin
+   * @param {string} adminId - ID của admin
+   * @param {object} options - { page, limit, status, audience, type }
+   * @returns {object} { notifications, totalItems }
+   */
+  findAdminSentNotifications: async (adminId, options) => {
+    const { page = 1, limit = 15, status, audience, type } = options;
     const offset = (page - 1) * limit;
 
-    // 1. Lấy thông báo đã GỬI (created_by = adminId)
+    // Build WHERE clauses
+    let whereClauses = `WHERE n.created_by = $1`;
+    const queryParams = [adminId];
+    let paramIndex = 2;
+
+    // Filter by status (draft = chưa gửi push, published = đã gửi push)
+    if (status === 'draft') {
+      whereClauses += ` AND n.is_push_sent = false`;
+    } else if (status === 'published') {
+      whereClauses += ` AND n.is_push_sent = true`;
+    }
+
+    // Filter by audience
+    if (audience) {
+      whereClauses += ` AND n.audience = $${paramIndex}`;
+      queryParams.push(audience);
+      paramIndex++;
+    }
+
+    // Filter by type
+    if (type) {
+      whereClauses += ` AND n.type = $${paramIndex}`;
+      queryParams.push(type);
+      paramIndex++;
+    }
+
+    // Lấy thông báo đã GỬI (created_by = adminId)
     const sentQuery = `
       SELECT 
         n.*,
         u.username as recipient_username,
-        u.email as recipient_email
+        u.name as recipient_name,
+        u.email as recipient_email,
+        u.avatar_url as recipient_avatar
       FROM "Notifications" n
       LEFT JOIN "Users" u ON n.recipient_id = u.id
-      WHERE n.created_by = $1
+      ${whereClauses}
       ORDER BY n.created_at DESC
-      LIMIT $2 OFFSET $3;
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1};
     `;
-    const sentResult = await db.query(sentQuery, [adminId, limit, offset]);
+    const sentResult = await db.query(sentQuery, [...queryParams, limit, offset]);
 
     // Đếm tổng số thông báo đã gửi
     const sentCountQuery = `
-      SELECT COUNT(*) FROM "Notifications"
-      WHERE created_by = $1;
+      SELECT COUNT(*) FROM "Notifications" n
+      ${whereClauses};
     `;
-    const sentCountResult = await db.query(sentCountQuery, [adminId]);
-    const totalSent = parseInt(sentCountResult.rows[0].count, 10);
+    const sentCountResult = await db.query(sentCountQuery, queryParams);
+    const totalItems = parseInt(sentCountResult.rows[0].count, 10);
 
-    // 2. Lấy thông báo đã NHẬN (recipient_id = adminId hoặc audience = 'admin' hoặc 'all')
-    const receivedQuery = `
+    return {
+      notifications: sentResult.rows,
+      totalItems
+    };
+  },
+
+  /**
+   * Lấy danh sách thông báo đã tạo của admin
+   * @param {string} adminId - ID của admin
+   * @param {object} options - { page, limit, status, audience, type }
+   * @returns {object} { notifications, totalItems }
+   */
+  findAdminSentNotifications: async (adminId, options) => {
+    const { page = 1, limit = 15, status, audience, type } = options;
+    const offset = (page - 1) * limit;
+
+    // Build WHERE clauses
+    let whereClauses = `WHERE n.created_by = $1`;
+    const queryParams = [adminId];
+    let paramIndex = 2;
+
+    // Filter by status (draft = chưa gửi push, published = đã gửi push)
+    if (status === 'draft') {
+      whereClauses += ` AND n.is_push_sent = false`;
+    } else if (status === 'published') {
+      whereClauses += ` AND n.is_push_sent = true`;
+    }
+
+    // Filter by audience
+    if (audience) {
+      whereClauses += ` AND n.audience = $${paramIndex}`;
+      queryParams.push(audience);
+      paramIndex++;
+    }
+
+    // Filter by type
+    if (type) {
+      whereClauses += ` AND n.type = $${paramIndex}`;
+      queryParams.push(type);
+      paramIndex++;
+    }
+
+    // Lấy thông báo đã GỬI (created_by = adminId)
+    const sentQuery = `
       SELECT 
         n.*,
-        sender.username as sender_username,
-        sender.email as sender_email
+        u.username as recipient_username,
+        u.name as recipient_name,
+        u.email as recipient_email,
+        u.avatar_url as recipient_avatar
       FROM "Notifications" n
-      LEFT JOIN "Users" sender ON n.created_by = sender.id
+      LEFT JOIN "Users" u ON n.recipient_id = u.id
+      ${whereClauses}
+      ORDER BY n.created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1};
+    `;
+    const sentResult = await db.query(sentQuery, [...queryParams, limit, offset]);
+
+    // Đếm tổng số thông báo đã gửi
+    const sentCountQuery = `
+      SELECT COUNT(*) FROM "Notifications" n
+      ${whereClauses};
+    `;
+    const sentCountResult = await db.query(sentCountQuery, queryParams);
+    const totalItems = parseInt(sentCountResult.rows[0].count, 10);
+
+    return {
+      notifications: sentResult.rows,
+      totalItems
+    };
+  },
+
+  /**
+   * Lấy danh sách thông báo đã nhận của admin
+   * @param {string} adminId - ID của admin
+   * @param {object} options - { page, limit, readStatus, type }
+   * @returns {object} { notifications, totalItems }
+   */
+  findAdminReceivedNotifications: async (adminId, options) => {
+    const { page = 1, limit = 15, readStatus, type } = options;
+    const offset = (page - 1) * limit;
+
+    // Build WHERE clauses
+    let whereClauses = `
       WHERE (
         n.recipient_id = $1 OR 
         n.audience = 'admin' OR 
         n.audience = 'all'
       )
       AND (n.expires_at IS NULL OR n.expires_at > NOW())
-      ORDER BY n.created_at DESC
-      LIMIT $2 OFFSET $3;
     `;
-    const receivedResult = await db.query(receivedQuery, [adminId, limit, offset]);
+
+    const queryParams = [adminId];
+    let paramIndex = 2;
+
+    // Filter by read status (chỉ chấp nhận 'read' hoặc 'unread')
+    if (readStatus === 'read') {
+      whereClauses += ` AND n.read_at IS NOT NULL`;
+    } else if (readStatus === 'unread') {
+      whereClauses += ` AND n.read_at IS NULL`;
+    }
+
+    // Filter by type
+    if (type) {
+      whereClauses += ` AND n.type = $${paramIndex}`;
+      queryParams.push(type);
+      paramIndex++;
+    }
+
+    // Lấy thông báo đã NHẬN
+    const receivedQuery = `
+      SELECT 
+        n.*,
+        sender.username as sender_username,
+        sender.name as sender_name,
+        sender.email as sender_email,
+        sender.avatar_url as sender_avatar
+      FROM "Notifications" n
+      LEFT JOIN "Users" sender ON n.created_by = sender.id
+      ${whereClauses}
+      ORDER BY n.created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1};
+    `;
+    const receivedResult = await db.query(receivedQuery, [...queryParams, limit, offset]);
 
     // Đếm tổng số thông báo đã nhận
     const receivedCountQuery = `
-      SELECT COUNT(*) FROM "Notifications"
-      WHERE (
-        recipient_id = $1 OR 
-        audience = 'admin' OR 
-        audience = 'all'
-      )
-      AND (expires_at IS NULL OR expires_at > NOW());
+      SELECT COUNT(*) FROM "Notifications" n
+      ${whereClauses};
     `;
-    const receivedCountResult = await db.query(receivedCountQuery, [adminId]);
-    const totalReceived = parseInt(receivedCountResult.rows[0].count, 10);
+    const receivedCountResult = await db.query(receivedCountQuery, queryParams);
+    const totalItems = parseInt(receivedCountResult.rows[0].count, 10);
 
     return {
-      sent: sentResult.rows,
-      received: receivedResult.rows,
-      meta: {
-        page,
-        limit,
-        totalSent,
-        totalReceived,
-        totalPagesSent: Math.ceil(totalSent / limit),
-        totalPagesReceived: Math.ceil(totalReceived / limit)
-      }
+      notifications: receivedResult.rows,
+      totalItems
     };
   },
 

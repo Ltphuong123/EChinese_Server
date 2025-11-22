@@ -481,23 +481,11 @@ const userModel = {
           audience: 'user',
           type: 'system',
           title: '🎖️ Bạn đã nhận huy hiệu mới!',
-          content: {
-            message: `Chúc mừng! Bạn đã đạt huy hiệu "${badge.name}". ${badge.rule_description || ''}`,
-            action: 'badge_unlocked',
-            badge_name: badge.name,
-            badge_level: badge.level,
-            min_points: badge.min_points
-          },
+          content: `Chúc mừng! Bạn đã đạt huy hiệu "${badge.name}" (Level ${badge.level}). ${badge.rule_description || ''}. Điểm cộng đồng hiện tại: ${updatedUser.community_points}/${badge.min_points}. Thời gian đạt được: ${new Date().toLocaleString('vi-VN')}.`,
           redirect_type: 'profile',
           data: {
-            badge_id: badge.id,
-            badge_level: badge.level,
-            badge_name: badge.name,
-            badge_icon: badge.icon,
-            badge_description: badge.rule_description,
-            min_points: badge.min_points,
-            current_points: updatedUser.community_points,
-            unlocked_at: new Date().toISOString()
+            id: userId,
+            data: `Huy hiệu: ${badge.name}\nLevel: ${badge.level}\nMô tả: ${badge.rule_description || 'Không có mô tả'}\nĐiểm tối thiểu: ${badge.min_points}\nĐiểm hiện tại: ${updatedUser.community_points}\nThời gian: ${new Date().toLocaleString('vi-VN')}`
           },
           priority: 2,
           from_system: true
@@ -552,27 +540,25 @@ const userModel = {
         const achievement = await achievementModel.findById(achievementId);
         
         if (achievement) {
+          const pointsEarned = pointsToAdd || achievement.points || 0;
           const notificationService = require('../services/notificationService');
           await notificationService.createNotification({
             recipient_id: userId,
             audience: 'user',
-            type: 'system',
+            type: 'achievement',
             title: '🏆 Bạn đã đạt thành tích mới!',
             content: {
-              message: `Chúc mừng! Bạn đã đạt thành tích "${achievement.name}". ${achievement.description || ''}`,
-              action: 'achievement_unlocked',
-              achievement_name: achievement.name,
-              points_earned: pointsToAdd || achievement.points || 0
+              html: `<h3>🎉 Chúc mừng! Bạn đã mở khóa thành tích mới!</h3>
+<p>Bạn đã đạt thành tích <strong>"${achievement.name}"</strong>.</p>
+${achievement.description ? `<p><em>${achievement.description}</em></p>` : ''}
+<p>🎁 <strong>Phần thưởng:</strong> +${pointsEarned} điểm cộng đồng</p>
+${progress ? `<p>📈 <strong>Tiến độ:</strong> ${progress}</p>` : ''}
+<p><small>Hãy tiếp tục phát huy để mở khóa thêm nhiều thành tích khác!</small></p>`
             },
             redirect_type: 'achievement',
             data: {
-              achievement_id: achievementId,
-              achievement_name: achievement.name,
-              achievement_description: achievement.description,
-              achievement_icon: achievement.icon,
-              points_earned: pointsToAdd || achievement.points || 0,
-              progress: progress,
-              unlocked_at: new Date().toISOString()
+              id: achievementId,
+              data: `Thành tích: ${achievement.name}\nMô tả: ${achievement.description || 'Không có mô tả'}\nĐiểm nhận được: ${pointsEarned}\n${progress ? `Tiến độ: ${progress}\n` : ''}Thời gian: ${new Date().toLocaleString('vi-VN')}`
             },
             priority: 2,
             from_system: true

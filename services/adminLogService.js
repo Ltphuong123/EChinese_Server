@@ -18,14 +18,31 @@ const adminLogService = {
   },
 
   /**
-   * Lấy danh sách log có phân trang.
-   * @param {object} filters - Các tùy chọn lọc.
+   * Lấy danh sách log có phân trang và filter.
+   * @param {object} filters - Các tùy chọn lọc và phân trang.
    * @returns {Promise<object>} Dữ liệu đã được định dạng cho response.
    */
-  getAllLogs: async () => {
-    // Gọi thẳng đến model mới và trả về dữ liệu
-    const logs = await adminLogModel.findAll();
-    return logs;
+  getAllLogs: async (filters) => {
+    const { page = 1, limit = 20 } = filters;
+    const offset = (page - 1) * limit;
+
+    const { logs, totalItems } = await adminLogModel.findAll({
+      ...filters,
+      offset,
+      limit
+    });
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: logs,
+      meta: {
+        total: totalItems,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages
+      }
+    };
   }
 
 };

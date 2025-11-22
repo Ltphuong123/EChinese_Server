@@ -321,12 +321,30 @@ const notificationController = {
         notification.read_at = new Date();
       }
 
+      // Mapping loại thông báo sang tiếng Việt
+      const typeMapping = {
+        'system': 'Hệ thống',
+        'community': 'Cộng đồng',
+        'violation': 'Vi phạm',
+        'comment_ban': 'Cấm bình luận',
+        'post_violation': 'Vi phạm bài viết',
+        'comment_violation': 'Vi phạm bình luận',
+        'account_warning': 'Cảnh báo tài khoản',
+        'account_suspended': 'Tạm khóa tài khoản',
+        'new_feature': 'Tính năng mới',
+        'maintenance': 'Bảo trì',
+        'promotion': 'Khuyến mãi',
+        'update': 'Cập nhật',
+        'achievement': 'Thành tựu'
+      };
+
       res.status(200).json({
         success: true,
         message: 'Lấy chi tiết thông báo thành công',
         data: {
           id: notification.id,
           type: notification.type,
+          type_display: typeMapping[notification.type] || notification.type,
           title: notification.title,
           content: notification.content,
           redirect_type: notification.redirect_type || 'none',
@@ -374,19 +392,7 @@ const notificationController = {
     }
   },
 
-  /**
-   * GET /api/admin/notifications/all
-   * Lấy tất cả thông báo đã gửi và đã nhận của admin
-   * 
-   * Query params:
-   * - page: number (default: 1)
-   * - limit: number (default: 20)
-   * 
-   * Response:
-   * - success: boolean
-   * - data: { sent: [], received: [] }
-   * - meta: { page, limit, totalSent, totalReceived, totalPagesSent, totalPagesReceived }
-   */
+
   getAdminAllNotifications: async (req, res) => {
     try {
       const adminId = req.user.id;
@@ -447,6 +453,210 @@ const notificationController = {
       res.status(500).json({
         success: false,
         message: 'Lỗi khi lấy danh sách thông báo',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/admin/notifications/sent
+   * Lấy danh sách thông báo đã tạo của admin
+   * 
+   * Query params:
+   * - page: number (default: 1, min: 1)
+   * - limit: number (default: 15, min: 1, max: 100)
+   * - status: string (optional) - 'draft' | 'published'
+   * - audience: string (optional) - 'all' | 'user' | 'admin'
+   * - type: string (optional) - 'system' | 'community' | 'reminder' | 'feedback'
+   * 
+   * Response format theo API_REQUIREMENTS.md
+   */
+  getAdminSentNotifications: async (req, res) => {
+    try {
+      const adminId = req.user.id;
+      const { page = 1, limit = 15, status, audience, type } = req.query;
+
+      // Validation
+      const pageNum = Math.max(parseInt(page) || 1, 1);
+      const limitNum = Math.min(Math.max(parseInt(limit) || 15, 1), 100);
+
+      // Validate status
+      let validStatus = null;
+      if (status === 'draft' || status === 'published') {
+        validStatus = status;
+      }
+
+      // Validate audience
+      let validAudience = null;
+      if (audience === 'all' || audience === 'user' || audience === 'admin') {
+        validAudience = audience;
+      }
+
+      const result = await notificationService.getAdminSentNotifications(adminId, {
+        page: pageNum,
+        limit: limitNum,
+        status: validStatus,
+        audience: validAudience,
+        type: type || null
+      });
+
+      res.status(200).json({
+        success: true,
+        data: result.data.map(n => ({
+          id: n.id,
+          title: n.title,
+          content: n.content,
+          type: n.type,
+          audience: n.audience,
+          from_system: n.from_system || false,
+          is_push_sent: n.is_push_sent,
+          priority: n.priority,
+          created_at: n.created_at,
+          published_at: n.is_push_sent ? n.created_at : null
+        })),
+        meta: result.meta
+      });
+
+    } catch (error) {
+      console.error('Error getting admin sent notifications:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi lấy danh sách thông báo đã tạo',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/admin/notifications/received
+   * Lấy danh sách thông báo đã nhận của admin
+   * 
+   * Query params:
+   * - page: number (default: 1, min: 1)
+   * - limit: number (default: 15, min: 1, max: 100)
+   * - read_status: string (optional) - 'read' | 'unread'
+   * - type: string (optional) - 'system' | 'report' | 'violation' | 'appeal' | 'subscription' | 'community' | 'achievement' | 'reminder' | 'feedback'
+   * 
+   * Response format theo API_REQUIREMENTS.md
+   */
+  getAdminReceivedNotifications: async (req, res) => {
+    try {
+      const adminId = req.user.id;
+      const { page = 1, limit = 15, read_status, type } = req.query;
+
+      // Validation
+      const pageNum = Math.max(parseInt(page) || 1, 1);
+      const limitNum = Math.min(Math.max(parseInt(limit) || 15, 1), 100);
+
+      // Validate read_status (chỉ chấp nhận 'read' hoặc 'unread')
+      let validReadStatus = null;
+      if (read_status === 'read' || read_status === 'unread') {
+        validReadStatus = read_status;
+      }
+
+      // Validate type
+      const validTypes = ['system', 'report', 'violation', 'appeal', 'subscription', 'community', 'achievement', 'reminder', 'feedback'];
+      let validType = null;
+      if (type && validTypes.includes(type)) {
+        validType = type;
+      }
+
+      const result = await notificationService.getAdminReceivedNotifications(adminId, {
+        page: pageNum,
+        limit: limitNum,
+        readStatus: validReadStatus,
+        type: validType
+      });
+
+      res.status(200).json({
+        success: true,
+        data: result.data.map(n => ({
+          id: n.id,
+          title: n.title,
+          content: n.content,
+          type: n.type,
+          audience: n.audience || 'admin',
+          from_system: n.from_system || false,
+          priority: n.priority,
+          read_at: n.read_at,
+          created_at: n.created_at,
+          related_type: n.redirect_type || null,
+          related_id: n.data?.related_id || null,
+          data: n.data || {}
+        })),
+        meta: result.meta
+      });
+
+    } catch (error) {
+      console.error('Error getting admin received notifications:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi lấy danh sách thông báo đã nhận',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * DELETE /api/admin/notifications/delete-all
+   * Xóa tất cả thông báo trong database (NGUY HIỂM!)
+   * 
+   * Response:
+   * - success: boolean
+   * - message: string
+   * - data: { deletedCount: number }
+   */
+  deleteAllNotifications: async (req, res) => {
+    try {
+      const deletedCount = await notificationService.deleteAllNotifications();
+
+      res.status(200).json({
+        success: true,
+        message: `Đã xóa tất cả ${deletedCount} thông báo trong database`,
+        data: {
+          deletedCount
+        }
+      });
+
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi xóa tất cả thông báo',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/admin/notifications/columns
+   * Lấy thông tin các cột trong bảng Notifications
+   * 
+   * Response:
+   * - success: boolean
+   * - data: array of column info
+   */
+  getTableColumns: async (req, res) => {
+    try {
+      const columns = await notificationService.getNotificationTableColumns();
+
+      res.status(200).json({
+        success: true,
+        message: 'Lấy thông tin các cột thành công',
+        data: columns.map((col) => ({
+          name: col.column_name,
+          type: col.data_type,
+          maxLength: col.character_maximum_length,
+          nullable: col.is_nullable === 'YES',
+          default: col.column_default
+        }))
+      });
+
+    } catch (error) {
+      console.error('Error getting table columns:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi lấy thông tin các cột',
         error: error.message
       });
     }

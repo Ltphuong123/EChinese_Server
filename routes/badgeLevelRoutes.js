@@ -5,6 +5,12 @@ const router = express.Router();
 const badgeLevelController = require('../controllers/badgeLevelController');
 const authMiddleware = require('../middlewares/authMiddleware');
 
+// GET /api/badges - Public API
+router.get(
+  '/badges',
+  badgeLevelController.getAllActiveBadgeLevels
+);
+
 // POST /api/admin/settings/badges
 router.post(
   '/admin/settings/badges',

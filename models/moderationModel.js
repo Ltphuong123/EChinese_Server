@@ -9,16 +9,87 @@ const moderationModel = {
     return result.rows[0];
   },
 
+  // findReports: async (filters) => {
+  //   const { limit, offset, search, status, targetType } = filters;
+  //   let where = `WHERE 1=1`;
+  //   const params = [];
+
+  //   if (status && status !== 'all') { params.push(status); where += ` AND r.status = $${params.length}`; }
+  //   if (targetType && targetType !== 'all') { params.push(targetType); where += ` AND r.target_type = $${params.length}`; }
+  //   if (search) { 
+  //       params.push(`%${search}%`); 
+  //       where += ` AND (r.reason ILIKE $${params.length} OR r.details ILIKE $${params.length} OR reporter.name ILIKE $${params.length})`; 
+  //   }
+
+  //   const baseQuery = `
+  //     FROM "Reports" r
+  //     LEFT JOIN "Users" reporter ON r.reporter_id = reporter.id
+  //     LEFT JOIN "Posts" p ON r.target_id = p.id AND r.target_type = 'post'
+  //     LEFT JOIN "Comments" c ON r.target_id = c.id AND r.target_type = 'comment'
+  //     LEFT JOIN "Users" target_user ON r.target_id = target_user.id AND r.target_type = 'user'
+  //     ${where}
+  //   `;
+
+  //   // --- Truy vấn đếm ---
+  //   const countQuery = `SELECT COUNT(r.id) ${baseQuery};`;
+  //   const totalResult = await db.query(countQuery, params);
+  //   const totalItems = parseInt(totalResult.rows[0].count, 10);
+
+  //   // --- Truy vấn lấy dữ liệu ---
+  //   const selectQuery = `
+  //     SELECT 
+  //       r.*,
+  //       jsonb_build_object(
+  //         'id', reporter.id,
+  //         'name', reporter.name,
+  //         'avatar_url', reporter.avatar_url,
+  //         'email', reporter.email,
+  //         'role', reporter.role
+  //       ) as reporter,
+  //       CASE r.target_type
+  //         WHEN 'post' THEN jsonb_build_object('id', p.id, 'title', p.title, 'content', p.content, 'author_id', p.user_id, 'status', p.status)
+  //         WHEN 'comment' THEN jsonb_build_object('id', c.id, 'content', c.content, 'author_id', c.user_id, 'post_id', c.post_id)
+  //         WHEN 'user' THEN jsonb_build_object('id', target_user.id, 'name', target_user.name, 'email', target_user.email)
+  //         ELSE jsonb_build_object('id', r.target_id, 'title', r.reason)
+  //       END as "targetContent"
+  //     ${baseQuery} 
+  //     ORDER BY r.created_at DESC 
+  //     LIMIT $${params.length + 1} OFFSET $${params.length + 2};
+  //   `;
+
+  //   const reportsResult = await db.query(selectQuery, [...params, limit, offset]);
+  //   return { reports: reportsResult.rows, totalItems };
+  // },
+
+  // Hàm findReports mới theo yêu cầu API_REQUIREMENTS.md
+
   findReports: async (filters) => {
-    const { limit, offset, search, status, targetType } = filters;
+    const { limit, offset, search, status, target_type } = filters;
     let where = `WHERE 1=1`;
     const params = [];
 
-    if (status && status !== 'all') { params.push(status); where += ` AND r.status = $${params.length}`; }
-    if (targetType && targetType !== 'all') { params.push(targetType); where += ` AND r.target_type = $${params.length}`; }
+    // Filter by status
+    if (status) { 
+      params.push(status); 
+      where += ` AND r.status = $${params.length}`; 
+    }
+    
+    // Filter by target_type
+    if (target_type) { 
+      params.push(target_type); 
+      where += ` AND r.target_type = $${params.length}`; 
+    }
+    
+    // Search by reason, details, reporter name, username, or report ID
     if (search) { 
-        params.push(`%${search}%`); 
-        where += ` AND (r.reason ILIKE $${params.length} OR r.details ILIKE $${params.length} OR reporter.name ILIKE $${params.length})`; 
+      params.push(`%${search}%`); 
+      where += ` AND (
+        r.reason ILIKE $${params.length} 
+        OR r.details ILIKE $${params.length} 
+        OR reporter.name ILIKE $${params.length}
+        OR reporter.username ILIKE $${params.length}
+        OR r.id::text ILIKE $${params.length}
+      )`; 
     }
 
     const baseQuery = `
@@ -30,27 +101,80 @@ const moderationModel = {
       ${where}
     `;
 
-    // --- Truy vấn đếm ---
+    // Count query
     const countQuery = `SELECT COUNT(r.id) ${baseQuery};`;
     const totalResult = await db.query(countQuery, params);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
 
-    // --- Truy vấn lấy dữ liệu ---
+    // Data query with full details
     const selectQuery = `
       SELECT 
-        r.*,
+        r.id,
+        r.reporter_id,
+        r.target_type,
+        r.target_id,
+        r.reason,
+        r.details,
+        r.status,
+        r.resolved_by,
+        r.resolved_at,
+        r.resolution,
+        r.related_violation_id,
+        COALESCE(r.auto_flagged, false) as auto_flagged,
+        r.created_at,
+        r.updated_at,
+        
+        -- Reporter info
         jsonb_build_object(
           'id', reporter.id,
           'name', reporter.name,
+          'username', reporter.username,
           'avatar_url', reporter.avatar_url,
           'email', reporter.email,
           'role', reporter.role
         ) as reporter,
+        
+        -- Target user ID (người bị báo cáo)
         CASE r.target_type
-          WHEN 'post' THEN jsonb_build_object('id', p.id, 'title', p.title, 'content', p.content, 'author_id', p.user_id, 'status', p.status)
-          WHEN 'comment' THEN jsonb_build_object('id', c.id, 'content', c.content, 'author_id', c.user_id, 'post_id', c.post_id)
-          WHEN 'user' THEN jsonb_build_object('id', target_user.id, 'name', target_user.name, 'email', target_user.email)
-          ELSE jsonb_build_object('id', r.target_id, 'title', r.reason)
+          WHEN 'post' THEN p.user_id
+          WHEN 'comment' THEN c.user_id
+          WHEN 'user' THEN target_user.id
+          ELSE NULL
+        END as target_user_id,
+        
+        -- Target content details
+        CASE r.target_type
+          WHEN 'post' THEN jsonb_build_object(
+            'id', p.id, 
+            'title', p.title, 
+            'content', p.content, 
+            'user_id', p.user_id, 
+            'status', p.status,
+            'created_at', p.created_at,
+            'deleted_at', p.deleted_at,
+            'deleted_by', p.deleted_by,
+            'deleted_reason', p.deleted_reason
+          )
+          WHEN 'comment' THEN jsonb_build_object(
+            'id', c.id, 
+            'content', c.content, 
+            'user_id', c.user_id, 
+            'post_id', c.post_id,
+            'created_at', c.created_at,
+            'deleted_at', c.deleted_at,
+            'deleted_by', c.deleted_by,
+            'deleted_reason', c.deleted_reason
+          )
+          WHEN 'user' THEN jsonb_build_object(
+            'id', target_user.id, 
+            'name', target_user.name, 
+            'username', target_user.username,
+            'email', target_user.email,
+            'avatar_url', target_user.avatar_url,
+            'role', target_user.role,
+            'is_active', target_user.is_active
+          )
+          ELSE NULL
         END as "targetContent"
       ${baseQuery} 
       ORDER BY r.created_at DESC 

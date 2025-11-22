@@ -53,21 +53,14 @@ const commentController = {
             type: 'community',
             title: '💬 Có người bình luận bài viết của bạn',
             content: {
-              message: `${commenter?.name || 'Một người dùng'} đã bình luận vào bài viết "${post.title}" của bạn.`,
-              action: 'post_commented',
-              commenter_name: commenter?.name || 'Người dùng'
+              html: `<p><strong>${commenter?.name || 'Một người dùng'}</strong> đã bình luận vào bài viết <strong>"${post.title}"</strong> của bạn.</p>
+<p><em>Nội dung bình luận:</em> "${commentPreview}..."</p>
+${parentCommentId ? '<p><small>💬 Đây là một phản hồi trong chuỗi bình luận</small></p>' : ''}`
             },
             redirect_type: 'post_comment',
             data: {
-              post_id: postId,
-              post_title: post.title,
-              comment_id: newComment.id,
-              comment_preview: commentPreview,
-              commenter_id: userId,
-              commenter_name: commenter?.name || 'Người dùng',
-              commenter_avatar: commenter?.avatar_url || null,
-              commented_at: new Date().toISOString(),
-              is_reply: !!parentCommentId
+              id: newComment.id,
+              data: `Bài viết: ${post.title}\nNgười bình luận: ${commenter?.name || 'Người dùng'}\nNội dung: ${commentPreview}...\nThời gian: ${new Date().toLocaleString('vi-VN')}${parentCommentId ? '\nLoại: Phản hồi' : ''}`
             }
           }, true); // auto push = true
         }
@@ -90,20 +83,14 @@ const commentController = {
               type: 'community',
               title: '↩️ Có người trả lời bình luận của bạn',
               content: {
-                message: `${commenter?.name || 'Một người dùng'} đã trả lời bình luận của bạn.`,
-                action: 'comment_replied',
-                commenter_name: commenter?.name || 'Người dùng'
+                html: `<p><strong>${commenter?.name || 'Một người dùng'}</strong> đã trả lời bình luận của bạn.</p>
+<p><em>Nội dung trả lời:</em> "${commentPreview}..."</p>
+<p><small>Nhấn để xem chuỗi bình luận đầy đủ</small></p>`
               },
               redirect_type: 'post_comment',
               data: {
-                post_id: postId,
-                comment_id: newComment.id,
-                parent_comment_id: parentCommentId,
-                comment_preview: commentPreview,
-                commenter_id: userId,
-                commenter_name: commenter?.name || 'Người dùng',
-                commenter_avatar: commenter?.avatar_url || null,
-                replied_at: new Date().toISOString()
+                id: newComment.id,
+                data: `Người trả lời: ${commenter?.name || 'Người dùng'}\nNội dung: ${commentPreview}...\nThời gian: ${new Date().toLocaleString('vi-VN')}\nBài viết ID: ${postId}`
               }
             }, true); // auto push = true
           }
@@ -229,6 +216,8 @@ const commentController = {
       
       // Gửi thông báo chi tiết cho user với lý do khôi phục
       const restoreReason = reason || 'Bình luận của bạn đã được xem xét lại và khôi phục.';
+      const violationsCleared = violations ? violations.length : 0;
+      
       const notificationService = require('../services/notificationService');
       await notificationService.createNotification({
         recipient_id: comment.user_id,
@@ -236,19 +225,16 @@ const commentController = {
         type: 'community',
         title: '✅ Bình luận của bạn đã được khôi phục',
         content: {
-          message: restoreReason,
-          action: 'comment_restored',
-          violations_removed: violations ? violations.length : 0,
-          restore_reason: restoreReason
+          html: `<p>Bình luận của bạn đã được quản trị viên khôi phục.</p>
+<p><strong>Lý do khôi phục:</strong> ${restoreReason}</p>
+${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong> vi phạm liên quan.</p>` : ''}
+<p><em>Nội dung bình luận:</em> "${commentPreview}..."</p>
+<p><small>Cảm ơn bạn đã đóng góp ý kiến cho cộng đồng!</small></p>`
         },
         redirect_type: 'post_comment',
         data: {
-          post_id: comment.post_id,
-          comment_id: commentId,
-          comment_preview: commentPreview,
-          restored_at: new Date().toISOString(),
-          violations_cleared: violations ? violations.length : 0,
-          restore_reason: restoreReason
+          id: commentId,
+          data: `Lý do khôi phục: ${restoreReason}\nKhôi phục bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString('vi-VN')}\nVi phạm đã xóa: ${violationsCleared}\nBài viết ID: ${comment.post_id}\n\nNội dung: ${commentPreview}...`
         }
       }, true); // auto push = true
       
@@ -304,6 +290,10 @@ const commentController = {
           }));
         }
         
+        const rulesText = violatedRulesDetail.map((r, i) => 
+          `<li><strong>${r.title}</strong> (${r.severity}): ${r.description}</li>`
+        ).join('');
+        
         const notificationService = require('../services/notificationService');
         await notificationService.createNotification({
           recipient_id: removedComment.user_id,
@@ -311,23 +301,18 @@ const commentController = {
           type: 'violation',
           title: '⚠️ Bình luận của bạn đã bị gỡ do vi phạm',
           content: {
-            message: reason,
-            violation_severity: severity || 'medium',
-            violation_type: 'comment',
-            detected_by: 'admin',
-            violated_rules_count: violatedRulesDetail.length
+            html: `<p>Bình luận của bạn đã bị gỡ bởi quản trị viên.</p>
+<p><strong>Lý do:</strong> ${reason}<br>
+<strong>Độ nghiêm trọng:</strong> <span class="badge-${severity || 'medium'}">${severity || 'medium'}</span><br>
+<strong>Vi phạm:</strong> ${violatedRulesDetail.length} quy tắc cộng đồng</p>
+${violatedRulesDetail.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${rulesText}</ul>` : ''}
+<p><em>Nội dung bình luận:</em> "${commentPreview}..."</p>
+<p><small>Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
           },
           redirect_type: 'post_comment',
           data: {
-            post_id: removedComment.post_id,
-            comment_id: commentId,
-            comment_preview: commentPreview,
-            violation_reason: reason,
-            severity: severity,
-            violated_rules: violatedRulesDetail,
-            removed_by: adminId,
-            removed_at: new Date().toISOString(),
-            resolution: resolution || reason
+            id: commentId,
+            data: `Lý do: ${reason}\nĐộ nghiêm trọng: ${severity || 'medium'}\nGỡ bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString('vi-VN')}\nBài viết ID: ${removedComment.post_id}\n\nQuy tắc vi phạm: ${violatedRulesDetail.length}\n\nNội dung: ${commentPreview}...`
           }
         }, true); // auto push = true
       }

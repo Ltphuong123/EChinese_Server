@@ -14,14 +14,11 @@ const notificationService = {
   },
 
   createNotification: async (payload, autoPush = true) => {
-    // Tạo notification record
-    const notification = await notificationModel.create(payload);
 
-    // Tự động gửi push notification nếu autoPush = true
+    const notification = await notificationModel.create(payload);
     if (autoPush) {
       await notificationService.sendPushNotification(notification);
     }
-
     return notification;
   },
 
@@ -40,16 +37,23 @@ const notificationService = {
           notification_id: notification.id,
           type: notification.type,
           redirect_type: redirect_type || 'none',
+          timestamp: Date.now().toString(), // Thêm timestamp để frontend check duplicate
           ...data, // data đã chứa tất cả thông tin cần thiết
         },
       };
 
       // Gửi theo audience
-      if (audience === 'all'|| audience === 'admin'|| audience === 'user') {
+      if (audience === 'all') {
         // Broadcast đến tất cả users
+        console.log(`📢 Broadcasting to all users`);
         await fcmService.sendToAll(payload);
-      } else if (recipient_id) {
+      } else if (audience === 'admin') {
+        // Gửi đến tất cả admins (có thể implement riêng nếu cần)
+        console.log(`📢 Broadcasting to all admins`);
+        await fcmService.sendToAll(payload);
+      } else if (audience === 'user' && recipient_id) {
         // Gửi đến user cụ thể
+        console.log(`👤 Sending to user: ${recipient_id}`);
         await fcmService.sendToUser(recipient_id, payload);
       }
 
@@ -135,6 +139,73 @@ const notificationService = {
     }
 
     return notification;
+  },
+
+  /**
+   * Xóa tất cả thông báo trong database (Admin only - NGUY HIỂM!)
+   */
+  deleteAllNotifications: async () => {
+    const count = await notificationModel.deleteAll();
+    return count;
+  },
+
+  /**
+   * Lấy thông tin các cột trong bảng Notifications
+   */
+  getNotificationTableColumns: async () => {
+    const columns = await notificationModel.getTableColumns();
+    return columns;
+  },
+
+  /**
+   * Lấy danh sách thông báo đã tạo của admin
+   */
+  getAdminSentNotifications: async (adminId, options) => {
+    const { page = 1, limit = 15, status, audience, type } = options;
+    const { notifications, totalItems } = await notificationModel.findAdminSentNotifications(adminId, { 
+      page, 
+      limit, 
+      status, 
+      audience, 
+      type 
+    });
+    
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: notifications,
+      meta: {
+        total: totalItems,
+        page,
+        limit,
+        totalPages
+      }
+    };
+  },
+
+  /**
+   * Lấy danh sách thông báo đã nhận của admin
+   */
+  getAdminReceivedNotifications: async (adminId, options) => {
+    const { page = 1, limit = 15, readStatus, type } = options;
+    const { notifications, totalItems } = await notificationModel.findAdminReceivedNotifications(adminId, { 
+      page, 
+      limit, 
+      readStatus, 
+      type 
+    });
+    
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: notifications,
+      meta: {
+        total: totalItems,
+        page,
+        limit,
+        totalPages
+      }
+    };
   },
 
 };

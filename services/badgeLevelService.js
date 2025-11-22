@@ -30,6 +30,10 @@ const badgeLevelService = {
     return await badgeLevelModel.findAll();
   },
 
+  getAllActiveBadgeLevels: async () => {
+    return await badgeLevelModel.findAllActive();
+  },
+
   updateBadgeLevel: async (id, payload) => {
     // Kiểm tra trùng lặp min_points
     if (payload.min_points !== undefined) {

@@ -37,67 +37,140 @@ const postModel = {
   findAllPublic: async (filters) => {
     const { limit, offset, topic, currentUserId, status } = filters;
 
-    // --- Xử lý tham số và điều kiện WHERE ---
-    const queryParams = [currentUserId, limit, offset];
-    let whereClauses = `WHERE p.deleted_at IS NULL`;
+    // Build WHERE conditions
+    const conditions = [
+      'p.deleted_at IS NULL',
+      "p.status != 'removed'",  // Không hiển thị bài đã gỡ
+    ];
+    const params = [];
 
-    // Lọc theo topic
-    if (topic && topic !== "undefined") {
-      queryParams.push(topic);
-      whereClauses += ` AND p.topic = $${queryParams.length}`;
+    // Filter by topic
+    if (topic) {
+      params.push(topic);
+      conditions.push(`p.topic = $${params.length}`);
     }
 
-    // Lọc theo status (trạng thái kiểm duyệt)
+    // Filter by status
     if (status && status !== "all") {
-      queryParams.push(status);
-      whereClauses += ` AND p.status = $${queryParams.length}`;
+      params.push(status);
+      conditions.push(`p.status = $${params.length}`);
+      
+      // Nếu filter published, phải approved
+      if (status === 'published') {
+        conditions.push(`p.is_approved = true`);
+      }
     } else {
-      // Mặc định, chỉ lấy các bài 'published' và đã 'approved'
-      whereClauses += ` AND p.status = 'published' AND p.is_approved = true`;
+      // Mặc định: chỉ lấy bài published và approved
+      conditions.push(`p.status = 'published'`);
+      conditions.push(`p.is_approved = true`);
     }
 
-    const baseQuery = `
+    const whereClause = 'WHERE ' + conditions.join(' AND ');
+
+    // ===== COUNT QUERY =====
+    const countQuery = `
+      SELECT COUNT(p.id)
+      FROM "Posts" p
+      ${whereClause}
+    `;
+    
+    const totalResult = await db.query(countQuery, params);
+    const totalItems = parseInt(totalResult.rows[0].count, 10);
+
+    // ===== SELECT QUERY =====
+    // Thêm currentUserId, limit, offset vào đầu params
+    const selectParams = [currentUserId, limit, offset, ...params];
+    
+    // Rebuild WHERE với offset đúng (bắt đầu từ $4)
+    const selectConditions = [
+      'p.deleted_at IS NULL',
+      "p.status != 'removed'",
+    ];
+    
+    let paramIndex = 4; // Vì $1=currentUserId, $2=limit, $3=offset
+    
+    if (topic) {
+      selectConditions.push(`p.topic = $${paramIndex++}`);
+    }
+    
+    if (status && status !== "all") {
+      selectConditions.push(`p.status = $${paramIndex++}`);
+      if (status === 'published') {
+        selectConditions.push(`p.is_approved = true`);
+      }
+    } else {
+      selectConditions.push(`p.status = 'published'`);
+      selectConditions.push(`p.is_approved = true`);
+    }
+    
+    const selectWhereClause = 'WHERE ' + selectConditions.join(' AND ');
+
+    const selectQuery = `
+      SELECT 
+        p.*,
+        -- User info (full profile theo yêu cầu)
+        jsonb_build_object(
+          'id', u.id,
+          'username', u.username,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'email', u.email,
+          'role', u.role,
+          'is_active', u.is_active,
+          'isVerify', u."isVerify",
+          'community_points', u.community_points,
+          'level', u.level,
+          'badge_level', u.badge_level,
+          'language', u.language,
+          'created_at', u.created_at,
+          'last_login', u.last_login,
+          'provider', u.provider
+        ) as "user",
+        -- Badge info (full theo yêu cầu)
+        jsonb_build_object(
+          'id', bl.id,
+          'level', bl.level,
+          'name', bl.name,
+          'icon', bl.icon,
+          'min_points', bl.min_points,
+          'rule_description', bl.rule_description,
+          'is_active', bl.is_active
+        ) as badge,
+        -- Comment count
+        (SELECT COUNT(*) 
+         FROM "Comments" cmt 
+         WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL
+        ) as comment_count,
+        -- User interactions
+        EXISTS (
+          SELECT 1 FROM "PostLikes" pl 
+          WHERE pl.post_id = p.id AND pl.user_id = $1
+        ) as "isLiked",
+        EXISTS (
+          SELECT 1 FROM "Comments" c 
+          WHERE c.post_id = p.id AND c.user_id = $1 AND c.deleted_at IS NULL
+        ) as "isCommented",
+        CASE 
+          WHEN $1 IS NULL THEN false  -- Khách chưa login → không track
+          ELSE EXISTS (
+            SELECT 1 FROM "PostViews" pv 
+            WHERE pv.post_id = p.id AND pv.user_id = $1
+          )
+        END as "isViewed"
       FROM "Posts" p
       JOIN "Users" u ON p.user_id = u.id
       LEFT JOIN "BadgeLevels" bl ON u.badge_level = bl.level
-      ${whereClauses}
-    `;
-
-    // --- Truy vấn đếm ---
-    const countQuery = `SELECT COUNT(p.id) ${baseQuery}`;
-    const countParams = queryParams.slice(3); // Chỉ lấy các param của WHERE
-    const totalResult = await db.query(countQuery, countParams);
-    const totalItems = parseInt(totalResult.rows[0].count, 10);
-
-    // --- Truy vấn lấy dữ liệu chính ---
-    const selectQuery = `
-      SELECT 
-        p.*, -- Lấy tất cả các trường từ Posts, bao gồm auto_flagged
-        jsonb_build_object(
-          'id', u.id,
-          'name', u.name,
-          'avatar_url', u.avatar_url,
-          'badge_level', u.badge_level,
-          'community_points', u.community_points,
-          'level', u.level,
-          'role', u.role
-        ) as "user",
-        jsonb_build_object(
-            'level', bl.level,
-            'name', bl.name,
-            'icon', bl.icon
-        ) as badge,
-        (SELECT COUNT(*) FROM "Comments" cmt WHERE cmt.post_id = p.id AND cmt.deleted_at IS NULL) as comment_count,
-        EXISTS (SELECT 1 FROM "PostLikes" pl WHERE pl.post_id = p.id AND pl.user_id = $1) as "isLiked",
-        EXISTS (SELECT 1 FROM "Comments" c WHERE c.post_id = p.id AND c.user_id = $1 AND c.deleted_at IS NULL) as "isCommented",
-        EXISTS (SELECT 1 FROM "PostViews" pv WHERE pv.post_id = p.id AND pv.user_id = $1) as "isViewed"
-      ${baseQuery}
+      ${selectWhereClause}
       ORDER BY p.is_pinned DESC, p.created_at DESC
-      LIMIT $2 OFFSET $3;
+      LIMIT $2 OFFSET $3
     `;
 
-    const postsResult = await db.query(selectQuery, queryParams);
-    return { posts: postsResult.rows, totalItems };
+    const postsResult = await db.query(selectQuery, selectParams);
+
+    return { 
+      posts: postsResult.rows, 
+      totalItems 
+    };
   },
 
   findById: async (postId) => {
@@ -900,4 +973,5 @@ const postModel = {
 };
 
 module.exports = postModel;
+
 

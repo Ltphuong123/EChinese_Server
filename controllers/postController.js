@@ -22,6 +22,7 @@ const postController = {
       const newPost = await postService.createPost(postData, userId);
 
       // Tự động kiểm duyệt bằng AI (chạy async, không chờ)
+      // Thông báo sẽ được gửi từ autoModerationService.moderatePost
       const autoModerationService = require("../services/autoModerationService");
       autoModerationService
         .moderatePost(newPost.id, {
@@ -31,36 +32,7 @@ const postController = {
         .then(async (result) => {
           if (result.removed) {
             console.log(`Post ${newPost.id} auto-removed:`, result.reason);
-            
-            // Gửi thông báo cho người dùng khi AI gỡ bài
-            const notificationModel = require("../models/notificationModel");
-            const contentPreview = typeof postData.content === 'string' 
-              ? postData.content.substring(0, 100) 
-              : (postData.content?.text || postData.content?.html || '').substring(0, 100);
-            
-            const notificationService = require("../services/notificationService");
-            await notificationService.createNotification({
-              recipient_id: userId,
-              audience: "user",
-              type: "violation",
-              title: "🤖 Bài viết của bạn đã bị gỡ tự động",
-              content: {
-                message: result.reason || "Bài viết vi phạm quy định cộng đồng",
-                violation_severity: result.severity || "medium",
-                violation_type: "post",
-                detected_by: "AI"
-              },
-              redirect_type: "post",
-              data: {
-                post_id: newPost.id,
-                post_title: postData.title,
-                post_preview: contentPreview,
-                violation_reason: result.reason,
-                severity: result.severity || "medium",
-                flagged_content: result.flaggedContent || null,
-                auto_detected: true
-              }
-            }, true); // auto push = true
+            // Thông báo đã được gửi từ autoModerationService.moderatePost
           }
         })
         .catch((error) => {
@@ -115,37 +87,63 @@ const postController = {
     }
   },
 
-  // READ (All)
+  // READ (All) - GET /api/community/posts
+  // Lấy danh sách bài viết công khai với phân trang và bộ lọc
   getPosts: async (req, res) => {
     try {
+      const { page = 1, limit = 15, topic, status = 'published' } = req.query;
+
+      // Validation
+      const pageNum = Math.max(parseInt(page) || 1, 1);
+      const limitNum = Math.min(Math.max(parseInt(limit) || 15, 1), 100);
+
+      // Validate status
+      const validStatuses = ['published', 'draft', 'removed', 'pending', 'all'];
+      let validStatus = 'published'; // default
+      if (status && validStatuses.includes(status)) {
+        validStatus = status;
+      }
+
+      // Validate topic (không gửi nếu "all")
+      let validTopic = null;
+      if (topic && topic !== 'all') {
+        const validTopics = ['learning_tips', 'grammar', 'vocabulary', 'pronunciation', 'culture', 'travel', 'hsk', 'conversation', 'general'];
+        if (validTopics.includes(topic)) {
+          validTopic = topic;
+        }
+      }
+
       const filters = {
-        page: parseInt(req.query.page, 10) || 1,
-        limit: parseInt(req.query.limit, 10) || 10,
-        topic: req.query.topic || "",
-        userId: req.user.id || "",
-        status: req.query.status,
+        page: pageNum,
+        limit: limitNum,
+        topic: validTopic,
+        currentUserId: req.user?.id || null,
+        status: validStatus,
       };
+
+      // Lấy danh sách bài viết từ service
       const result = await postService.getPublicPosts(filters);
 
-      // Lấy thông tin user đã like/comment cho các posts
+      // Lấy thông tin user đã like/comment/view cho các posts
       const postIds = result.data.map((post) => post.id);
       const userInteractions = await postService.getPostsUserInteractions(
         postIds,
         req.user.id
       );
 
-      // Transform posts to required shape
+      // Transform posts theo cấu trúc yêu cầu
       const transformed = (result.data || []).map((post) => {
         const interaction = userInteractions.find(
           (i) => i.postId === post.id
-        ) || { isLiked: false, isCommented: false };
+        ) || { isLiked: false, isCommented: false, isViewed: false };
 
-        // Build content object
+        // Chuẩn hóa content object
         let contentHtml = null,
           contentText = null,
           contentImages = [];
         const rawContent = post.content;
         const stripTags = (html) => (html || "").replace(/<[^>]*>/g, "").trim();
+        
         if (rawContent && typeof rawContent === "object") {
           contentHtml = rawContent.html || rawContent.content || null;
           contentText = rawContent.text || stripTags(contentHtml);
@@ -156,6 +154,7 @@ const postController = {
           contentHtml = rawContent;
           contentText = stripTags(rawContent);
         }
+
         return {
           id: post.id,
           user_id: post.user_id,
@@ -166,22 +165,31 @@ const postController = {
             images: contentImages,
           },
           topic: post.topic,
+          status: post.status,
+          is_pinned: post.is_pinned || false,
+          is_approved: post.is_approved || false,
+          auto_flagged: post.auto_flagged || false,
+          created_at: post.created_at,
+          updated_at: post.updated_at,
+          deleted_at: post.deleted_at || null,
+          deleted_by: post.deleted_by || null,
+          deleted_reason: post.deleted_reason || null,
           likes: post.likes || 0,
           views: post.views || 0,
-          created_at: post.created_at,
-          status: post.status,
-          is_pinned: post.is_pinned,
-          is_approved: post.is_approved,
-          auto_flagged: post.auto_flagged,
+          comment_count: post.comment_count || 0,
           user: post.user || null,
           badge: post.badge || null,
-          comment_count: post.comment_count || 0,
           isLiked: interaction.isLiked,
           isCommented: interaction.isCommented,
           isViewed: interaction.isViewed,
         };
       });
-      res.status(200).json({ data: transformed, meta: result.meta });
+
+      // Trả về response theo đúng format yêu cầu (không có success field)
+      res.status(200).json({ 
+        data: transformed, 
+        meta: result.meta 
+      });
     } catch (error) {
       res.status(500).json({
         success: false,
@@ -546,17 +554,14 @@ const postController = {
           // Lấy thông tin chi tiết các rule bị vi phạm
           const db = require("../config/db");
           let violatedRulesDetail = [];
+          let rulesText = '';
           if (violationInput.ruleIds && violationInput.ruleIds.length > 0) {
             const rulesResult = await db.query(
               `SELECT id, title, description, severity_default FROM "CommunityRules" WHERE id = ANY($1::uuid[])`,
               [violationInput.ruleIds]
             );
-            violatedRulesDetail = rulesResult.rows.map(r => ({
-              id: r.id,
-              title: r.title,
-              description: r.description,
-              severity: r.severity_default
-            }));
+            violatedRulesDetail = rulesResult.rows;
+            rulesText = violatedRulesDetail.map((r, i) => `${i+1}. ${r.title} (${r.severity_default}): ${r.description}`).join('\n');
           }
 
           // Gửi thông báo vi phạm chi tiết với thông tin bài viết
@@ -567,23 +572,18 @@ const postController = {
             type: "violation",
             title: "⚠️ Bài viết của bạn đã bị gỡ do vi phạm",
             content: {
-              message: violation.reason,
-              violation_severity: violationInput.severity,
-              violation_type: "post",
-              detected_by: "admin",
-              violated_rules_count: violatedRulesDetail.length
+              html: `<p>Bài viết <strong>"${existing.title}"</strong> của bạn đã bị gỡ bởi quản trị viên.</p>
+<p><strong>Lý do:</strong> ${violation.reason}<br>
+<strong>Độ nghiêm trọng:</strong> <span class="badge-${violationInput.severity}">${violationInput.severity}</span><br>
+<strong>Vi phạm:</strong> ${violatedRulesDetail.length} quy tắc cộng đồng</p>
+${violatedRulesDetail.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRulesDetail.map(r => `<li><strong>${r.title}</strong> (${r.severity_default}): ${r.description}</li>`).join('')}</ul>` : ''}
+<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p>
+<p><small>Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
             },
             redirect_type: "post",
             data: {
-              post_id: postId,
-              post_title: existing.title,
-              post_preview: contentPreview,
-              violation_reason: violation.reason,
-              severity: violationInput.severity,
-              violated_rules: violatedRulesDetail,
-              removed_by: deletedBy,
-              removed_at: new Date().toISOString(),
-              resolution: violation.resolution || violation.reason
+              id: postId,
+              data: `Bài viết: ${existing.title}\nLý do: ${violation.reason}\nĐộ nghiêm trọng: ${violationInput.severity}\nGỡ bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString('vi-VN')}\n\nQuy tắc vi phạm:\n${rulesText}\n\nNội dung: ${contentPreview}...`
             }
           }, true); // auto push = true
         }
@@ -626,6 +626,8 @@ const postController = {
             ? existing.content.substring(0, 100) 
             : (existing.content?.text || existing.content?.html || '').substring(0, 100);
 
+          const violationsCleared = violations ? violations.length : 0;
+
           // Gửi thông báo chi tiết tới người dùng với lý do khôi phục
           const notificationService = require("../services/notificationService");
           await notificationService.createNotification({
@@ -634,20 +636,16 @@ const postController = {
             type: "community",
             title: "✅ Bài viết của bạn đã được khôi phục",
             content: {
-              message: restoreReason,
-              action: "post_restored",
-              violations_removed: violations ? violations.length : 0,
-              restore_reason: restoreReason
+              html: `<p>Bài viết <strong>"${existing.title}"</strong> của bạn đã được quản trị viên khôi phục.</p>
+<p><strong>Lý do khôi phục:</strong> ${restoreReason}</p>
+${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong> vi phạm liên quan.</p>` : ''}
+<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p>
+<p><small>Cảm ơn bạn đã đóng góp nội dung chất lượng cho cộng đồng!</small></p>`
             },
             redirect_type: "post",
             data: {
-              post_id: postId,
-              post_title: existing.title,
-              post_preview: contentPreview,
-              restored_by: adminId,
-              restored_at: new Date().toISOString(),
-              violations_cleared: violations ? violations.length : 0,
-              restore_reason: restoreReason
+              id: postId,
+              data: `Bài viết: ${existing.title}\nLý do khôi phục: ${restoreReason}\nKhôi phục bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString('vi-VN')}\nVi phạm đã xóa: ${violationsCleared}\n\nNội dung: ${contentPreview}...`
             }
           }, true); // auto push = true
         }
@@ -737,11 +735,11 @@ const postController = {
 
       // Gửi thông báo khi có người like (không phải tự like)
       if (result.action === "liked" && userId !== post.user_id) {
-        const notificationModel = require("../models/notificationModel");
         const userModel = require("../models/userModel");
         
         // Lấy thông tin người like
         const liker = await userModel.findUserById(userId);
+        const likerName = liker?.name || 'Một người dùng';
         
         // Tạo preview của nội dung bài viết
         const contentPreview = typeof post.content === 'string' 
@@ -755,20 +753,14 @@ const postController = {
           type: "community",
           title: "❤️ Có người thích bài viết của bạn",
           content: {
-            message: `${liker?.name || 'Một người dùng'} đã thích bài viết "${post.title}" của bạn.`,
-            action: "post_liked",
-            liker_name: liker?.name || 'Người dùng'
+            html: `<p><strong>${likerName}</strong> đã thích bài viết <strong>"${post.title}"</strong> của bạn.</p>
+<p>❤️ Tổng số lượt thích: <strong>${result.likes}</strong></p>
+<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p>`
           },
           redirect_type: "post",
           data: {
-            post_id: postId,
-            post_title: post.title,
-            post_preview: contentPreview,
-            liker_id: userId,
-            liker_name: liker?.name || 'Người dùng',
-            liker_avatar: liker?.avatar_url || null,
-            total_likes: result.likes,
-            liked_at: new Date().toISOString()
+            id: postId,
+            data: `Bài viết: ${post.title}\nNgười thích: ${likerName}\nTổng lượt thích: ${result.likes}\nThời gian: ${new Date().toLocaleString('vi-VN')}\n\nNội dung: ${contentPreview}...`
           }
         }, true); // auto push = true
       }

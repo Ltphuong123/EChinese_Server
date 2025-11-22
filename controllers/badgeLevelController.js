@@ -52,6 +52,19 @@ const badgeLevelController = {
     }
   },
 
+  getAllActiveBadgeLevels: async (req, res) => {
+    try {
+      const badgeLevels = await badgeLevelService.getAllActiveBadgeLevels();
+      res.status(200).json({
+        success: true,
+        message: 'Lấy danh sách huy hiệu đang hoạt động thành công.',
+        data: badgeLevels
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách huy hiệu đang hoạt động', error: error.message });
+    }
+  },
+
   updateBadgeLevelAdmin: async (req, res) => {
     const { id } = req.params;
     const payload = req.body;

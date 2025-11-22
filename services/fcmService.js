@@ -15,6 +15,8 @@ const fcmService = {
    * @param {string} payload.imageUrl - URL hình ảnh (optional)
    */
   sendToUser: async (userId, payload) => {
+    console.log(`🚀 [FCM DEBUG] sendToUser called for userId: ${userId}, title: ${payload.title}`);
+    
     if (!isFirebaseEnabled()) {
       console.log('⚠️  Firebase not enabled, skipping push notification');
       return { success: false, reason: 'firebase_not_configured' };
@@ -30,6 +32,8 @@ const fcmService = {
       }
 
       const tokens = devices.map(d => d.token);
+      console.log(`📱 Found ${tokens.length} device(s) for user ${userId}`);
+      
       const result = await fcmService.sendToTokens(tokens, payload);
 
       return result;

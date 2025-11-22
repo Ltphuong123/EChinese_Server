@@ -792,6 +792,9 @@ CREATE TABLE "Reports" (
   "auto_flagged" boolean DEFAULT false
 );
 
+           
+ 
+
 COMMENT ON TABLE "Reports" IS 'Lưu báo cáo do user hoặc hệ thống (AI) tạo. Khi target_type=''bug'' → dùng details + attachments để miêu tả lỗi. related_violation_id giúp truy vết sang Violation.';
 CREATE INDEX ON "Reports" ("target_type", "target_id");
 CREATE INDEX ON "Reports" ("reporter_id");

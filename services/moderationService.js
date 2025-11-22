@@ -6,12 +6,30 @@ const notificationService = require('./notificationService');
 
 const moderationService = {
   createReport: (data) => moderationModel.createReport(data),
+  
   getReports: async (filters) => {
-    const { page = 1, limit = 10 } = filters;
+    const { page = 1, limit = 10, status, target_type, search } = filters;
     const offset = (page - 1) * limit;
-    const { reports, totalItems } = await moderationModel.findReports({ ...filters, offset, limit });
+    
+    const { reports, totalItems } = await moderationModel.findReports({ 
+      status, 
+      target_type, 
+      search, 
+      offset, 
+      limit 
+    });
+    
     const totalPages = Math.ceil(totalItems / limit);
-    return { data: reports, meta: { total: totalItems, page, limit, totalPages } };
+    
+    return { 
+      data: reports, 
+      meta: { 
+        total: totalItems, 
+        page: parseInt(page), 
+        limit: parseInt(limit), 
+        totalPages 
+      } 
+    };
   },
   
 
@@ -162,10 +180,16 @@ const moderationService = {
   },
 
   getViolations: async (filters) => {
-    const { page, limit } = filters;
+    const { page = 1, limit = 12, severity, targetType, search } = filters;
     const offset = (page - 1) * limit;
 
-    const { violations, totalItems } = await moderationModel.findViolations({ ...filters, limit, offset });
+    const { violations, totalItems } = await moderationModel.findViolations({ 
+      severity, 
+      targetType, 
+      search, 
+      limit, 
+      offset 
+    });
     
     const totalPages = Math.ceil(totalItems / limit);
     return { data: violations, meta: { total: totalItems, page, limit, totalPages } };
@@ -210,9 +234,14 @@ const moderationService = {
   },
 
   getAdminAppeals: async (filters) => {
-    const { page = 1, limit = 10 } = filters;
+    const { page = 1, limit = 12, status, search } = filters;
     const offset = (page - 1) * limit;
-    const { appeals, totalItems } = await moderationModel.findAllAppeals({ ...filters, offset, limit });
+    const { appeals, totalItems } = await moderationModel.findAllAppeals({ 
+      status, 
+      search, 
+      offset, 
+      limit 
+    });
     const totalPages = Math.ceil(totalItems / limit);
     return { data: appeals, meta: { total: totalItems, page, limit, totalPages } };
   },

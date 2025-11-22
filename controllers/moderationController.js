@@ -17,9 +17,36 @@ const moderationController = {
   // --- Admin-facing ---
   getReports: async (req, res) => {
     try {
-      const result = await moderationService.getReports(req.query);
+      // Parse và validate query parameters
+      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 100);
+      
+      // Xử lý status filter
+      let status = req.query.status || 'all';
+      const validStatuses = ['all', 'pending', 'in_progress', 'resolved', 'dismissed'];
+      if (!validStatuses.includes(status)) {
+        status = 'all';
+      }
+      
+      // Xử lý target_type filter
+      let targetType = req.query.target_type || 'all';
+      const validTargetTypes = ['all', 'post', 'comment', 'user', 'bug', 'other'];
+      if (!validTargetTypes.includes(targetType)) {
+        targetType = 'all';
+      }
+      
+      const filters = {
+        page,
+        limit,
+        status: status === 'all' ? null : status,
+        target_type: targetType === 'all' ? null : targetType,
+        search: req.query.search || null,
+      };
+      
+      const result = await moderationService.getReports(filters);
       res.status(200).json({ success: true, data: result });
     } catch (error) {
+      console.error('Error in getReports:', error);
       res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
     }
   },
@@ -93,10 +120,10 @@ const moderationController = {
     try {
       const filters = {
         page: parseInt(req.query.page, 10) || 1,
-        limit: parseInt(req.query.limit, 10) || 10,
-        search: req.query.search || '',
-        severity: req.query.severity || 'all',
-        targetType: req.query.targetType || 'all',
+        limit: parseInt(req.query.limit, 10) || 12,
+        search: req.query.search || null,
+        severity: req.query.severity || null,
+        targetType: req.query.targetType || null,
       };
       const result = await moderationService.getViolations(filters);
       res.status(200).json({ success: true, data:result });
@@ -167,7 +194,13 @@ const moderationController = {
   // Admin-facing
   getAdminAppeals: async (req, res) => {
     try {
-      const result = await moderationService.getAdminAppeals(req.query);
+      const filters = {
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 12,
+        status: req.query.status || null,
+        search: req.query.search || null,
+      };
+      const result = await moderationService.getAdminAppeals(filters);
       res.status(200).json({ success: true, data: result });
     } catch (error) {
       res.status(500).json({ success: false, message: 'Lỗi khi lấy danh sách khiếu nại', error: error.message });

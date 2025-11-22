@@ -10,10 +10,11 @@ const BASE_PATH = '/notifications';
 // --- User Routes (yêu cầu đăng nhập) ---
 router.get(BASE_PATH, authMiddleware.verifyToken, notificationController.getNotifications);
 
+// Route cụ thể phải đặt TRƯỚC route động (:id)
 router.get(
-  '/notifications/:id',
+  '/notifications/unread-count',
   authMiddleware.verifyToken,
-  notificationController.getNotificationById
+  notificationController.getUnreadCount
 );
 
 router.post(
@@ -22,10 +23,11 @@ router.post(
   notificationController.markAsRead
 );
 
+// Route động với :id phải đặt CUỐI CÙNG
 router.get(
-  '/notifications/unread-count',
-  authMiddleware.verifyToken, // Yêu cầu phải đăng nhập
-  notificationController.getUnreadCount
+  '/notifications/:id',
+  authMiddleware.verifyToken,
+  notificationController.getNotificationById
 );
 
 // --- Admin Routes (yêu cầu quyền admin) ---
@@ -33,6 +35,18 @@ router.get(
     '/admin/notifications/all',
     [authMiddleware.verifyToken, authMiddleware.isAdmin],
     notificationController.getAdminAllNotifications
+);
+
+router.get(
+    '/admin/notifications/sent',
+    [authMiddleware.verifyToken, authMiddleware.isAdmin],
+    notificationController.getAdminSentNotifications
+);
+
+router.get(
+    '/admin/notifications/received',
+    [authMiddleware.verifyToken, authMiddleware.isAdmin],
+    notificationController.getAdminReceivedNotifications
 );
 
 router.post(
@@ -51,6 +65,18 @@ router.post(
     `${BASE_PATH}/delete`,
     [authMiddleware.verifyToken, authMiddleware.isAdmin],
     notificationController.deleteNotifications
+);
+
+router.delete(
+    '/admin/notifications/delete-all',
+    [authMiddleware.verifyToken, authMiddleware.isAdmin],
+    notificationController.deleteAllNotifications
+);
+
+router.get(
+    '/admin/notifications/columns',
+    [authMiddleware.verifyToken, authMiddleware.isAdmin],
+    notificationController.getTableColumns
 );
 
 module.exports = router;

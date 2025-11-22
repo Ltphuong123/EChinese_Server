@@ -13,19 +13,25 @@ const postService = {
   },
 
   getPublicPosts: async (filters) => {
-    const { page, limit } = filters;
+    const { page = 1, limit = 15 } = filters;
     const offset = (page - 1) * limit;
 
-    // `filters` đã chứa `status`, truyền thẳng xuống là được
+    // `filters` đã chứa `status`, `topic`, truyền thẳng xuống model
     const { posts, totalItems } = await postModel.findAllPublic({
       ...filters,
       offset,
+      limit,
     });
 
     const totalPages = Math.ceil(totalItems / limit);
     return {
       data: posts,
-      meta: { total: totalItems, page, limit, totalPages },
+      meta: { 
+        total: totalItems, 
+        page: parseInt(page), 
+        limit: parseInt(limit), 
+        totalPages 
+      },
     };
   },
 
