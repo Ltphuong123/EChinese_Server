@@ -91,34 +91,67 @@ const postController = {
   // Lấy danh sách bài viết công khai với phân trang và bộ lọc
   getPosts: async (req, res) => {
     try {
-      const { page = 1, limit = 15, topic, status = 'published' } = req.query;
+      const {
+        page = 1,
+        limit = 15,
+        topic,
+        status = "published",
+        search,
+      } = req.query;
 
       // Validation
       const pageNum = Math.max(parseInt(page) || 1, 1);
       const limitNum = Math.min(Math.max(parseInt(limit) || 15, 1), 100);
 
       // Validate status
-      const validStatuses = ['published', 'draft', 'removed', 'pending', 'all'];
-      let validStatus = 'published'; // default
+      const validStatuses = ["published", "draft", "removed", "pending", "all"];
+      let validStatus = "published"; // default
       if (status && validStatuses.includes(status)) {
         validStatus = status;
       }
 
-      // Validate topic (không gửi nếu "all")
-      let validTopic = null;
-      if (topic && topic !== 'all') {
-        const validTopics = ['learning_tips', 'grammar', 'vocabulary', 'pronunciation', 'culture', 'travel', 'hsk', 'conversation', 'general'];
-        if (validTopics.includes(topic)) {
-          validTopic = topic;
-        }
+      // Validate topic (hỗ trợ nhiều topic cách nhau bởi dấu phẩy)
+      let validTopics = null;
+      if (topic && topic !== "all") {
+        const topicsArray = topic
+          .split(",")
+          .map((t) => t.trim())
+          .filter((t) => t);
+        const validTopicsList = [
+          "Cơ khí",
+          "CNTT",
+          "Dịch",
+          "Du học",
+          "Du lịch",
+          "Góc chia sẻ",
+          "Tìm bạn học chung",
+          "Học tiếng Trung",
+          "Tìm gia sư",
+          "Việc làm",
+          "Văn hóa",
+          "Thể thao",
+          "Xây dựng",
+          "Y tế",
+          "Tâm sự",
+          "Khác",
+        ];
+        validTopics = topicsArray.filter((t) => validTopicsList.includes(t));
+        if (validTopics.length === 0) validTopics = null;
+      }
+
+      // Validate search
+      let validSearch = null;
+      if (search && typeof search === "string" && search.trim().length > 0) {
+        validSearch = search.trim();
       }
 
       const filters = {
         page: pageNum,
         limit: limitNum,
-        topic: validTopic,
+        topic: validTopics,
         currentUserId: req.user?.id || null,
         status: validStatus,
+        search: validSearch,
       };
 
       // Lấy danh sách bài viết từ service
@@ -143,7 +176,7 @@ const postController = {
           contentImages = [];
         const rawContent = post.content;
         const stripTags = (html) => (html || "").replace(/<[^>]*>/g, "").trim();
-        
+
         if (rawContent && typeof rawContent === "object") {
           contentHtml = rawContent.html || rawContent.content || null;
           contentText = rawContent.text || stripTags(contentHtml);
@@ -186,9 +219,9 @@ const postController = {
       });
 
       // Trả về response theo đúng format yêu cầu (không có success field)
-      res.status(200).json({ 
-        data: transformed, 
-        meta: result.meta 
+      res.status(200).json({
+        data: transformed,
+        meta: result.meta,
       });
     } catch (error) {
       res.status(500).json({
@@ -547,45 +580,79 @@ const postController = {
           );
 
           // Tạo preview của nội dung bài viết
-          const contentPreview = typeof existing.content === 'string' 
-            ? existing.content.substring(0, 100) 
-            : (existing.content?.text || existing.content?.html || '').substring(0, 100);
+          const contentPreview =
+            typeof existing.content === "string"
+              ? existing.content.substring(0, 100)
+              : (
+                  existing.content?.text ||
+                  existing.content?.html ||
+                  ""
+                ).substring(0, 100);
 
           // Lấy thông tin chi tiết các rule bị vi phạm
           const db = require("../config/db");
           let violatedRulesDetail = [];
-          let rulesText = '';
+          let rulesText = "";
           if (violationInput.ruleIds && violationInput.ruleIds.length > 0) {
             const rulesResult = await db.query(
               `SELECT id, title, description, severity_default FROM "CommunityRules" WHERE id = ANY($1::uuid[])`,
               [violationInput.ruleIds]
             );
             violatedRulesDetail = rulesResult.rows;
-            rulesText = violatedRulesDetail.map((r, i) => `${i+1}. ${r.title} (${r.severity_default}): ${r.description}`).join('\n');
+            rulesText = violatedRulesDetail
+              .map(
+                (r, i) =>
+                  `${i + 1}. ${r.title} (${r.severity_default}): ${
+                    r.description
+                  }`
+              )
+              .join("\n");
           }
 
           // Gửi thông báo vi phạm chi tiết với thông tin bài viết
           const notificationService = require("../services/notificationService");
-          await notificationService.createNotification({
-            recipient_id: violationInput.userId,
-            audience: "user",
-            type: "violation",
-            title: "⚠️ Bài viết của bạn đã bị gỡ do vi phạm",
-            content: {
-              html: `<p>Bài viết <strong>"${existing.title}"</strong> của bạn đã bị gỡ bởi quản trị viên.</p>
+          await notificationService.createNotification(
+            {
+              recipient_id: violationInput.userId,
+              audience: "user",
+              type: "violation",
+              title: "⚠️ Bài viết của bạn đã bị gỡ do vi phạm",
+              content: {
+                html: `<p>Bài viết <strong>"${
+                  existing.title
+                }"</strong> của bạn đã bị gỡ bởi quản trị viên.</p>
 <p><strong>Lý do:</strong> ${violation.reason}<br>
-<strong>Độ nghiêm trọng:</strong> <span class="badge-${violationInput.severity}">${violationInput.severity}</span><br>
+<strong>Độ nghiêm trọng:</strong> <span class="badge-${
+                  violationInput.severity
+                }">${violationInput.severity}</span><br>
 <strong>Vi phạm:</strong> ${violatedRulesDetail.length} quy tắc cộng đồng</p>
-${violatedRulesDetail.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRulesDetail.map(r => `<li><strong>${r.title}</strong> (${r.severity_default}): ${r.description}</li>`).join('')}</ul>` : ''}
+${
+  violatedRulesDetail.length > 0
+    ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRulesDetail
+        .map(
+          (r) =>
+            `<li><strong>${r.title}</strong> (${r.severity_default}): ${r.description}</li>`
+        )
+        .join("")}</ul>`
+    : ""
+}
 <p><em>Nội dung bài viết:</em> "${contentPreview}..."</p>
-<p><small>Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
+<p><small>Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`,
+              },
+              redirect_type: "post",
+              data: {
+                id: postId,
+                data: `Bài viết: ${existing.title}\nLý do: ${
+                  violation.reason
+                }\nĐộ nghiêm trọng: ${
+                  violationInput.severity
+                }\nGỡ bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString(
+                  "vi-VN"
+                )}\n\nQuy tắc vi phạm:\n${rulesText}\n\nNội dung: ${contentPreview}...`,
+              },
             },
-            redirect_type: "post",
-            data: {
-              id: postId,
-              data: `Bài viết: ${existing.title}\nLý do: ${violation.reason}\nĐộ nghiêm trọng: ${violationInput.severity}\nGỡ bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString('vi-VN')}\n\nQuy tắc vi phạm:\n${rulesText}\n\nNội dung: ${contentPreview}...`
-            }
-          }, true); // auto push = true
+            true
+          ); // auto push = true
         }
       } else if (action === "restore") {
         // Validate required fields for restore action
@@ -598,7 +665,10 @@ ${violatedRulesDetail.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</s
 
         const { post_update, restore_reason } = payload;
         const isAdminRestore = adminId !== existing.user_id;
-        const restoreReason = restore_reason || post_update.restore_reason || "Bài viết đã được xem xét lại và khôi phục.";
+        const restoreReason =
+          restore_reason ||
+          post_update.restore_reason ||
+          "Bài viết đã được xem xét lại và khôi phục.";
 
         // Khôi phục bài viết
         await postService.updatePostStatus(postId, {
@@ -612,8 +682,11 @@ ${violatedRulesDetail.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</s
         if (isAdminRestore) {
           // Tìm và xóa vi phạm liên quan đến bài viết này (nếu có)
           const moderationModel = require("../models/moderationModel");
-          const violations = await moderationModel.findViolationsByTarget("post", postId);
-          
+          const violations = await moderationModel.findViolationsByTarget(
+            "post",
+            postId
+          );
+
           if (violations && violations.length > 0) {
             // Xóa tất cả vi phạm liên quan đến bài viết này
             for (const violation of violations) {
@@ -622,32 +695,50 @@ ${violatedRulesDetail.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</s
           }
 
           // Tạo preview của nội dung bài viết
-          const contentPreview = typeof existing.content === 'string' 
-            ? existing.content.substring(0, 100) 
-            : (existing.content?.text || existing.content?.html || '').substring(0, 100);
+          const contentPreview =
+            typeof existing.content === "string"
+              ? existing.content.substring(0, 100)
+              : (
+                  existing.content?.text ||
+                  existing.content?.html ||
+                  ""
+                ).substring(0, 100);
 
           const violationsCleared = violations ? violations.length : 0;
 
           // Gửi thông báo chi tiết tới người dùng với lý do khôi phục
           const notificationService = require("../services/notificationService");
-          await notificationService.createNotification({
-            recipient_id: existing.user_id,
-            audience: "user",
-            type: "community",
-            title: "✅ Bài viết của bạn đã được khôi phục",
-            content: {
-              html: `<p>Bài viết <strong>"${existing.title}"</strong> của bạn đã được quản trị viên khôi phục.</p>
+          await notificationService.createNotification(
+            {
+              recipient_id: existing.user_id,
+              audience: "user",
+              type: "community",
+              title: "✅ Bài viết của bạn đã được khôi phục",
+              content: {
+                html: `<p>Bài viết <strong>"${
+                  existing.title
+                }"</strong> của bạn đã được quản trị viên khôi phục.</p>
 <p><strong>Lý do khôi phục:</strong> ${restoreReason}</p>
-${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong> vi phạm liên quan.</p>` : ''}
+${
+  violationsCleared > 0
+    ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong> vi phạm liên quan.</p>`
+    : ""
+}
 <p><em>Nội dung bài viết:</em> "${contentPreview}..."</p>
-<p><small>Cảm ơn bạn đã đóng góp nội dung chất lượng cho cộng đồng!</small></p>`
+<p><small>Cảm ơn bạn đã đóng góp nội dung chất lượng cho cộng đồng!</small></p>`,
+              },
+              redirect_type: "post",
+              data: {
+                id: postId,
+                data: `Bài viết: ${
+                  existing.title
+                }\nLý do khôi phục: ${restoreReason}\nKhôi phục bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString(
+                  "vi-VN"
+                )}\nVi phạm đã xóa: ${violationsCleared}\n\nNội dung: ${contentPreview}...`,
+              },
             },
-            redirect_type: "post",
-            data: {
-              id: postId,
-              data: `Bài viết: ${existing.title}\nLý do khôi phục: ${restoreReason}\nKhôi phục bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString('vi-VN')}\nVi phạm đã xóa: ${violationsCleared}\n\nNội dung: ${contentPreview}...`
-            }
-          }, true); // auto push = true
+            true
+          ); // auto push = true
         }
       }
 
@@ -725,9 +816,9 @@ ${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong
       // Lấy thông tin bài viết để biết chủ bài viết
       const post = await postService.getPostById(postId);
       if (!post) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Bài viết không tồn tại." 
+        return res.status(404).json({
+          success: false,
+          message: "Bài viết không tồn tại.",
         });
       }
 
@@ -736,33 +827,46 @@ ${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong
       // Gửi thông báo khi có người like (không phải tự like)
       if (result.action === "liked" && userId !== post.user_id) {
         const userModel = require("../models/userModel");
-        
+
         // Lấy thông tin người like
         const liker = await userModel.findUserById(userId);
-        const likerName = liker?.name || 'Một người dùng';
-        
+        const likerName = liker?.name || "Một người dùng";
+
         // Tạo preview của nội dung bài viết
-        const contentPreview = typeof post.content === 'string' 
-          ? post.content.substring(0, 100) 
-          : (post.content?.text || post.content?.html || '').substring(0, 100);
-        
+        const contentPreview =
+          typeof post.content === "string"
+            ? post.content.substring(0, 100)
+            : (post.content?.text || post.content?.html || "").substring(
+                0,
+                100
+              );
+
         const notificationService = require("../services/notificationService");
-        await notificationService.createNotification({
-          recipient_id: post.user_id,
-          audience: "user",
-          type: "community",
-          title: "❤️ Có người thích bài viết của bạn",
-          content: {
-            html: `<p><strong>${likerName}</strong> đã thích bài viết <strong>"${post.title}"</strong> của bạn.</p>
+        await notificationService.createNotification(
+          {
+            recipient_id: post.user_id,
+            audience: "user",
+            type: "community",
+            title: "❤️ Có người thích bài viết của bạn",
+            content: {
+              html: `<p><strong>${likerName}</strong> đã thích bài viết <strong>"${post.title}"</strong> của bạn.</p>
 <p>❤️ Tổng số lượt thích: <strong>${result.likes}</strong></p>
-<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p>`
+<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p>`,
+            },
+            redirect_type: "post",
+            data: {
+              id: postId,
+              data: `Bài viết: ${
+                post.title
+              }\nNgười thích: ${likerName}\nTổng lượt thích: ${
+                result.likes
+              }\nThời gian: ${new Date().toLocaleString(
+                "vi-VN"
+              )}\n\nNội dung: ${contentPreview}...`,
+            },
           },
-          redirect_type: "post",
-          data: {
-            id: postId,
-            data: `Bài viết: ${post.title}\nNgười thích: ${likerName}\nTổng lượt thích: ${result.likes}\nThời gian: ${new Date().toLocaleString('vi-VN')}\n\nNội dung: ${contentPreview}...`
-          }
-        }, true); // auto push = true
+          true
+        ); // auto push = true
       }
 
       res.status(200).json({
@@ -936,10 +1040,10 @@ ${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong
       const { confirmationCode } = req.body;
 
       // Chỉ cho phép super admin
-      if (adminRole !== 'super admin') {
+      if (adminRole !== "super admin") {
         return res.status(403).json({
           success: false,
-          message: 'Chỉ Super Admin mới có quyền thực hiện thao tác này.'
+          message: "Chỉ Super Admin mới có quyền thực hiện thao tác này.",
         });
       }
 
@@ -947,31 +1051,36 @@ ${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong
       if (!confirmationCode) {
         return res.status(400).json({
           success: false,
-          message: 'Thiếu mã xác nhận. Vui lòng cung cấp confirmationCode trong body.'
+          message:
+            "Thiếu mã xác nhận. Vui lòng cung cấp confirmationCode trong body.",
         });
       }
 
-      const stats = await postService.permanentDeleteAllPosts(adminId, confirmationCode);
+      const stats = await postService.permanentDeleteAllPosts(
+        adminId,
+        confirmationCode
+      );
 
       res.status(200).json({
         success: true,
-        message: 'Đã xóa vĩnh viễn TẤT CẢ bài đăng và dữ liệu liên quan thành công.',
+        message:
+          "Đã xóa vĩnh viễn TẤT CẢ bài đăng và dữ liệu liên quan thành công.",
         data: {
           deleted: stats,
           performed_by: adminId,
-          performed_at: new Date()
-        }
+          performed_at: new Date(),
+        },
       });
     } catch (error) {
-      if (error.message.includes('Mã xác nhận')) {
-        return res.status(400).json({ 
-          success: false, 
-          message: error.message 
+      if (error.message.includes("Mã xác nhận")) {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
         });
       }
       res.status(500).json({
         success: false,
-        message: 'Lỗi khi xóa toàn bộ bài đăng',
+        message: "Lỗi khi xóa toàn bộ bài đăng",
         error: error.message,
       });
     }
@@ -979,6 +1088,3 @@ ${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong
 };
 
 module.exports = postController;
-
-
-  

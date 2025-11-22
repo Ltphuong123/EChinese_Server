@@ -27,8 +27,25 @@ const aiController = {
           });
 
       }
-      const result = await generateChineseLesson(theme, level);
       const userId = req.user?.id || null;
+
+      // Kiểm tra subscription quota trước khi tạo bài học
+      if (userId) {
+        const subscriptionLimits = await aiController._getSubscriptionLimitsFromDB(userId, 'ai_lesson');
+        if (subscriptionLimits.remaining <= 0) {
+          return res.status(429).json({
+            success: false,
+            message: "Bạn đã đạt giới hạn tạo bài học AI trong ngày. Vui lòng nâng cấp gói để tiếp tục.",
+            data: {
+              quota: subscriptionLimits.quota,
+              used: subscriptionLimits.used,
+              remaining: subscriptionLimits.remaining,
+            },
+          });
+        }
+      }
+
+      const result = await generateChineseLesson(theme, level);
       const lesson = result && result.data ? result.data : result;
       const model = result && result.model ? result.model : null;
       const saved = await aiLessonService.saveLesson({
@@ -38,6 +55,17 @@ const aiController = {
         content: lesson,
         model,
       });
+
+      // Cập nhật usage sau khi tạo bài học thành công
+      if (userId) {
+        const currentUsage = await usageModel.findByUserAndFeature(userId, 'ai_lesson');
+        if (currentUsage) {
+          await usageModel.incrementCount(currentUsage.id);
+        } else {
+          await usageModel.create({ user_id: userId, feature: 'ai_lesson', daily_count: 1 });
+        }
+      }
+
       return res
         .status(200)
         .json({
@@ -377,7 +405,7 @@ const aiController = {
 
       // Lấy giới hạn từ subscription thay vì hardcode
       const subscriptionLimits =
-        await aiController._getSubscriptionLimitsFromDB(userId);
+        await aiController._getSubscriptionLimitsFromDB(userId, 'ai_translate');
 
       // Kiểm tra subscription quota trước khi cho phép dịch
       if (subscriptionLimits.remaining <= 0) {
@@ -401,7 +429,7 @@ const aiController = {
 
       // Lấy lại subscription limits sau khi dịch (đã cập nhật usage)
       const newSubscriptionLimits =
-        await aiController._getSubscriptionLimitsFromDB(userId);
+        await aiController._getSubscriptionLimitsFromDB(userId, 'ai_translate');
 
       // Trả về thông tin với subscription limits thực tế
       return res.status(200).json({
@@ -429,7 +457,7 @@ const aiController = {
   },
 
   // Helper function để lấy giới hạn từ subscription (HÀM MỚI - TRUY VẤN TRỰC TIẾP DB)
-  _getSubscriptionLimitsFromDB: async (userId) => {
+  _getSubscriptionLimitsFromDB: async (userId, feature) => {
     try {
       // Lấy thông tin subscription plan của user
       const subscriptionPlan =
@@ -444,13 +472,14 @@ const aiController = {
         };
       }
 
-      // Lấy thông tin usage hiện tại của user cho feature ai_translate
+      // Lấy thông tin usage hiện tại của user cho feature
       const currentUsage = await usageModel.findByUserAndFeature(
         userId,
-        "ai_translate"
+        feature
       );
 
-      const quota = subscriptionPlan.daily_quota_translate || 0;
+      const quotaKey = feature === 'ai_translate' ? 'daily_quota_translate' : 'daily_quota_ai_lesson';
+      const quota = subscriptionPlan[quotaKey] || 0;
       const used = currentUsage ? currentUsage.daily_count : 0;
       const remaining = Math.max(0, quota - used);
 
@@ -476,7 +505,7 @@ const aiController = {
       const userId = req.user.id;
 
       // Gọi DB trực tiếp để lấy giới hạn thực tế
-      const limits = await aiController._getSubscriptionLimitsFromDB(userId);
+      const limits = await aiController._getSubscriptionLimitsFromDB(userId, 'ai_translate');
 
       return res.status(200).json({
         success: true,
@@ -515,7 +544,7 @@ const aiController = {
       const userId = req.user?.id || null;
 
       // Lấy giới hạn từ DB trực tiếp
-      const limits = await aiController._getSubscriptionLimitsFromDB(userId);
+      const limits = await aiController._getSubscriptionLimitsFromDB(userId, 'ai_translate');
 
       // Kiểm tra còn lượt dịch không
       if (limits.remaining <= 0) {
@@ -538,7 +567,7 @@ const aiController = {
       });
 
       // Lấy lại limits sau khi dịch (sẽ giảm remaining)
-      const newLimits = await aiController._getSubscriptionLimitsFromDB(userId);
+      const newLimits = await aiController._getSubscriptionLimitsFromDB(userId, 'ai_translate');
 
       // Trả về thông tin với subscription limits
       return res.status(200).json({

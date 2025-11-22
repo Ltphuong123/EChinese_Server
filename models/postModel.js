@@ -35,28 +35,40 @@ const postModel = {
   },
 
   findAllPublic: async (filters) => {
-    const { limit, offset, topic, currentUserId, status } = filters;
+    const { limit, offset, topic, currentUserId, status, search } = filters;
 
     // Build WHERE conditions
     const conditions = [
-      'p.deleted_at IS NULL',
-      "p.status != 'removed'",  // Không hiển thị bài đã gỡ
+      "p.deleted_at IS NULL",
+      "p.status != 'removed'", // Không hiển thị bài đã gỡ
     ];
     const params = [];
 
-    // Filter by topic
-    if (topic) {
+    // Filter by topic (hỗ trợ nhiều topic)
+    if (topic && Array.isArray(topic) && topic.length > 0) {
+      const placeholders = topic
+        .map((_, i) => `$${params.length + i + 1}`)
+        .join(",");
+      conditions.push(`p.topic IN (${placeholders})`);
+      params.push(...topic);
+    } else if (topic && typeof topic === "string") {
       params.push(topic);
       conditions.push(`p.topic = $${params.length}`);
+    }
+
+    // Filter by search (tìm trong title)
+    if (search) {
+      params.push(`%${search}%`);
+      conditions.push(`p.title ILIKE $${params.length}`);
     }
 
     // Filter by status
     if (status && status !== "all") {
       params.push(status);
       conditions.push(`p.status = $${params.length}`);
-      
+
       // Nếu filter published, phải approved
-      if (status === 'published') {
+      if (status === "published") {
         conditions.push(`p.is_approved = true`);
       }
     } else {
@@ -65,7 +77,7 @@ const postModel = {
       conditions.push(`p.is_approved = true`);
     }
 
-    const whereClause = 'WHERE ' + conditions.join(' AND ');
+    const whereClause = "WHERE " + conditions.join(" AND ");
 
     // ===== COUNT QUERY =====
     const countQuery = `
@@ -73,37 +85,42 @@ const postModel = {
       FROM "Posts" p
       ${whereClause}
     `;
-    
+
     const totalResult = await db.query(countQuery, params);
     const totalItems = parseInt(totalResult.rows[0].count, 10);
 
     // ===== SELECT QUERY =====
     // Thêm currentUserId, limit, offset vào đầu params
     const selectParams = [currentUserId, limit, offset, ...params];
-    
+
     // Rebuild WHERE với offset đúng (bắt đầu từ $4)
-    const selectConditions = [
-      'p.deleted_at IS NULL',
-      "p.status != 'removed'",
-    ];
-    
+    const selectConditions = ["p.deleted_at IS NULL", "p.status != 'removed'"];
+
     let paramIndex = 4; // Vì $1=currentUserId, $2=limit, $3=offset
-    
-    if (topic) {
+
+    if (topic && Array.isArray(topic) && topic.length > 0) {
+      const placeholders = topic.map((_, i) => `$${paramIndex + i}`).join(",");
+      selectConditions.push(`p.topic IN (${placeholders})`);
+      paramIndex += topic.length;
+    } else if (topic && typeof topic === "string") {
       selectConditions.push(`p.topic = $${paramIndex++}`);
     }
-    
+
+    if (search) {
+      selectConditions.push(`p.title ILIKE $${paramIndex++}`);
+    }
+
     if (status && status !== "all") {
       selectConditions.push(`p.status = $${paramIndex++}`);
-      if (status === 'published') {
+      if (status === "published") {
         selectConditions.push(`p.is_approved = true`);
       }
     } else {
       selectConditions.push(`p.status = 'published'`);
       selectConditions.push(`p.is_approved = true`);
     }
-    
-    const selectWhereClause = 'WHERE ' + selectConditions.join(' AND ');
+
+    const selectWhereClause = "WHERE " + selectConditions.join(" AND ");
 
     const selectQuery = `
       SELECT 
@@ -167,9 +184,9 @@ const postModel = {
 
     const postsResult = await db.query(selectQuery, selectParams);
 
-    return { 
-      posts: postsResult.rows, 
-      totalItems 
+    return {
+      posts: postsResult.rows,
+      totalItems,
     };
   },
 
@@ -898,7 +915,6 @@ const postModel = {
     }));
   },
 
-  
   /**
    * Xóa vĩnh viễn TẤT CẢ bài đăng và dữ liệu liên quan trong hệ thống
    * ⚠️ CỰC KỲ NGUY HIỂM - CHỈ DÙNG KHI CẦN THIẾT
@@ -906,18 +922,26 @@ const postModel = {
   permanentDeleteAll: async () => {
     const client = await db.pool.connect();
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN");
 
       // Đếm số lượng trước khi xóa để báo cáo
       const countPosts = await client.query('SELECT COUNT(*) FROM "Posts"');
-      const countComments = await client.query('SELECT COUNT(*) FROM "Comments"');
+      const countComments = await client.query(
+        'SELECT COUNT(*) FROM "Comments"'
+      );
       const countLikes = await client.query('SELECT COUNT(*) FROM "PostLikes"');
       const countViews = await client.query('SELECT COUNT(*) FROM "PostViews"');
       const countReports = await client.query('SELECT COUNT(*) FROM "Reports"');
-      const countViolations = await client.query('SELECT COUNT(*) FROM "Violations"');
+      const countViolations = await client.query(
+        'SELECT COUNT(*) FROM "Violations"'
+      );
       const countAppeals = await client.query('SELECT COUNT(*) FROM "Appeals"');
-      const countModerationLogs = await client.query('SELECT COUNT(*) FROM "ModerationLogs"');
-      const countViolationRules = await client.query('SELECT COUNT(*) FROM "ViolationRules"');
+      const countModerationLogs = await client.query(
+        'SELECT COUNT(*) FROM "ModerationLogs"'
+      );
+      const countViolationRules = await client.query(
+        'SELECT COUNT(*) FROM "ViolationRules"'
+      );
 
       const stats = {
         posts: parseInt(countPosts.rows[0].count, 10),
@@ -928,7 +952,7 @@ const postModel = {
         violations: parseInt(countViolations.rows[0].count, 10),
         appeals: parseInt(countAppeals.rows[0].count, 10),
         moderationLogs: parseInt(countModerationLogs.rows[0].count, 10),
-        violationRules: parseInt(countViolationRules.rows[0].count, 10)
+        violationRules: parseInt(countViolationRules.rows[0].count, 10),
       };
 
       // 1. Xóa tất cả ViolationRules (liên kết giữa violations và rules)
@@ -958,20 +982,16 @@ const postModel = {
       // 9. Cuối cùng, xóa tất cả posts
       await client.query('DELETE FROM "Posts"');
 
-      await client.query('COMMIT');
-      
+      await client.query("COMMIT");
+
       return stats;
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client.query("ROLLBACK");
       throw error;
     } finally {
       client.release();
     }
   },
-
-  
 };
 
 module.exports = postModel;
-
-

@@ -13,24 +13,15 @@ const db = require("../config/db");
 const saltRounds = 10;
 
 const generateAccessToken = (user) => {
-  return jwt.sign(
-    { id: user.id, role: user.role },
-    process.env.JWT_SECRET,
-    {
-      expiresIn: process.env.JWT_EXPIRATION || "1d",
-    }
-  );
+  return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRATION || "1d",
+  });
 };
 
 const generateRefreshToken = (user) => {
-  return jwt.sign(
-    { id: user.id },
-    process.env.JWT_REFRESH_SECRET,
-    {
-
-      expiresIn: process.env.JWT_REFRESH_EXPIRATION || "70d",
-    }
-  );
+  return jwt.sign({ id: user.id }, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: process.env.JWT_REFRESH_EXPIRATION || "70d",
+  });
 };
 
 const userService = {
@@ -142,6 +133,7 @@ const userService = {
         provider: "google",
         provider_id: null,
         avatar_url,
+        isVerify: true,
       };
       user = await userModel.createUser(newUserData);
 
@@ -570,7 +562,13 @@ const userService = {
 
   updateUserProfile: async (userId, updateData) => {
     // --- LỚP BẢO MẬT: Chỉ cho phép cập nhật các trường được chỉ định ---
-    const allowedFields = ["name", "avatar_url", "language"];
+    const allowedFields = [
+      "name",
+      "avatar_url",
+      "language",
+      "email",
+      "isVerify",
+    ];
     const safeUpdateData = {};
 
     Object.keys(updateData).forEach((key) => {

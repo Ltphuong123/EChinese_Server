@@ -1,7 +1,7 @@
 const db = require("../config/db");
 const userSubscriptionService = require("../services/userSubscriptionService");
 const userUsageService = require("../services/usageService");
-require('dotenv').config();
+require("dotenv").config();
 
 const userModel = {
   getAllUsers: async () => {
@@ -21,10 +21,11 @@ const userModel = {
       provider,
       provider_id,
       avatar_url,
+      isVerify = false,
     } = userData;
     const queryText = `
-      INSERT INTO "Users" (username, password_hash, name, email, provider, provider_id, avatar_url)
-      VALUES  ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO "Users" (username, password_hash, name, email, provider, provider_id, avatar_url, "isVerify")
+      VALUES  ($1, $2, $3, $4, $5, $6, $7, $8)
       
       RETURNING id, username, name, email;
     `;
@@ -36,6 +37,7 @@ const userModel = {
       provider,
       provider_id,
       avatar_url,
+      isVerify,
     ];
 
     const result = await db.query(queryText, values);
@@ -44,9 +46,10 @@ const userModel = {
       result.rows[0].id,
       process.env.FREE_PLAN_ID
     );
-    await userUsageService.resetUsageCounters(result.rows[0].id, ['ai_lesson', 'ai_translate']);
-
-    
+    await userUsageService.resetUsageCounters(result.rows[0].id, [
+      "ai_lesson",
+      "ai_translate",
+    ]);
 
     return result.rows[0];
   },
@@ -67,7 +70,7 @@ const userModel = {
   findUserByUsername: async (username) => {
     const queryText = `SELECT * FROM  "Users" WHERE username = $1;`;
     const result = await db.query(queryText, [username]);
-    
+
     return result.rows[0];
   },
 
@@ -408,6 +411,7 @@ const userModel = {
       "level",
       "language",
       "is_active",
+      "isVerify",
     ];
 
     // --- BƯỚC 2: LỌC DỮ LIỆU ĐẦU VÀO ĐỂ CHỈ GIỮ LẠI CÁC TRƯỜNG HỢP LỆ ---
@@ -473,26 +477,39 @@ const userModel = {
       const badgeQuery = `SELECT * FROM "BadgeLevels" WHERE level = $1`;
       const badgeResult = await db.query(badgeQuery, [newBadgeLevel]);
       const badge = badgeResult.rows[0];
-      
+
       if (badge) {
-        const notificationService = require('../services/notificationService');
-        await notificationService.createNotification({
-          recipient_id: userId,
-          audience: 'user',
-          type: 'system',
-          title: '🎖️ Bạn đã nhận huy hiệu mới!',
-          content: `Chúc mừng! Bạn đã đạt huy hiệu "${badge.name}" (Level ${badge.level}). ${badge.rule_description || ''}. Điểm cộng đồng hiện tại: ${updatedUser.community_points}/${badge.min_points}. Thời gian đạt được: ${new Date().toLocaleString('vi-VN')}.`,
-          redirect_type: 'profile',
-          data: {
-            id: userId,
-            data: `Huy hiệu: ${badge.name}\nLevel: ${badge.level}\nMô tả: ${badge.rule_description || 'Không có mô tả'}\nĐiểm tối thiểu: ${badge.min_points}\nĐiểm hiện tại: ${updatedUser.community_points}\nThời gian: ${new Date().toLocaleString('vi-VN')}`
+        const notificationService = require("../services/notificationService");
+        await notificationService.createNotification(
+          {
+            recipient_id: userId,
+            audience: "user",
+            type: "system",
+            title: "🎖️ Bạn đã nhận huy hiệu mới!",
+            content: `Chúc mừng! Bạn đã đạt huy hiệu "${badge.name}" (Level ${
+              badge.level
+            }). ${badge.rule_description || ""}. Điểm cộng đồng hiện tại: ${
+              updatedUser.community_points
+            }/${
+              badge.min_points
+            }. Thời gian đạt được: ${new Date().toLocaleString("vi-VN")}.`,
+            redirect_type: "profile",
+            data: {
+              id: userId,
+              data: `Huy hiệu: ${badge.name}\nLevel: ${badge.level}\nMô tả: ${
+                badge.rule_description || "Không có mô tả"
+              }\nĐiểm tối thiểu: ${badge.min_points}\nĐiểm hiện tại: ${
+                updatedUser.community_points
+              }\nThời gian: ${new Date().toLocaleString("vi-VN")}`,
+            },
+            priority: 2,
+            from_system: true,
           },
-          priority: 2,
-          from_system: true
-        }, true); // auto push = true
+          true
+        ); // auto push = true
       }
     } catch (notifError) {
-      console.error('Error sending badge notification:', notifError);
+      console.error("Error sending badge notification:", notifError);
       // Không throw để không ảnh hưởng đến việc cập nhật badge
     }
 
@@ -536,36 +553,43 @@ const userModel = {
 
       // Gửi thông báo khi đạt achievement
       try {
-        const achievementModel = require('./achievementModel');
+        const achievementModel = require("./achievementModel");
         const achievement = await achievementModel.findById(achievementId);
-        
+
         if (achievement) {
           const pointsEarned = pointsToAdd || achievement.points || 0;
-          const notificationService = require('../services/notificationService');
-          await notificationService.createNotification({
-            recipient_id: userId,
-            audience: 'user',
-            type: 'achievement',
-            title: '🏆 Bạn đã đạt thành tích mới!',
-            content: {
-              html: `<h3>🎉 Chúc mừng! Bạn đã mở khóa thành tích mới!</h3>
+          const notificationService = require("../services/notificationService");
+          await notificationService.createNotification(
+            {
+              recipient_id: userId,
+              audience: "user",
+              type: "achievement",
+              title: "🏆 Bạn đã đạt thành tích mới!",
+              content: {
+                html: `<h3>🎉 Chúc mừng! Bạn đã mở khóa thành tích mới!</h3>
 <p>Bạn đã đạt thành tích <strong>"${achievement.name}"</strong>.</p>
-${achievement.description ? `<p><em>${achievement.description}</em></p>` : ''}
+${achievement.description ? `<p><em>${achievement.description}</em></p>` : ""}
 <p>🎁 <strong>Phần thưởng:</strong> +${pointsEarned} điểm cộng đồng</p>
-${progress ? `<p>📈 <strong>Tiến độ:</strong> ${progress}</p>` : ''}
-<p><small>Hãy tiếp tục phát huy để mở khóa thêm nhiều thành tích khác!</small></p>`
+${progress ? `<p>📈 <strong>Tiến độ:</strong> ${progress}</p>` : ""}
+<p><small>Hãy tiếp tục phát huy để mở khóa thêm nhiều thành tích khác!</small></p>`,
+              },
+              redirect_type: "achievement",
+              data: {
+                id: achievementId,
+                data: `Thành tích: ${achievement.name}\nMô tả: ${
+                  achievement.description || "Không có mô tả"
+                }\nĐiểm nhận được: ${pointsEarned}\n${
+                  progress ? `Tiến độ: ${progress}\n` : ""
+                }Thời gian: ${new Date().toLocaleString("vi-VN")}`,
+              },
+              priority: 2,
+              from_system: true,
             },
-            redirect_type: 'achievement',
-            data: {
-              id: achievementId,
-              data: `Thành tích: ${achievement.name}\nMô tả: ${achievement.description || 'Không có mô tả'}\nĐiểm nhận được: ${pointsEarned}\n${progress ? `Tiến độ: ${progress}\n` : ''}Thời gian: ${new Date().toLocaleString('vi-VN')}`
-            },
-            priority: 2,
-            from_system: true
-          }, true); // auto push = true
+            true
+          ); // auto push = true
         }
       } catch (notifError) {
-        console.error('Error sending achievement notification:', notifError);
+        console.error("Error sending achievement notification:", notifError);
         // Không throw để không ảnh hưởng đến việc gán achievement
       }
 
