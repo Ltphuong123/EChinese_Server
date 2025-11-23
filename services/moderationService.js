@@ -88,30 +88,10 @@ const moderationService = {
 
       try {
         if (enforcement === 'ban_comment') {
-          // Tạo thông báo cấm bình luận có thời hạn
+          // Cấm bình luận (không gửi thông báo riêng)
           const banDays = parseInt(data.ban_days || 7, 10);
           const expires = new Date(Date.now() + banDays * 24 * 60 * 60 * 1000);
-          await notificationService.createNotification({
-            recipient_id: report.target_user_id,
-            audience: null,
-            type: 'comment_ban',
-
-            title: '⚠️ Bạn đã bị cấm bình luận tạm thời',
-            content: { 
-              message: `Bạn bị cấm bình luận trong ${banDays} ngày do vi phạm: ${resolutionReason}` 
-            },
-            redirect_type: 'community_rules',
-            data: { 
-              ban_days: String(banDays),
-              reason: resolutionReason,
-              report_id: report.id, 
-              violation_id: newViolation.id,
-              expires_at: expires.toISOString()
-            },
-            expires_at: expires,
-            priority: 3,
-            from_system: true,
-          });
+          // Logic cấm bình luận sẽ được xử lý ở đây nếu cần
         } else {
           // Gỡ nội dung vi phạm theo loại mục tiêu
           if (report.target_type === 'post') {
@@ -121,34 +101,49 @@ const moderationService = {
           }
         }
 
-        // Gửi thông báo kết quả xử lý báo cáo
-        const actionText = enforcement === 'ban_comment'
-          ? 'cấm bình luận tạm thời'
-          : (report.target_type === 'post' ? 'gỡ bài viết' : 'gỡ bình luận');
-        await notificationService.createNotification({
-          recipient_id: report.target_user_id,
-          audience: null,
-
-          type: 'moderation',
-          title: '🗑️ Nội dung của bạn đã bị gỡ',
-          content: { 
-            message: `Hệ thống đã ${actionText} của bạn. Lý do: ${resolutionReason}` 
-          },
-          redirect_type: 'community_rules',
-          data: { 
-            target_type: report.target_type,
-            target_id: report.target_id,
-            action: actionText,
-            reason: resolutionReason,
-            report_id: report.id, 
-            violation_id: newViolation.id,
-            removed_by: 'admin',
-            removed_at: new Date().toISOString()
-          },
-          expires_at: null,
-          priority: 2,
-          from_system: true,
-        });
+        // Gửi thông báo gỡ nội dung vi phạm (chỉ khi không phải ban_comment)
+        if (enforcement !== 'ban_comment') {
+          const contentType = report.target_type === 'post' ? 'Bài viết' : 'Bình luận';
+          const removeType = report.target_type === 'post' ? 'post_remove' : 'comment_remove';
+          
+          // Lấy chi tiết đối tượng bị gỡ
+          let targetDetails = null;
+          let contentPreview = '';
+          
+          try {
+            if (report.target_type === 'post') {
+              targetDetails = await postService.getPostById(report.target_id);
+              contentPreview = typeof targetDetails.content === 'string' 
+                ? targetDetails.content.substring(0, 150) 
+                : (targetDetails.content?.text || targetDetails.content?.html || '').substring(0, 150);
+            } else if (report.target_type === 'comment') {
+              targetDetails = await commentService.getCommentById(report.target_id);
+              contentPreview = typeof targetDetails.content === 'string' 
+                ? targetDetails.content.substring(0, 150) 
+                : (targetDetails.content?.text || targetDetails.content?.html || '').substring(0, 150);
+            }
+          } catch (err) {
+            console.error('Error fetching target details:', err);
+          }
+          
+          await notificationService.createNotification({
+            recipient_id: report.target_user_id,
+            audience: 'user',
+            type: 'violation',
+            title: `🗑️ ${contentType} của bạn đã bị gỡ`,
+            content: { 
+              html: `<p>${contentType} của bạn đã bị quản trị viên gỡ bỏ do vi phạm quy định cộng đồng.</p>${targetDetails && report.target_type === 'post' ? `<p><strong>Tiêu đề:</strong> ${targetDetails.title}</p>` : ''}<p><strong>Lý do:</strong> ${resolutionReason}</p>${contentPreview ? `<p><em>Nội dung ${contentType.toLowerCase()}:</em> "${contentPreview}${contentPreview.length >= 150 ? '...' : ''}"</p>` : ''}<hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Loại nội dung:</strong> ${contentType}</li><li><strong>Gỡ bởi:</strong> Quản trị viên</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Mã báo cáo:</strong> ${report.id}</li></ul><p><small>⚖️ Vui lòng tuân thủ quy định cộng đồng.</small></p>`
+            },
+            redirect_type: 'community_rules',
+            data: { 
+              id: report.target_id,
+              type: removeType
+            },
+            expires_at: null,
+            priority: 2,
+            from_system: true,
+          });
+        }
       } catch (enfErr) {
         console.error('Lỗi khi thực thi biện pháp xử lý/Thông báo:', enfErr);
       }
@@ -284,9 +279,12 @@ const moderationService = {
     }
     
     return processedAppeal;
+  },
+
+  // Lấy danh sách các giá trị constraint của target_type trong bảng Violations
+  getViolationTargetTypes: async () => {
+    return await moderationModel.getViolationTargetTypes();
   }
-
-
 
 };
 

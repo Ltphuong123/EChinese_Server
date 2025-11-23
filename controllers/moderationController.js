@@ -260,6 +260,24 @@ const moderationController = {
   //   }
   // },
 
+  // API: Lấy thông tin các giá trị constraint của target_type trong bảng Violations
+  getViolationTargetTypes: async (req, res) => {
+    try {
+      const targetTypes = await moderationService.getViolationTargetTypes();
+      res.status(200).json({
+        success: true,
+        message: "Lấy danh sách target_type thành công",
+        data: targetTypes
+      });
+    } catch (error) {
+      console.error('Error in getViolationTargetTypes:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi lấy danh sách target_type',
+        error: error.message
+      });
+    }
+  }
 
 };
 

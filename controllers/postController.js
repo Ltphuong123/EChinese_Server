@@ -611,48 +611,20 @@ const postController = {
 
           // Gửi thông báo vi phạm chi tiết với thông tin bài viết
           const notificationService = require("../services/notificationService");
-          await notificationService.createNotification(
-            {
-              recipient_id: violationInput.userId,
-              audience: "user",
-              type: "violation",
-              title: "⚠️ Bài viết của bạn đã bị gỡ do vi phạm",
-              content: {
-                html: `<p>Bài viết <strong>"${
-                  existing.title
-                }"</strong> của bạn đã bị gỡ bởi quản trị viên.</p>
-<p><strong>Lý do:</strong> ${violation.reason}<br>
-<strong>Độ nghiêm trọng:</strong> <span class="badge-${
-                  violationInput.severity
-                }">${violationInput.severity}</span><br>
-<strong>Vi phạm:</strong> ${violatedRulesDetail.length} quy tắc cộng đồng</p>
-${
-  violatedRulesDetail.length > 0
-    ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRulesDetail
-        .map(
-          (r) =>
-            `<li><strong>${r.title}</strong> (${r.severity_default}): ${r.description}</li>`
-        )
-        .join("")}</ul>`
-    : ""
-}
-<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p>
-<p><small>Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`,
-              },
-              redirect_type: "post",
-              data: {
-                id: postId,
-                data: `Bài viết: ${existing.title}\nLý do: ${
-                  violation.reason
-                }\nĐộ nghiêm trọng: ${
-                  violationInput.severity
-                }\nGỡ bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString(
-                  "vi-VN"
-                )}\n\nQuy tắc vi phạm:\n${rulesText}\n\nNội dung: ${contentPreview}...`,
-              },
+          await notificationService.createNotification({
+            recipient_id: violationInput.userId,
+            audience: "user",
+            type: "violation",
+            title: "⚠️ Bài viết của bạn đã bị gỡ do vi phạm",
+            content: {
+              html: `<p>Bài viết <strong>"${existing.title}"</strong> của bạn đã bị gỡ bởi quản trị viên.</p><p><strong>Lý do:</strong> ${violation.reason}</p><p><strong>Độ nghiêm trọng:</strong> ${violationInput.severity}</p><p><strong>Vi phạm:</strong> ${violatedRulesDetail.length} quy tắc cộng đồng</p>${violatedRulesDetail.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRulesDetail.map(r => `<li><strong>${r.title}</strong> (${r.severity_default}): ${r.description}</li>`).join('')}</ul>` : ''}<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Bài viết:</strong> ${existing.title}</li><li><strong>Gỡ bởi:</strong> Quản trị viên</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Số quy tắc vi phạm:</strong> ${violatedRulesDetail.length}</li></ul><p><small>⚖️ Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
             },
-            true
-          ); // auto push = true
+            redirect_type: "post",
+            data: {
+              id: postId,
+              type: "post_remove"
+            }
+          }, true); // auto push = true
         }
       } else if (action === "restore") {
         // Validate required fields for restore action
@@ -708,37 +680,20 @@ ${
 
           // Gửi thông báo chi tiết tới người dùng với lý do khôi phục
           const notificationService = require("../services/notificationService");
-          await notificationService.createNotification(
-            {
-              recipient_id: existing.user_id,
-              audience: "user",
-              type: "community",
-              title: "✅ Bài viết của bạn đã được khôi phục",
-              content: {
-                html: `<p>Bài viết <strong>"${
-                  existing.title
-                }"</strong> của bạn đã được quản trị viên khôi phục.</p>
-<p><strong>Lý do khôi phục:</strong> ${restoreReason}</p>
-${
-  violationsCleared > 0
-    ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong> vi phạm liên quan.</p>`
-    : ""
-}
-<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p>
-<p><small>Cảm ơn bạn đã đóng góp nội dung chất lượng cho cộng đồng!</small></p>`,
-              },
-              redirect_type: "post",
-              data: {
-                id: postId,
-                data: `Bài viết: ${
-                  existing.title
-                }\nLý do khôi phục: ${restoreReason}\nKhôi phục bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString(
-                  "vi-VN"
-                )}\nVi phạm đã xóa: ${violationsCleared}\n\nNội dung: ${contentPreview}...`,
-              },
+          await notificationService.createNotification({
+            recipient_id: existing.user_id,
+            audience: "user",
+            type: "community",
+            title: "✅ Bài viết của bạn đã được khôi phục",
+            content: {
+              html: `<p>Bài viết <strong>"${existing.title}"</strong> của bạn đã được quản trị viên khôi phục.</p><p><strong>Lý do khôi phục:</strong> ${restoreReason}</p>${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong> vi phạm liên quan.</p>` : ''}<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Bài viết:</strong> ${existing.title}</li><li><strong>Khôi phục bởi:</strong> Quản trị viên</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Vi phạm đã xóa:</strong> ${violationsCleared}</li></ul><p><small>💚 Cảm ơn bạn đã đóng góp nội dung chất lượng cho cộng đồng!</small></p>`
             },
-            true
-          ); // auto push = true
+            redirect_type: "post",
+            data: {
+              id: postId,
+              type: "post"
+            }
+          }, true); // auto push = true
         }
       }
 
@@ -842,31 +797,21 @@ ${
               );
 
         const notificationService = require("../services/notificationService");
-        await notificationService.createNotification(
-          {
-            recipient_id: post.user_id,
-            audience: "user",
-            type: "community",
-            title: "❤️ Có người thích bài viết của bạn",
-            content: {
-              html: `<p><strong>${likerName}</strong> đã thích bài viết <strong>"${post.title}"</strong> của bạn.</p>
-<p>❤️ Tổng số lượt thích: <strong>${result.likes}</strong></p>
-<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p>`,
-            },
-            redirect_type: "post",
-            data: {
-              id: postId,
-              data: `Bài viết: ${
-                post.title
-              }\nNgười thích: ${likerName}\nTổng lượt thích: ${
-                result.likes
-              }\nThời gian: ${new Date().toLocaleString(
-                "vi-VN"
-              )}\n\nNội dung: ${contentPreview}...`,
-            },
+
+        await notificationService.createNotification({
+          recipient_id: post.user_id,
+          audience: "user",
+          type: "community",
+          title: "❤️ Có người thích bài viết của bạn",
+          content: {
+            html: `<p><strong>${likerName}</strong> đã thích bài viết <strong>"${post.title}"</strong> của bạn.</p><p>❤️ Tổng số lượt thích: <strong>${result.likes}</strong></p><p><em>Nội dung bài viết:</em> "${contentPreview}..."</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Bài viết:</strong> ${post.title}</li><li><strong>Người thích:</strong> ${likerName}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Tổng lượt thích:</strong> ${result.likes}</li></ul>`
           },
-          true
-        ); // auto push = true
+          redirect_type: "post",
+          data: {
+            id: postId,
+            type: "post"
+          }
+        }, true); // auto push = true
       }
 
       res.status(200).json({
