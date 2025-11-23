@@ -203,22 +203,16 @@ const achievementService = {
             type: 'achievement',
             title: `🏆 Chúc mừng! Bạn đã đạt thành tích mới`,
             content: { 
-              message: `Bạn đã đạt thành tích "${achievement.name}" và nhận được ${achievement.points || 0} điểm!` 
+              html: `<p>Chúc mừng! Bạn đã đạt thành tích <strong>"${achievement.name}"</strong>!</p><p><em>${achievement.description || 'Thành tích đặc biệt'}</em></p><p><strong>Phần thưởng:</strong> +${achievement.points || 0} điểm cộng đồng</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Thành tích:</strong> ${achievement.icon || '🏆'} ${achievement.name}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Điểm nhận được:</strong> ${achievement.points || 0}</li><li><strong>Tiến độ:</strong> ${currentValue}/${requiredValue}</li></ul><p><small>🎉 Tiếp tục phát huy!</small></p>`
             },
             redirect_type: 'achievement',
             data: { 
-              achievement_id: achievement.id,
-              achievement_name: achievement.name,
-              achievement_description: achievement.description || '',
-              achievement_icon: achievement.icon || '🏆',
-              points: String(achievement.points || 0),
-              achieved_at: new Date().toISOString(),
-              progress_current: String(currentValue),
-              progress_required: String(requiredValue)
+              id: achievement.id,
+              type: 'achievement'
             },
             priority: 2,
             from_system: true
-          });
+          }, true);
         } catch (error) {
           console.error('❌ Error sending achievement notification:', error);
         }

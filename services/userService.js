@@ -858,11 +858,6 @@ const userService = {
       userId,
     ]);
 
-    // Tạo violation record - Không có target_type 'user' trong constraint
-    // Nên tạo violation với target_type là 'post' hoặc 'comment' tùy theo ngữ cảnh
-    // Hoặc không tạo violation cho ban user, chỉ ghi log
-    // Ở đây tôi sẽ bỏ qua việc tạo violation vì constraint không hỗ trợ
-
     // Lấy lại user đã cập nhật
     return await userModel.findUserDetailsById(userId);
   },

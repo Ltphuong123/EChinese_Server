@@ -812,9 +812,50 @@ const moderationModel = {
     await db.query(query, [violationId, reportId]);
   },
 
-
-
-
+  /**
+   * Lấy danh sách các giá trị constraint của target_type trong bảng Violations
+   * Query từ information_schema để lấy constraint check
+   */
+  getViolationTargetTypes: async () => {
+    const query = `
+      SELECT 
+        conname as constraint_name,
+        pg_get_constraintdef(c.oid) as constraint_definition
+      FROM pg_constraint c
+      JOIN pg_namespace n ON n.oid = c.connamespace
+      JOIN pg_class cl ON cl.oid = c.conrelid
+      WHERE 
+        cl.relname = 'Violations' 
+        AND n.nspname = 'public'
+        AND conname = 'Violations_target_type_check';
+    `;
+    
+    const result = await db.query(query);
+    
+    if (result.rows.length === 0) {
+      return {
+        constraint_name: 'Violations_target_type_check',
+        allowed_values: [],
+        constraint_definition: 'Constraint not found',
+        note: 'Có thể constraint chưa được tạo hoặc đã bị xóa'
+      };
+    }
+    
+    // Parse constraint definition để lấy các giá trị
+    // Ví dụ: CHECK ((target_type)::text = ANY (ARRAY['post'::character varying, 'comment'::character varying, 'user'::character varying]::text[]))
+    const constraintDef = result.rows[0].constraint_definition;
+    
+    // Extract các giá trị từ constraint definition
+    const matches = constraintDef.match(/'([^']+)'/g);
+    const allowedValues = matches ? matches.map(m => m.replace(/'/g, '')) : [];
+    
+    return {
+      constraint_name: result.rows[0].constraint_name,
+      allowed_values: allowedValues,
+      constraint_definition: constraintDef,
+      note: 'Các giá trị được phép cho target_type trong bảng Violations'
+    };
+  }
 
 };
 

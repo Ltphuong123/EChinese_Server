@@ -5,7 +5,7 @@ const usageModel = require('../models/usageModel');
 const db = require('../config/db');
 require('dotenv').config();
 
-const FREE_PLAN_ID = process
+const FREE_PLAN_ID = process.env.FREE_PLAN_ID;
 
 class ValidationError extends Error {
   constructor(message) { super(message); this.name = 'ValidationError'; }
@@ -195,10 +195,16 @@ const userSubscriptionService = {
       const startDate = overrides.startDate ? new Date(overrides.startDate) : new Date();
       let expiryDate = overrides.expiryDate ? new Date(overrides.expiryDate) : null;
 
-      if (expiryDate === null && newPlan.duration_months) {
+      // Tự động tính toán ngày hết hạn dựa trên duration_months của gói
+      if (expiryDate === null && newPlan.duration_months && newPlan.duration_months > 0) {
         expiryDate = new Date(startDate);
         expiryDate.setMonth(expiryDate.getMonth() + newPlan.duration_months);
       }
+
+      // Tự động bật auto_renew cho các gói trả phí (có expiry_date)
+      const autoRenew = overrides.autoRenew !== undefined 
+        ? overrides.autoRenew 
+        : (expiryDate !== null); // Bật auto_renew nếu gói có thời hạn
 
       const newSubData = {
         user_id: userId,
@@ -206,14 +212,14 @@ const userSubscriptionService = {
         start_date: startDate,
         expiry_date: expiryDate,
         is_active: true,
-        auto_renew: overrides.autoRenew !== undefined ? overrides.autoRenew : false,
+        auto_renew: autoRenew,
         last_payment_id: overrides.paymentId || null,
       };
 
       // --- BƯỚC 4: Tạo bản ghi UserSubscription mới ---
       const createdSubscription = await userSubscriptionModel.create(newSubData, client);
 
-      // --- BƯỚC 5 (MỚI): Cập nhật hoặc Tạo Quotas cho người dùng ---
+      // --- BƯỚC 5: Cập nhật hoặc Tạo Quotas cho người dùng ---
       // Lấy quota từ gói đăng ký mới
       const quotasToUpdate = [
         { feature: 'ai_lesson', daily_count: newPlan.daily_quota_ai_lesson },
@@ -310,7 +316,21 @@ const userSubscriptionService = {
         if (!userSub.is_active) {
             throw new BusinessLogicError('Không thể thay đổi ngày hết hạn của một gói đã không còn hoạt động.');
         }
-        return await userSubscriptionModel.update1(userSub.id, { expiry_date: new Date(payload.new_expiry_date) }, client);
+        
+        // Xử lý đặt gói vĩnh viễn (new_expiry_date = null)
+        if (payload.new_expiry_date === null) {
+            return await userSubscriptionModel.update1(userSub.id, { 
+                expiry_date: null,
+                auto_renew: false // Gói vĩnh viễn không cần auto renew
+            }, client);
+        }
+        
+        // Xử lý đặt ngày hết hạn cụ thể
+        const newExpiryDate = new Date(payload.new_expiry_date);
+        return await userSubscriptionModel.update1(userSub.id, { 
+            expiry_date: newExpiryDate,
+            auto_renew: true // Tự động bật auto_renew khi có ngày hết hạn
+        }, client);
     },
 
     async _applyAutoRenewToggle(userSub, payload, client) {
@@ -322,15 +342,33 @@ const userSubscriptionService = {
         if (!userSub.is_active) throw new BusinessLogicError('Gói đăng ký này đã bị hủy trước đó.');
         if (userSub.subscription_id === FREE_PLAN_ID) throw new BusinessLogicError('Không thể hủy gói Miễn phí.');
 
-        // 1. Hủy gói hiện tại
+        // 1. Hủy gói hiện tại (đánh dấu không hoạt động)
         await userSubscriptionModel.update1(userSub.id, {
             is_active: false,
             auto_renew: false,
             expiry_date: new Date(),
         }, client);
 
-        // 2. Chuyển người dùng sang gói Miễn phí và trả về thông tin gói mới
-        return await this._assignAndResetQuotasForPlan(userSub.user_id, FREE_PLAN_ID, client);
+        // 2. Chuyển người dùng sang gói Miễn phí
+        // Sử dụng addSubscription để tự động xử lý việc hủy gói cũ và tạo gói mới
+        const freePlan = await userSubscriptionModel.findSubscriptionById1(FREE_PLAN_ID, client);
+        if (!freePlan) throw new Error('Không tìm thấy gói Miễn phí trong hệ thống.');
+
+        // Tạo gói Free mới cho người dùng
+        const newFreeSub = await userSubscriptionModel.create1({
+            user_id: userSub.user_id,
+            subscription_id: FREE_PLAN_ID,
+            start_date: new Date(),
+            expiry_date: null, // Gói Free không có hạn
+            is_active: true,
+            auto_renew: false, // Gói Free không cần auto renew
+        }, client);
+
+        // 3. Cập nhật quotas theo gói Free
+        await this._updateUserQuotasForPlan(userSub.user_id, freePlan, client);
+
+        // 4. Trả về thông tin gói Free mới
+        return newFreeSub;
     },
     
     async _performPlanChange(userSub, payload, client) {
@@ -340,13 +378,28 @@ const userSubscriptionService = {
             const newPlan = await userSubscriptionModel.findSubscriptionById1(payload.new_subscription_id, client);
             if (!newPlan) throw new Error(`Gói đăng ký mới với ID ${payload.new_subscription_id} không tồn tại.`);
 
-            // 1. Cập nhật bản ghi hiện tại để trỏ đến gói mới
-            await userSubscriptionModel.update1(userSub.id, { subscription_id: payload.new_subscription_id }, client);
+            // 1. Tính toán ngày hết hạn mới dựa trên gói mới
+            let newExpiryDate = null;
+            if (newPlan.duration_months && newPlan.duration_months > 0) {
+                newExpiryDate = new Date();
+                newExpiryDate.setMonth(newExpiryDate.getMonth() + newPlan.duration_months);
+            }
+
+            // 2. Tự động bật auto_renew cho gói có thời hạn
+            const autoRenew = newExpiryDate !== null;
+
+            // 3. Cập nhật bản ghi hiện tại với gói mới, ngày hết hạn mới và auto_renew
+            await userSubscriptionModel.update1(userSub.id, { 
+                subscription_id: payload.new_subscription_id,
+                expiry_date: newExpiryDate,
+                auto_renew: autoRenew,
+                start_date: new Date() // Reset ngày bắt đầu
+            }, client);
             
-            // 2. Cập nhật lại quota theo gói mới
+            // 4. Cập nhật lại quota theo gói mới
             await this._updateUserQuotasForPlan(userSub.user_id, newPlan, client);
             
-            // 3. Trả về thông tin đầy đủ của gói đã cập nhật
+            // 5. Trả về thông tin đầy đủ của gói đã cập nhật
             return await userSubscriptionModel.findById1(userSub.id, client);
         } else {
             throw new BusinessLogicError('Chức năng thay đổi gói vào cuối kỳ chưa được hỗ trợ.');
@@ -406,8 +459,18 @@ const userSubscriptionService = {
     },
 
     _validateChangeExpiryPayload(payload) {
-        if (!payload.new_expiry_date || isNaN(new Date(payload.new_expiry_date))) {
-            throw new ValidationError('Hành động "change_expiry" yêu cầu "new_expiry_date" hợp lệ.');
+        // Cho phép new_expiry_date = null (gói vĩnh viễn)
+        if (payload.new_expiry_date === null) {
+            return; // Valid: đặt gói vĩnh viễn
+        }
+        
+        // Kiểm tra nếu không phải null thì phải là ngày hợp lệ
+        if (payload.new_expiry_date === undefined) {
+            throw new ValidationError('Hành động "change_expiry" yêu cầu trường "new_expiry_date".');
+        }
+        
+        if (isNaN(new Date(payload.new_expiry_date))) {
+            throw new ValidationError('Hành động "change_expiry" yêu cầu "new_expiry_date" là ngày hợp lệ hoặc null.');
         }
     },
 
@@ -493,14 +556,14 @@ const userSubscriptionService = {
               recipient_id: sub.user_id,
               audience: 'user',
               type: 'system',
-              title: '⏰ Gói đăng ký của bạn đã hết hạn',
+              title: '⏰ Gói đăng ký đã hết hạn',
               content: {
-                message: `Gói "${sub.subscription_name}" của bạn đã hết hạn vào ${expiryDate.toLocaleString('vi-VN')}. Bạn đã được tự động chuyển về gói Miễn phí. Gia hạn ngay để tiếp tục sử dụng các tính năng cao cấp.\n\nThời hạn gói: ${sub.duration_months} tháng\nGiá: ${sub.price} VNĐ`
+                html: `<p>Gói đăng ký <strong>"${sub.subscription_name}"</strong> của bạn đã hết hạn.</p><p><strong>Ngày hết hạn:</strong> ${expiryDate.toLocaleString('vi-VN')}</p><p><strong>Thời gian sử dụng:</strong> ${sub.duration_months} tháng</p><p>Bạn đã được tự động chuyển về <strong>gói Miễn phí</strong>.</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Gói:</strong> ${sub.subscription_name}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Trạng thái:</strong> Đã hết hạn</li><li><strong>Giá gia hạn:</strong> ${sub.price.toLocaleString('vi-VN')} VNĐ</li></ul><p><small>🔄 Gia hạn ngay để tiếp tục sử dụng!</small></p>`
               },
               redirect_type: 'subscription',
               data: {
                 id: sub.subscription_id,
-                data: `Gói: ${sub.subscription_name}\nThời hạn: ${sub.duration_months} tháng\nGiá: ${sub.price} VNĐ\nHết hạn: ${expiryDate.toLocaleString('vi-VN')}\nTrạng thái: Đã chuyển về gói Miễn phí`
+                type: 'subscription_expired'
               },
               priority: 2,
               from_system: true
@@ -520,14 +583,14 @@ const userSubscriptionService = {
             recipient_id: sub.user_id,
             audience: 'user',
             type: 'system',
-            title: `⏰ Gói đăng ký sắp hết hạn trong ${daysUntilExpiry} ngày`,
+            title: '⚠️ Gói đăng ký sắp hết hạn',
             content: {
-              message: `Gói "${sub.subscription_name}" của bạn sẽ hết hạn vào ${expiryDate.toLocaleDateString('vi-VN')} (còn ${daysUntilExpiry} ngày). Gia hạn ngay để không bị gián đoạn dịch vụ.\n\nThông tin gói:\n- Tên gói: ${sub.subscription_name}\n- Giá: ${sub.price} VNĐ\n- Thời hạn: ${sub.duration_months} tháng\n- Tự động gia hạn: ${sub.auto_renew ? 'Có' : 'Không'}\n- Ngày hết hạn: ${expiryDate.toLocaleDateString('vi-VN')}`
+              html: `<p>Gói đăng ký <strong>"${sub.subscription_name}"</strong> của bạn sắp hết hạn.</p><p><strong>Còn lại:</strong> ${daysUntilExpiry} ngày</p><p><strong>Ngày hết hạn:</strong> ${expiryDate.toLocaleDateString('vi-VN')}</p><p><strong>Tự động gia hạn:</strong> ${sub.auto_renew ? 'Có' : 'Không'}</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Gói:</strong> ${sub.subscription_name}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Hết hạn:</strong> ${expiryDate.toLocaleDateString('vi-VN')}</li><li><strong>Giá gia hạn:</strong> ${sub.price.toLocaleString('vi-VN')} VNĐ</li></ul><p><small>🔄 Gia hạn ngay để không bị gián đoạn!</small></p>`
             },
             redirect_type: 'subscription',
             data: {
               id: sub.subscription_id,
-              data: `Gói: ${sub.subscription_name}\nGiá: ${sub.price} VNĐ\nThời hạn: ${sub.duration_months} tháng\nCòn lại: ${daysUntilExpiry} ngày\nHết hạn: ${expiryDate.toLocaleDateString('vi-VN')}\nTự động gia hạn: ${sub.auto_renew ? 'Có' : 'Không'}`
+              type: 'subscription'
             },
             priority: 2,
             from_system: true

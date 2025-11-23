@@ -55,12 +55,21 @@ const commentController = {
             content: {
               html: `<p><strong>${commenter?.name || 'Một người dùng'}</strong> đã bình luận vào bài viết <strong>"${post.title}"</strong> của bạn.</p>
 <p><em>Nội dung bình luận:</em> "${commentPreview}..."</p>
-${parentCommentId ? '<p><small>💬 Đây là một phản hồi trong chuỗi bình luận</small></p>' : ''}`
+${parentCommentId ? '<p><small>💬 Đây là một phản hồi trong chuỗi bình luận</small></p>' : ''}
+<hr>
+<p><small><strong>📌 Thông tin chi tiết:</strong></small></p>
+<ul style="font-size: 0.9em;">
+  <li><strong>Bài viết:</strong> ${post.title}</li>
+  <li><strong>Người bình luận:</strong> ${commenter?.name || 'Người dùng'}</li>
+  <li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li>
+  ${parentCommentId ? '<li><strong>Loại:</strong> Phản hồi bình luận</li>' : ''}
+</ul>`
             },
             redirect_type: 'post_comment',
             data: {
-              id: newComment.id,
-              data: `Bài viết: ${post.title}\nNgười bình luận: ${commenter?.name || 'Người dùng'}\nNội dung: ${commentPreview}...\nThời gian: ${new Date().toLocaleString('vi-VN')}${parentCommentId ? '\nLoại: Phản hồi' : ''}`
+              comment_id: newComment.id,
+              post_id: postId,
+              type: 'comment'
             }
           }, true); // auto push = true
         }
@@ -85,12 +94,20 @@ ${parentCommentId ? '<p><small>💬 Đây là một phản hồi trong chuỗi b
               content: {
                 html: `<p><strong>${commenter?.name || 'Một người dùng'}</strong> đã trả lời bình luận của bạn.</p>
 <p><em>Nội dung trả lời:</em> "${commentPreview}..."</p>
-<p><small>Nhấn để xem chuỗi bình luận đầy đủ</small></p>`
+<hr>
+<p><small><strong>�  Thông tin chi tiết:</strong></small></p>
+<ul style="font-size: 0.9em;">
+  <li><strong>Người trả lời:</strong> ${commenter?.name || 'Người dùng'}</li>
+  <li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li>
+  <li><strong>Bài viết ID:</strong> ${postId}</li>
+</ul>
+<p><small>💡 Nhấn để xem chuỗi bình luận đầy đủ</small></p>`
               },
               redirect_type: 'post_comment',
               data: {
-                id: newComment.id,
-                data: `Người trả lời: ${commenter?.name || 'Người dùng'}\nNội dung: ${commentPreview}...\nThời gian: ${new Date().toLocaleString('vi-VN')}\nBài viết ID: ${postId}`
+                comment_id: newComment.id,
+                post_id: postId,
+                type: 'comment'
               }
             }, true); // auto push = true
           }
@@ -130,12 +147,36 @@ ${parentCommentId ? '<p><small>💬 Đây là một phản hồi trong chuỗi b
     try {
       const { commentId } = req.params;
       const comment = await commentService.getCommentById(commentId);
-      res.status(200).json({ success: true, data: comment });
+      
+      // Format response theo spec
+      res.status(200).json({ 
+        success: true, 
+        data: {
+          id: comment.id,
+          post_id: comment.post_id,
+          user_id: comment.user_id,
+          parent_id: comment.parent_id || null,
+          content: comment.content,
+          deleted_at: comment.deleted_at || null,
+          deleted_by: comment.deleted_by || null,
+          deleted_reason: comment.deleted_reason || null,
+          created_at: comment.created_at,
+          updated_at: comment.updated_at,
+          likes_count: comment.likes_count || 0
+        }
+      });
     } catch (error) {
       if (error.message.includes('không tồn tại')) {
-        return res.status(404).json({ success: false, message: error.message });
+        return res.status(404).json({ 
+          success: false, 
+          error: 'Comment not found' 
+        });
       }
-      res.status(500).json({ success: false, message: 'Lỗi khi lấy bình luận', error: error.message });
+      res.status(500).json({ 
+        success: false, 
+        error: 'Internal server error',
+        message: error.message 
+      });
     }
   },
 
@@ -229,12 +270,21 @@ ${parentCommentId ? '<p><small>💬 Đây là một phản hồi trong chuỗi b
 <p><strong>Lý do khôi phục:</strong> ${restoreReason}</p>
 ${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong> vi phạm liên quan.</p>` : ''}
 <p><em>Nội dung bình luận:</em> "${commentPreview}..."</p>
-<p><small>Cảm ơn bạn đã đóng góp ý kiến cho cộng đồng!</small></p>`
+<hr>
+<p><small><strong>📌 Thông tin chi tiết:</strong></small></p>
+<ul style="font-size: 0.9em;">
+  <li><strong>Khôi phục bởi:</strong> Quản trị viên</li>
+  <li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li>
+  <li><strong>Vi phạm đã xóa:</strong> ${violationsCleared}</li>
+  <li><strong>Bài viết ID:</strong> ${comment.post_id}</li>
+</ul>
+<p><small>💚 Cảm ơn bạn đã đóng góp ý kiến cho cộng đồng!</small></p>`
         },
         redirect_type: 'post_comment',
         data: {
-          id: commentId,
-          data: `Lý do khôi phục: ${restoreReason}\nKhôi phục bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString('vi-VN')}\nVi phạm đã xóa: ${violationsCleared}\nBài viết ID: ${comment.post_id}\n\nNội dung: ${commentPreview}...`
+          comment_id: commentId,
+          post_id: comment.post_id,
+          type: 'comment'
         }
       }, true); // auto push = true
       
@@ -302,17 +352,26 @@ ${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong
           title: '⚠️ Bình luận của bạn đã bị gỡ do vi phạm',
           content: {
             html: `<p>Bình luận của bạn đã bị gỡ bởi quản trị viên.</p>
-<p><strong>Lý do:</strong> ${reason}<br>
-<strong>Độ nghiêm trọng:</strong> <span class="badge-${severity || 'medium'}">${severity || 'medium'}</span><br>
-<strong>Vi phạm:</strong> ${violatedRulesDetail.length} quy tắc cộng đồng</p>
+<p><strong>Lý do:</strong> ${reason}</p>
+<p><strong>Độ nghiêm trọng:</strong> <span class="badge-${severity || 'medium'}">${severity || 'medium'}</span></p>
+<p><strong>Vi phạm:</strong> ${violatedRulesDetail.length} quy tắc cộng đồng</p>
 ${violatedRulesDetail.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${rulesText}</ul>` : ''}
 <p><em>Nội dung bình luận:</em> "${commentPreview}..."</p>
-<p><small>Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
+<hr>
+<p><small><strong>📌 Thông tin chi tiết:</strong></small></p>
+<ul style="font-size: 0.9em;">
+  <li><strong>Gỡ bởi:</strong> Quản trị viên</li>
+  <li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li>
+  <li><strong>Bài viết ID:</strong> ${removedComment.post_id}</li>
+  <li><strong>Số quy tắc vi phạm:</strong> ${violatedRulesDetail.length}</li>
+</ul>
+<p><small>⚖️ Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
           },
           redirect_type: 'post_comment',
           data: {
-            id: commentId,
-            data: `Lý do: ${reason}\nĐộ nghiêm trọng: ${severity || 'medium'}\nGỡ bởi: Quản trị viên\nThời gian: ${new Date().toLocaleString('vi-VN')}\nBài viết ID: ${removedComment.post_id}\n\nQuy tắc vi phạm: ${violatedRulesDetail.length}\n\nNội dung: ${commentPreview}...`
+            comment_id: commentId,
+            post_id: removedComment.post_id,
+            type: 'comment_remove'
           }
         }, true); // auto push = true
       }

@@ -57,22 +57,12 @@ const refundService = {
               type: 'system',
               title: '📝 Yêu cầu hoàn tiền đã được gửi',
               content: {
-                  message: `Yêu cầu hoàn tiền cho gói "${subscription?.name || 'đăng ký'}" đã được gửi thành công. Chúng tôi sẽ xem xét và phản hồi trong vòng 24-48 giờ.`,
-                  action: 'refund_requested',
-                  subscription_name: subscription?.name || 'Premium',
-                  amount: payment.amount
+                  html: `<p>Yêu cầu hoàn tiền cho gói <strong>"${subscription?.name || 'đăng ký'}"</strong> đã được gửi.</p><p><strong>Số tiền:</strong> ${payment.amount.toLocaleString('vi-VN')} VNĐ</p><p><strong>Lý do:</strong> ${reason}</p><p><strong>Trạng thái:</strong> Đang xử lý</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Mã yêu cầu:</strong> ${refundRequest.id}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Thời gian xử lý:</strong> 3-5 ngày làm việc</li></ul><p><small>⏳ Chúng tôi sẽ xem xét và phản hồi sớm.</small></p>`
               },
-              redirect_type: 'refund',
+              redirect_type: 'subscription',
               data: {
-                  refund_id: refundRequest.id,
-                  payment_id: paymentId,
-                  subscription_id: payment.subscription_id || null,
-                  subscription_name: subscription?.name || 'Premium',
-                  amount: payment.amount,
-                  currency: 'VND',
-                  reason: reason,
-                  requested_at: new Date().toISOString(),
-                  estimated_response_time: '24-48 giờ'
+                  id: refundRequest.id,
+                  type: 'refund'
               },
               priority: 1,
               from_system: true
@@ -193,26 +183,12 @@ const refundService = {
                         type: 'system',
                         title: '✅ Yêu cầu hoàn tiền đã được chấp nhận',
                         content: { 
-                            message: `Yêu cầu hoàn tiền cho gói "${subscription?.name || 'đăng ký'}" đã được chấp nhận. Số tiền ${amount.toLocaleString('vi-VN')}đ sẽ được hoàn về trong 3-5 ngày làm việc.`,
-                            action: 'refund_approved',
-                            refund_amount: amount,
-                            subscription_name: subscription?.name || 'Premium',
-                            refund_method: method
+                            html: `<p>Yêu cầu hoàn tiền cho gói <strong>"${subscription?.name || 'đăng ký'}"</strong> đã được chấp nhận.</p><p><strong>Số tiền:</strong> ${amount.toLocaleString('vi-VN')} VNĐ</p><p><strong>Phương thức:</strong> ${method}</p>${notes ? `<p><strong>Ghi chú:</strong> ${notes}</p>` : ''}<hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Mã yêu cầu:</strong> ${refundId}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Hoàn tiền trong:</strong> 5-7 ngày làm việc</li></ul><p><small>💰 Số tiền sẽ được hoàn về tài khoản của bạn.</small></p>`
                         },
-                        redirect_type: 'refund',
+                        redirect_type: 'subscription',
                         data: { 
-                            refund_id: refundId,
-                            payment_id: refundRequest.payment_id,
-                            subscription_id: paymentInfo?.subscription_id || null,
-                            subscription_name: subscription?.name || 'Premium',
-                            refund_amount: amount,
-                            original_amount: paymentInfo?.amount || amount,
-                            currency: 'VND',
-                            refund_method: method,
-                            approved_by: adminId,
-                            approved_at: new Date().toISOString(),
-                            estimated_refund_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-                            admin_notes: notes || null
+                            id: refundId,
+                            type: 'refund'
                         },
                         priority: 2,
                         from_system: true
@@ -223,25 +199,14 @@ const refundService = {
                         recipient_id: refundRequest.user_id,
                         audience: 'user',
                         type: 'system',
-                        title: '❌ Yêu cầu hoàn tiền đã bị từ chối',
+                        title: '❌ Yêu cầu hoàn tiền bị từ chối',
                         content: { 
-                            message: `Yêu cầu hoàn tiền cho gói "${subscription?.name || 'đăng ký'}" không được chấp nhận. Lý do: ${notes || 'Không đủ điều kiện hoàn tiền'}`,
-                            action: 'refund_rejected',
-                            subscription_name: subscription?.name || 'Premium',
-                            rejection_reason: notes || 'Không đủ điều kiện hoàn tiền'
+                            html: `<p>Yêu cầu hoàn tiền cho gói <strong>"${subscription?.name || 'đăng ký'}"</strong> đã bị từ chối.</p><p><strong>Lý do:</strong> ${notes || 'Không đủ điều kiện hoàn tiền'}</p><p><strong>Số tiền yêu cầu:</strong> ${(paymentInfo?.amount || 0).toLocaleString('vi-VN')} VNĐ</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Mã yêu cầu:</strong> ${refundId}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Xử lý bởi:</strong> Quản trị viên</li></ul><p><small>💡 Vui lòng liên hệ hỗ trợ nếu có thắc mắc.</small></p>`
                         },
-                        redirect_type: 'refund',
+                        redirect_type: 'subscription',
                         data: { 
-                            refund_id: refundId,
-                            payment_id: refundRequest.payment_id,
-                            subscription_id: paymentInfo?.subscription_id || null,
-                            subscription_name: subscription?.name || 'Premium',
-                            requested_amount: paymentInfo?.amount || 0,
-                            currency: 'VND',
-                            rejection_reason: notes || 'Không đủ điều kiện hoàn tiền',
-                            rejected_by: adminId,
-                            rejected_at: new Date().toISOString(),
-                            user_reason: refundRequest.reason || null
+                            id: refundId,
+                            type: 'refund_rejected'
                         },
                         priority: 2,
                         from_system: true

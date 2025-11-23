@@ -53,21 +53,14 @@ const paymentService = {
         recipient_id: userId,
         audience: 'user',
         type: 'system',
-        title: '💳 Hướng dẫn thanh toán',
+        title: '🛒 Đơn hàng đã được tạo',
         content: {
-          message: `Vui lòng chuyển khoản ${subscription.price}đ để kích hoạt gói "${subscription.name}". Sau khi chuyển khoản, vui lòng chờ xác nhận từ hệ thống.`,
-          action: 'payment_instruction',
-          subscription_name: subscription.name,
-          amount: subscription.price
+          html: `<p>Đơn hàng của bạn đã được tạo thành công.</p><p><strong>Gói:</strong> ${subscription.name}</p><p><strong>Giá:</strong> ${subscription.price.toLocaleString('vi-VN')} VNĐ</p><p><strong>Trạng thái:</strong> Chờ thanh toán</p><p><strong>Thông tin chuyển khoản:</strong></p><ul><li>Ngân hàng: ${bankInfo.bank_name}</li><li>Số tài khoản: ${bankInfo.account_number}</li><li>Chủ tài khoản: ${bankInfo.account_name}</li><li>Nội dung: ${bankInfo.transfer_content}</li></ul><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Gói:</strong> ${subscription.name}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Phương thức:</strong> ${paymentMethod}</li></ul><p><small>💳 Vui lòng thanh toán để kích hoạt gói.</small></p>`
         },
         redirect_type: 'subscription',
         data: {
-          subscription_id: subscriptionId,
-          subscription_name: subscription.name,
-          amount: subscription.price,
-          payment_method: paymentMethod,
-          bank_info: bankInfo,
-          created_at: new Date().toISOString()
+          id: newPayment.id,
+          type: 'payment'
         }
       }, true); // auto push = true
     } catch (notifError) {
@@ -161,26 +154,21 @@ const paymentService = {
         
         // Gửi thông báo xác nhận thanh toán thành công
         const notificationService = require('./notificationService');
+        const userSub = await subscriptionModel.getUserActiveSubscription(updatedPayment.user_id);
+        const expiresAt = userSub?.expires_at ? new Date(userSub.expires_at).toLocaleString('vi-VN') : 'N/A';
+        
         await notificationService.createNotification({
           recipient_id: updatedPayment.user_id,
           audience: 'user',
           type: 'system',
-          title: '✅ Thanh toán đã được xác nhận',
+          title: '✅ Thanh toán thành công',
           content: {
-            message: `Thanh toán của bạn đã được xác nhận thành công. Gói "${subscription?.name || 'Premium'}" đã được kích hoạt.`,
-            action: 'payment_confirmed',
-            payment_amount: updatedPayment.amount,
-            subscription_name: subscription?.name || 'Premium'
+            html: `<p>Thanh toán cho đơn hàng của bạn đã thành công!</p><p><strong>Gói:</strong> ${subscription?.name || 'Premium'}</p><p><strong>Số tiền:</strong> ${updatedPayment.amount.toLocaleString('vi-VN')} VNĐ</p><p><strong>Thời hạn:</strong> ${subscription?.duration_days || 30} ngày</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Mã giao dịch:</strong> ${updatedPayment.id}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Hết hạn:</strong> ${expiresAt}</li><li><strong>Phương thức:</strong> ${updatedPayment.payment_method}</li></ul><p><small>🎉 Cảm ơn bạn đã sử dụng dịch vụ!</small></p>`
           },
           redirect_type: 'subscription',
           data: {
-            payment_id: updatedPayment.id,
-            subscription_id: updatedPayment.subscription_id,
-            subscription_name: subscription?.name || 'Premium',
-            amount: updatedPayment.amount,
-            payment_method: updatedPayment.payment_method,
-            confirmed_at: new Date().toISOString(),
-            confirmed_by: adminId
+            id: updatedPayment.id,
+            type: 'payment'
           }
         }, true); // auto push = true
       } else if (status === 'failed') {
@@ -193,22 +181,14 @@ const paymentService = {
           recipient_id: updatedPayment.user_id,
           audience: 'user',
           type: 'system',
-          title: '❌ Thanh toán bị từ chối',
+          title: '❌ Thanh toán thất bại',
           content: {
-            message: `Thanh toán của bạn cho gói "${subscription?.name || 'Premium'}" đã bị từ chối. Vui lòng kiểm tra lại thông tin thanh toán hoặc liên hệ hỗ trợ.`,
-            action: 'payment_failed',
-            payment_amount: updatedPayment.amount,
-            subscription_name: subscription?.name || 'Premium'
+            html: `<p>Thanh toán cho đơn hàng của bạn đã thất bại.</p><p><strong>Gói:</strong> ${subscription?.name || 'Premium'}</p><p><strong>Số tiền:</strong> ${updatedPayment.amount.toLocaleString('vi-VN')} VNĐ</p><p><strong>Lý do:</strong> Thanh toán bị từ chối</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Mã đơn:</strong> ${updatedPayment.id}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Phương thức:</strong> ${updatedPayment.payment_method}</li></ul><p><small>💡 Vui lòng thử lại hoặc liên hệ hỗ trợ.</small></p>`
           },
           redirect_type: 'subscription',
           data: {
-            payment_id: updatedPayment.id,
-            subscription_id: updatedPayment.subscription_id,
-            subscription_name: subscription?.name || 'Premium',
-            amount: updatedPayment.amount,
-            payment_method: updatedPayment.payment_method,
-            failed_at: new Date().toISOString(),
-            rejected_by: adminId
+            id: updatedPayment.id,
+            type: 'payment_failed'
           }
         }, true); // auto push = true
       }

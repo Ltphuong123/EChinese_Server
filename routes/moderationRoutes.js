@@ -22,6 +22,7 @@ router.put(`${ADMIN_BASE}/reports/:reportId/status`, moderationController.update
 // Violations
 router.post(`${ADMIN_BASE}/violations`, moderationController.createViolation);
 router.get(`${ADMIN_BASE}/violations`, moderationController.getViolations);
+router.get(`${ADMIN_BASE}/violations/target-types`, moderationController.getViolationTargetTypes);
 router.delete(`${ADMIN_BASE}/violations/:id`, moderationController.deleteViolation);
 
 // Appeals
