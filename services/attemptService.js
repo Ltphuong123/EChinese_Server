@@ -97,15 +97,17 @@ const attemptService = {
                   case 'Trắc nghiệm (3 đáp án)':
                   case 'Trắc nghiệm (4 đáp án)':
                   case 'Trắc nghiệm (5 đáp án - Nối)':
-                      isCorrect = item.options.some(opt => opt.id === userResponse && opt.is_correct);
+                      isCorrect = item.options?.some(opt => opt.id === userResponse && opt.is_correct) || false;
                       break;
                   case 'Sắp xếp từ':
                   case 'Sắp xếp câu':
-                      isCorrect = item.correct_answers.some(ans => ans.answer === userResponse);
+                      isCorrect = item.correct_answers?.some(ans => ans.answer === userResponse) || false;
                       break;
                   case 'Viết câu trả lời':
-                      if (item.correct_answers.length > 0) {
-                          isCorrect = item.correct_answers.some(ans => ans.answer.toLowerCase() === userResponse.toLowerCase());
+                      if (item.correct_answers && item.correct_answers.length > 0) {
+                          isCorrect = item.correct_answers.some(ans => 
+                              ans.answer?.toLowerCase() === userResponse.toLowerCase()
+                          );
                       } else {
                           isCorrect = userResponse.trim().length > 0;
                       }
@@ -185,15 +187,17 @@ const attemptService = {
                       case 'Trắc nghiệm (3 đáp án)':
                       case 'Trắc nghiệm (4 đáp án)':
                       case 'Trắc nghiệm (5 đáp án - Nối)':
-                          isCorrect = item.options.some(opt => opt.id === userResponse && opt.is_correct);
+                          isCorrect = item.options?.some(opt => opt.id === userResponse && opt.is_correct) || false;
                           break;
                       case 'Sắp xếp từ':
                       case 'Sắp xếp câu':
-                          isCorrect = item.correct_answers.some(ans => ans.answer === userResponse);
+                          isCorrect = item.correct_answers?.some(ans => ans.answer === userResponse) || false;
                           break;
                       case 'Viết câu trả lời':
-                          if (item.correct_answers.length > 0) {
-                              isCorrect = item.correct_answers.some(ans => ans.answer.toLowerCase() === userResponse.toLowerCase());
+                          if (item.correct_answers && item.correct_answers.length > 0) {
+                              isCorrect = item.correct_answers.some(ans => 
+                                  ans.answer?.toLowerCase() === userResponse.toLowerCase()
+                              );
                           } else {
                               isCorrect = userResponse.trim().length > 0;
                           }
@@ -249,9 +253,20 @@ const attemptService = {
 
   // API: getAttemptResult
   getGradedResult: async (attemptId, userId) => {
+    // Kiểm tra xem attempt có tồn tại không
+    const attempt = await attemptModel.findAttemptByIdAndUser(attemptId, userId);
+    if (!attempt) {
+      throw new Error('Lượt làm bài không tồn tại hoặc không thuộc về bạn.');
+    }
+    
+    // Kiểm tra xem đã nộp bài chưa
+    if (attempt.score_total === null) {
+      throw new Error('Bài thi chưa được nộp. Vui lòng nộp bài trước khi xem kết quả.');
+    }
+    
     const result = await attemptModel.getFinalResult(attemptId, userId);
     if (!result) {
-      throw new Error('Lượt làm bài không hợp lệ hoặc chưa hoàn thành.');
+      throw new Error('Không thể lấy kết quả bài thi.');
     }
     return result;
   },
