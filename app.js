@@ -7,7 +7,6 @@ const port = process.env.PORT || 5000;
 
 const { generalLimiter } = require("./middlewares/rateLimitMiddleware");
 
-
 app.use(cors());
 const corsOptions = {
   origin: "*", // Chỉ cho phép yêu cầu từ địa chỉ này
@@ -54,7 +53,6 @@ const aiModerationRoutes = require("./routes/aiModerationRoutes");
 const deviceTokenRoutes = require("./routes/deviceTokenRoutes");
 const simpleNotificationRoutes = require("./routes/simpleNotificationRoutes");
 
-
 app.use("/api", userRoutes);
 
 app.use("/api", notebookRoutes);
@@ -90,6 +88,22 @@ app.use("/api", aiModerationRoutes);
 app.use("/api/users", deviceTokenRoutes);
 app.use("/api", simpleNotificationRoutes);
 
+// Cron job for checking expiring subscriptions daily at 9 AM
+const cron = require("node-cron");
+const userSubscriptionService = require("./services/userSubscriptionService");
+
+cron.schedule("0 9 * * *", async () => {
+  console.log("Running daily subscription expiry check...");
+  try {
+    const result =
+      await userSubscriptionService.checkAndNotifyExpiringSubscriptions();
+    console.log(
+      `Subscription check completed: ${result.expiredCount} expired, ${result.expiringCount} expiring soon`
+    );
+  } catch (error) {
+    console.error("Error in subscription expiry check cron job:", error);
+  }
+});
 
 app.listen(port, () => {
   console.log(`Server chạy tại http://localhost:${port}`);

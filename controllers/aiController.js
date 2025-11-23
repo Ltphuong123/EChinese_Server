@@ -7,7 +7,6 @@ const axios = require("axios");
 const userSubscriptionModel = require("../models/userSubscriptionModel");
 const usageModel = require("../models/usageModel");
 
-
 const aiController = {
   generateLesson: async (req, res) => {
     try {
@@ -19,23 +18,22 @@ const aiController = {
       }
       const validLevels = ["Cơ bản", "Trung cấp", "Cao cấp"];
       if (!validLevels.includes(level)) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: `level phải là một trong: ${validLevels.join(", ")}`,
-          });
-
+        return res.status(400).json({
+          success: false,
+          message: `level phải là một trong: ${validLevels.join(", ")}`,
+        });
       }
       const userId = req.user?.id || null;
 
       // Kiểm tra subscription quota trước khi tạo bài học
       if (userId) {
-        const subscriptionLimits = await aiController._getSubscriptionLimitsFromDB(userId, 'ai_lesson');
+        const subscriptionLimits =
+          await aiController._getSubscriptionLimitsFromDB(userId, "ai_lesson");
         if (subscriptionLimits.remaining <= 0) {
           return res.status(429).json({
             success: false,
-            message: "Bạn đã đạt giới hạn tạo bài học AI trong ngày. Vui lòng nâng cấp gói để tiếp tục.",
+            message:
+              "Bạn đã đạt giới hạn tạo bài học AI trong ngày. Vui lòng nâng cấp gói để tiếp tục.",
             data: {
               quota: subscriptionLimits.quota,
               used: subscriptionLimits.used,
@@ -58,47 +56,46 @@ const aiController = {
 
       // Cập nhật usage sau khi tạo bài học thành công
       if (userId) {
-        const currentUsage = await usageModel.findByUserAndFeature(userId, 'ai_lesson');
+        const currentUsage = await usageModel.findByUserAndFeature(
+          userId,
+          "ai_lesson"
+        );
         if (currentUsage) {
           await usageModel.incrementCount(currentUsage.id);
         } else {
-          await usageModel.create({ user_id: userId, feature: 'ai_lesson', daily_count: 1 });
+          await usageModel.create({
+            user_id: userId,
+            feature: "ai_lesson",
+            daily_count: 1,
+          });
         }
       }
 
-      return res
-        .status(200)
-        .json({
-          success: true,
-          data: lesson,
-          saved: { id: saved.id, model: saved.model },
-        });
+      return res.status(200).json({
+        success: true,
+        data: lesson,
+        saved: { id: saved.id, model: saved.model },
+      });
     } catch (error) {
       if (error.message && error.message.includes("JSON không hợp lệ")) {
-        return res
-          .status(502)
-          .json({
-            success: false,
-            message: "AI trả về dữ liệu không hợp lệ",
-            error: error.message,
-          });
-      }
-      if (error.message && error.message.includes("GEMINI_API_KEY")) {
-        return res
-          .status(500)
-          .json({
-            success: false,
-            message: "Thiếu cấu hình GEMINI_API_KEY",
-            error: error.message,
-          });
-      }
-      return res
-        .status(500)
-        .json({
+        return res.status(502).json({
           success: false,
-          message: "Lỗi tạo bài học bằng AI",
+          message: "AI trả về dữ liệu không hợp lệ",
           error: error.message,
         });
+      }
+      if (error.message && error.message.includes("GEMINI_API_KEY")) {
+        return res.status(500).json({
+          success: false,
+          message: "Thiếu cấu hình GEMINI_API_KEY",
+          error: error.message,
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi tạo bài học bằng AI",
+        error: error.message,
+      });
     }
   },
   translate: async (req, res) => {
@@ -124,13 +121,11 @@ const aiController = {
         return res.status(400).json({ success: false, message: error.message });
       if (error.message.includes("Thiếu"))
         return res.status(400).json({ success: false, message: error.message });
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: "Lỗi dịch văn bản",
-          error: error.message,
-        });
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi dịch văn bản",
+        error: error.message,
+      });
     }
   },
   getMyTranslations: async (req, res) => {
@@ -183,34 +178,28 @@ const aiController = {
       if (error.message.includes("Thiếu translationId"))
         return res.status(400).json({ success: false, message: error.message });
 
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: "Lỗi khi xóa bản dịch",
-          error: error.message,
-        });
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi khi xóa bản dịch",
+        error: error.message,
+      });
     }
   },
   clearMyTranslations: async (req, res) => {
     try {
       const userId = req.user.id;
       const count = await aiTranslationService.clearUserTranslations(userId);
-      return res
-        .status(200)
-        .json({
-          success: true,
-          message: "Đã xóa lịch sử dịch",
-          deleted: count,
-        });
+      return res.status(200).json({
+        success: true,
+        message: "Đã xóa lịch sử dịch",
+        deleted: count,
+      });
     } catch (error) {
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: "Lỗi khi xóa toàn bộ lịch sử dịch",
-          error: error.message,
-        });
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi khi xóa toàn bộ lịch sử dịch",
+        error: error.message,
+      });
     }
   },
 
@@ -227,14 +216,11 @@ const aiController = {
         .status(200)
         .json({ success: true, data: result.data, meta: result.meta });
     } catch (error) {
-
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: "Lỗi khi lấy danh sách bài học",
-          error: error.message,
-        });
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách bài học",
+        error: error.message,
+      });
     }
   },
 
@@ -251,13 +237,11 @@ const aiController = {
     } catch (error) {
       if (error.statusCode === 403)
         return res.status(403).json({ success: false, message: error.message });
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: "Lỗi khi lấy chi tiết bài học",
-          error: error.message,
-        });
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy chi tiết bài học",
+        error: error.message,
+      });
     }
   },
 
@@ -275,13 +259,11 @@ const aiController = {
       if (error.statusCode === 403)
         return res.status(403).json({ success: false, message: error.message });
 
-      return res
-        .status(500)
-        .json({
-          success: false,
-          message: "Lỗi khi xóa bài học",
-          error: error.message,
-        });
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi khi xóa bài học",
+        error: error.message,
+      });
     }
   },
 
@@ -405,7 +387,7 @@ const aiController = {
 
       // Lấy giới hạn từ subscription thay vì hardcode
       const subscriptionLimits =
-        await aiController._getSubscriptionLimitsFromDB(userId, 'ai_translate');
+        await aiController._getSubscriptionLimitsFromDB(userId, "ai_translate");
 
       // Kiểm tra subscription quota trước khi cho phép dịch
       if (subscriptionLimits.remaining <= 0) {
@@ -429,7 +411,7 @@ const aiController = {
 
       // Lấy lại subscription limits sau khi dịch (đã cập nhật usage)
       const newSubscriptionLimits =
-        await aiController._getSubscriptionLimitsFromDB(userId, 'ai_translate');
+        await aiController._getSubscriptionLimitsFromDB(userId, "ai_translate");
 
       // Trả về thông tin với subscription limits thực tế
       return res.status(200).json({
@@ -478,7 +460,10 @@ const aiController = {
         feature
       );
 
-      const quotaKey = feature === 'ai_translate' ? 'daily_quota_translate' : 'daily_quota_ai_lesson';
+      const quotaKey =
+        feature === "ai_translate"
+          ? "daily_quota_translate"
+          : "daily_quota_ai_lesson";
       const quota = subscriptionPlan[quotaKey] || 0;
       const used = currentUsage ? currentUsage.daily_count : 0;
       const remaining = Math.max(0, quota - used);
@@ -505,7 +490,10 @@ const aiController = {
       const userId = req.user.id;
 
       // Gọi DB trực tiếp để lấy giới hạn thực tế
-      const limits = await aiController._getSubscriptionLimitsFromDB(userId, 'ai_translate');
+      const limits = await aiController._getSubscriptionLimitsFromDB(
+        userId,
+        "ai_translate"
+      );
 
       return res.status(200).json({
         success: true,
@@ -544,7 +532,10 @@ const aiController = {
       const userId = req.user?.id || null;
 
       // Lấy giới hạn từ DB trực tiếp
-      const limits = await aiController._getSubscriptionLimitsFromDB(userId, 'ai_translate');
+      const limits = await aiController._getSubscriptionLimitsFromDB(
+        userId,
+        "ai_translate"
+      );
 
       // Kiểm tra còn lượt dịch không
       if (limits.remaining <= 0) {
@@ -567,7 +558,10 @@ const aiController = {
       });
 
       // Lấy lại limits sau khi dịch (sẽ giảm remaining)
-      const newLimits = await aiController._getSubscriptionLimitsFromDB(userId, 'ai_translate');
+      const newLimits = await aiController._getSubscriptionLimitsFromDB(
+        userId,
+        "ai_translate"
+      );
 
       // Trả về thông tin với subscription limits
       return res.status(200).json({
