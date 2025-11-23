@@ -3,9 +3,9 @@ const db = require('../config/db');
 const moderationModel = {
   // --- Reports ---
   createReport: async (data) => {
-    const { reporter_id, target_type, target_id, reason, details } = data;
-    const query = `INSERT INTO "Reports" (reporter_id, target_type, target_id, reason, details) VALUES ($1, $2, $3, $4, $5) RETURNING *;`;
-    const result = await db.query(query, [reporter_id, target_type, target_id, reason, details]);
+    const { reporter_id, target_type, target_id, reason, details, attachments } = data;
+    const query = `INSERT INTO "Reports" (reporter_id, target_type, target_id, reason, details, attachments) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;`;
+    const result = await db.query(query, [reporter_id, target_type, target_id, reason, details, attachments || []]);
     return result.rows[0];
   },
 
@@ -115,6 +115,7 @@ const moderationModel = {
         r.target_id,
         r.reason,
         r.details,
+        COALESCE(r.attachments, '[]'::jsonb) as attachments,
         r.status,
         r.resolved_by,
         r.resolved_at,

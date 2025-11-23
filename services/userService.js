@@ -879,6 +879,69 @@ const userService = {
     // Lấy lại user đã cập nhật
     return await userModel.findUserDetailsById(userId);
   },
+
+  // Đổi avatar cho user
+  updateAvatar: async (userId, avatarUrl) => {
+    // Kiểm tra user có tồn tại không
+    const user = await userModel.findUserById(userId);
+    if (!user) {
+      throw new Error("Người dùng không tồn tại.");
+    }
+
+    // Cập nhật avatar_url
+    const updatedUser = await userModel.updateUser(userId, {
+      avatar_url: avatarUrl,
+    });
+
+    // Lấy lại thông tin chi tiết đầy đủ
+    const userDetails = await userModel.findUserDetailsById(userId);
+    return userDetails;
+  },
+
+  // Đổi avatar cho danh sách người dùng
+  updateAvatarBulk: async (userAvatarList) => {
+    const results = {
+      success: [],
+      failed: [],
+    };
+
+    for (const item of userAvatarList) {
+      try {
+        const { userId, avatarUrl } = item;
+
+        // Kiểm tra user có tồn tại không
+        const user = await userModel.findUserById(userId);
+        if (!user) {
+          results.failed.push({
+            userId,
+            avatarUrl,
+            reason: "Người dùng không tồn tại.",
+          });
+          continue;
+        }
+
+        // Cập nhật avatar_url
+        await userModel.updateUser(userId, {
+          avatar_url: avatarUrl,
+        });
+
+        results.success.push({
+          userId,
+          avatarUrl,
+          username: user.username,
+          name: user.name,
+        });
+      } catch (error) {
+        results.failed.push({
+          userId: item.userId,
+          avatarUrl: item.avatarUrl,
+          reason: error.message,
+        });
+      }
+    }
+
+    return results;
+  },
 };
 
 module.exports = userService;

@@ -109,6 +109,13 @@ router.put(
   userController.updateUserProfile
 );
 
+// Đổi avatar cho user
+router.put(
+  "/users/avatar",
+  authMiddleware.verifyToken,
+  userController.updateAvatar
+);
+
 router.get(
   "/users/me/exam-history",
   authMiddleware.verifyToken,
@@ -203,6 +210,13 @@ router.post(
   "/admin/users/:userId/unban",
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
   userController.unbanUser
+);
+
+// Đổi avatar cho danh sách người dùng (Admin)
+router.post(
+  "/admin/users/bulk-update-avatar",
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  userController.updateAvatarBulk
 );
 
 module.exports = router;

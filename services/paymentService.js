@@ -2,10 +2,10 @@
 
 const paymentModel = require('../models/paymentModel');
 const userSubscriptionService = require('./userSubscriptionService'); // Sử dụng lại service đã có
-const subscriptionModel = require('../models/subscriptionModel'); 
+const subscriptionModel = require('../models/subscriptionModel');
+const userSubscriptionModel = require('../models/userSubscriptionModel');
 const db = require('../config/db');
-const { v4: uuidv4 } = require('uuid'); 
-const { application } = require('express');
+const { v4: uuidv4 } = require('uuid');
 
 /**
  * Hàm trợ giúp kích hoạt gói đăng ký sau khi thanh toán thành công
@@ -55,11 +55,11 @@ const paymentService = {
         type: 'system',
         title: '🛒 Đơn hàng đã được tạo',
         content: {
-          html: `<p>Đơn hàng của bạn đã được tạo thành công.</p><p><strong>Gói:</strong> ${subscription.name}</p><p><strong>Giá:</strong> ${subscription.price.toLocaleString('vi-VN')} VNĐ</p><p><strong>Trạng thái:</strong> Chờ thanh toán</p><p><strong>Thông tin chuyển khoản:</strong></p><ul><li>Ngân hàng: ${bankInfo.bank_name}</li><li>Số tài khoản: ${bankInfo.account_number}</li><li>Chủ tài khoản: ${bankInfo.account_name}</li><li>Nội dung: ${bankInfo.transfer_content}</li></ul><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Gói:</strong> ${subscription.name}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Phương thức:</strong> ${paymentMethod}</li></ul><p><small>💳 Vui lòng thanh toán để kích hoạt gói.</small></p>`
+          html: `<p>Đơn hàng của bạn đã được tạo thành công.</p><p><strong>Gói:</strong> ${subscription.name}</p><p><strong>Giá:</strong> ${subscription.price.toLocaleString('vi-VN')} VNĐ</p><p><strong>Trạng thái:</strong> Chờ thanh toán</p><p><strong>Thông tin chuyển khoản:</strong></p><ul><li>Ngân hàng: ${bankInfo.bankName}</li><li>Số tài khoản: ${bankInfo.accountNumber}</li><li>Chủ tài khoản: ${bankInfo.accountName}</li><li>Chi nhánh: ${bankInfo.branch}</li></ul><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Gói:</strong> ${subscription.name}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Phương thức:</strong> ${paymentMethod}</li></ul><p><small>💳 Vui lòng thanh toán để kích hoạt gói.</small></p>`
         },
         redirect_type: 'subscription',
         data: {
-          id: newPayment.id,
+          id: subscriptionId,
           type: 'payment'
         }
       }, true); // auto push = true
@@ -154,8 +154,8 @@ const paymentService = {
         
         // Gửi thông báo xác nhận thanh toán thành công
         const notificationService = require('./notificationService');
-        const userSub = await subscriptionModel.getUserActiveSubscription(updatedPayment.user_id);
-        const expiresAt = userSub?.expires_at ? new Date(userSub.expires_at).toLocaleString('vi-VN') : 'N/A';
+        const userSub = await userSubscriptionModel.findActiveSubscriptionByUserId(updatedPayment.user_id, client);
+        const expiresAt = userSub?.expiry_date ? new Date(userSub.expiry_date).toLocaleString('vi-VN') : 'N/A';
         
         await notificationService.createNotification({
           recipient_id: updatedPayment.user_id,

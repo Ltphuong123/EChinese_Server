@@ -5,7 +5,51 @@ const moderationController = {
   // --- User-facing ---
   createUserReport: async (req, res) => {
     try {
-      const reportData = { ...req.body, reporter_id: req.user.id };
+      const { target_type, target_id, reason, details, attachments } = req.body;
+      
+      // Validation cơ bản
+      if (!target_type || !target_id || !reason) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Các trường 'target_type', 'target_id', và 'reason' là bắt buộc." 
+        });
+      }
+      
+      // Validate attachments nếu có
+      if (attachments) {
+        if (!Array.isArray(attachments)) {
+          return res.status(400).json({ 
+            success: false, 
+            message: "Trường 'attachments' phải là một mảng." 
+          });
+        }
+        
+        // Giới hạn số lượng ảnh (tối đa 5 ảnh)
+        if (attachments.length > 5) {
+          return res.status(400).json({ 
+            success: false, 
+            message: "Chỉ được đính kèm tối đa 5 ảnh." 
+          });
+        }
+        
+        // Validate URL format
+        const urlPattern = /^https?:\/\/.+/i;
+        for (const url of attachments) {
+          if (typeof url !== 'string' || !urlPattern.test(url)) {
+            return res.status(400).json({ 
+              success: false, 
+              message: "Link ảnh không hợp lệ. Vui lòng cung cấp URL đầy đủ." 
+            });
+          }
+        }
+      }
+      
+      const reportData = { 
+        ...req.body, 
+        reporter_id: req.user.id,
+        attachments: attachments || []
+      };
+      
       const newReport = await moderationService.createReport(reportData);
       res.status(201).json({ success: true, message: "Báo cáo của bạn đã được gửi.", data: newReport });
     } catch (error) {

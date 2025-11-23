@@ -765,6 +765,79 @@ const userController = {
       });
     }
   },
+
+  // API: Đổi avatar cho user
+  updateAvatar: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { avatar_url } = req.body;
+
+      if (!avatar_url) {
+        return res.status(400).json({
+          success: false,
+          message: "Trường 'avatar_url' là bắt buộc.",
+        });
+      }
+
+      const updatedUser = await userService.updateAvatar(userId, avatar_url);
+
+      res.status(200).json({
+        success: true,
+        message: "Cập nhật avatar thành công.",
+        data: updatedUser,
+      });
+    } catch (error) {
+      if (error.message.includes("không tồn tại")) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi cập nhật avatar",
+        error: error.message,
+      });
+    }
+  },
+
+  // API: Đổi avatar cho danh sách người dùng (Admin)
+  updateAvatarBulk: async (req, res) => {
+    try {
+      const { users } = req.body;
+
+      if (!users || !Array.isArray(users) || users.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Trường 'users' là bắt buộc và phải là một mảng không rỗng.",
+        });
+      }
+
+      // Validate từng item trong mảng
+      for (const user of users) {
+        if (!user.userId || !user.avatarUrl) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Mỗi người dùng phải có 'userId' và 'avatarUrl'.",
+          });
+        }
+      }
+
+      const results = await userService.updateAvatarBulk(users);
+
+      res.status(200).json({
+        success: true,
+        message: "Cập nhật avatar hàng loạt hoàn tất.",
+        data: results,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi cập nhật avatar hàng loạt",
+        error: error.message,
+      });
+    }
+  },
+
   unbanUser: async (req, res) => {
     try {
       const { userId } = req.params;
