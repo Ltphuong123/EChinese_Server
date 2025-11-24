@@ -16,12 +16,12 @@ router.post("/auth/logout", userController.logout);
 
 // Debug endpoint - xóa sau khi debug xong
 router.get("/auth/debug-token", authMiddleware.verifyToken, (req, res) => {
-  const jwt = require('jsonwebtoken');
-  const token = req.headers.authorization?.split(' ')[1];
+  const jwt = require("jsonwebtoken");
+  const token = req.headers.authorization?.split(" ")[1];
   const decoded = jwt.decode(token, { complete: true });
   const now = Math.floor(Date.now() / 1000);
   const timeLeft = decoded.payload.exp - now;
-  
+
   res.json({
     issuedAt: new Date(decoded.payload.iat * 1000).toISOString(),
     expiresAt: new Date(decoded.payload.exp * 1000).toISOString(),
@@ -29,7 +29,7 @@ router.get("/auth/debug-token", authMiddleware.verifyToken, (req, res) => {
     timeLeftHours: (timeLeft / 3600).toFixed(2),
     timeLeftDays: (timeLeft / 86400).toFixed(2),
     userId: decoded.payload.id,
-    role: decoded.payload.role
+    role: decoded.payload.role,
   });
 });
 router.post(
@@ -125,6 +125,12 @@ router.get(
   "/users/me/violations",
   authMiddleware.verifyToken,
   userController.getUserViolations
+);
+
+router.get(
+  "/users/me/violations/:violationId/appeals",
+  authMiddleware.verifyToken,
+  moderationController.getAppealsByViolationId
 );
 
 router.get(
