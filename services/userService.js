@@ -183,7 +183,17 @@ const userService = {
 
     if (!streak) {
       // Nếu user chưa có record streak, tạo mới
-      return userModel.createUserStreak(userId, 1, 1, today);
+      const result = await userModel.createUserStreak(userId, 1, 1, today);
+      
+      // Cập nhật tiến độ thành tích login_streak với giá trị tuyệt đối
+      try {
+        const achievementService = require('./achievementService');
+        await achievementService.updateProgress(userId, "login_streak", 1, true);
+      } catch (error) {
+        console.error("Lỗi khi cập nhật tiến độ thành tích login_streak:", error);
+      }
+      
+      return result;
     }
 
     const lastLogin = new Date(streak.last_login_date);
@@ -197,20 +207,40 @@ const userService = {
         newCurrentStreak,
         streak.longest_streak
       );
-      return userModel.updateUserStreak(
+      const result = await userModel.updateUserStreak(
         userId,
         newCurrentStreak,
         newLongestStreak,
         today
       );
+      
+      // Cập nhật tiến độ thành tích login_streak với giá trị tuyệt đối
+      try {
+        const achievementService = require('./achievementService');
+        await achievementService.updateProgress(userId, "login_streak", newCurrentStreak, true);
+      } catch (error) {
+        console.error("Lỗi khi cập nhật tiến độ thành tích login_streak:", error);
+      }
+      
+      return result;
     } else if (diffDays > 1) {
       // Bỏ lỡ ngày đăng nhập -> reset streak về 1
-      return userModel.updateUserStreak(
+      const result = await userModel.updateUserStreak(
         userId,
         1,
         streak.longest_streak,
         today
       );
+      
+      // Reset tiến độ thành tích login_streak về 1 (giá trị tuyệt đối)
+      try {
+        const achievementService = require('./achievementService');
+        await achievementService.updateProgress(userId, "login_streak", 1, true);
+      } catch (error) {
+        console.error("Lỗi khi cập nhật tiến độ thành tích login_streak:", error);
+      }
+      
+      return result;
     }
     // Nếu đăng nhập lại trong cùng ngày (diffDays === 0), không làm gì cả
   },

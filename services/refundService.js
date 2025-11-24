@@ -55,7 +55,7 @@ const refundService = {
               recipient_id: userId,
               audience: 'user',
               type: 'system',
-              title: '📝 Yêu cầu hoàn tiền đã được gửi',
+              title: 'Yêu cầu hoàn tiền đã được gửi',
               content: {
                   html: `<p>Yêu cầu hoàn tiền cho gói <strong>"${subscription?.name || 'đăng ký'}"</strong> đã được gửi.</p><p><strong>Số tiền:</strong> ${payment.amount.toLocaleString('vi-VN')} VNĐ</p><p><strong>Lý do:</strong> ${reason}</p><p><strong>Trạng thái:</strong> Đang xử lý</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Mã yêu cầu:</strong> ${refundRequest.id}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Thời gian xử lý:</strong> 3-5 ngày làm việc</li></ul><p><small>⏳ Chúng tôi sẽ xem xét và phản hồi sớm.</small></p>`
               },
@@ -181,7 +181,7 @@ const refundService = {
                         recipient_id: refundRequest.user_id,
                         audience: 'user',
                         type: 'system',
-                        title: '✅ Yêu cầu hoàn tiền đã được chấp nhận',
+                        title: 'Yêu cầu hoàn tiền đã được chấp nhận',
                         content: { 
                             html: `<p>Yêu cầu hoàn tiền cho gói <strong>"${subscription?.name || 'đăng ký'}"</strong> đã được chấp nhận.</p><p><strong>Số tiền:</strong> ${amount.toLocaleString('vi-VN')} VNĐ</p><p><strong>Phương thức:</strong> ${method}</p>${notes ? `<p><strong>Ghi chú:</strong> ${notes}</p>` : ''}<hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Mã yêu cầu:</strong> ${refundId}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Hoàn tiền trong:</strong> 5-7 ngày làm việc</li></ul><p><small>💰 Số tiền sẽ được hoàn về tài khoản của bạn.</small></p>`
                         },
@@ -199,7 +199,7 @@ const refundService = {
                         recipient_id: refundRequest.user_id,
                         audience: 'user',
                         type: 'system',
-                        title: '❌ Yêu cầu hoàn tiền bị từ chối',
+                        title: 'Yêu cầu hoàn tiền bị từ chối',
                         content: { 
                             html: `<p>Yêu cầu hoàn tiền cho gói <strong>"${subscription?.name || 'đăng ký'}"</strong> đã bị từ chối.</p><p><strong>Lý do:</strong> ${notes || 'Không đủ điều kiện hoàn tiền'}</p><p><strong>Số tiền yêu cầu:</strong> ${(paymentInfo?.amount || 0).toLocaleString('vi-VN')} VNĐ</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Mã yêu cầu:</strong> ${refundId}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Xử lý bởi:</strong> Quản trị viên</li></ul><p><small>💡 Vui lòng liên hệ hỗ trợ nếu có thắc mắc.</small></p>`
                         },

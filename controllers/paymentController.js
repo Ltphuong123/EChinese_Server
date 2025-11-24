@@ -43,13 +43,18 @@ const paymentController = {
       const user_id = req.user.id; // Lấy từ token
 
       // --- Validation cơ bản ---
-      const { subscription_id, amount, payment_method } = paymentData;
+      const { subscription_id, amount, payment_method, manual_proof_url } = paymentData;
 
       if (!subscription_id || amount === undefined || !payment_method) {
         return res.status(400).json({
           success: false,
           message: 'Các trường subscription_id, amount, và payment_method là bắt buộc.'
         });
+      }
+
+      // Nếu có link ảnh chứng từ, thêm vào paymentData
+      if (manual_proof_url) {
+        paymentData.manual_proof_url = manual_proof_url;
       }
 
       const newPayment = await paymentService.createPayment(paymentData, user_id);

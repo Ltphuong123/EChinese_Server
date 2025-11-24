@@ -47,6 +47,15 @@ const testAttemptService = {
     // Cập nhật điểm cao nhất
     await testAttemptModel.updateHighestScore(userId, attempt.test_id, totalScore);
     
+    // Cập nhật tiến độ thành tích mock_test
+    try {
+      const achievementService = require('./achievementService');
+      await achievementService.updateProgress(userId, "mock_test", 1);
+    } catch (error) {
+      console.error("Lỗi khi cập nhật tiến độ thành tích mock_test:", error);
+      // Không throw để không ảnh hưởng đến flow chính
+    }
+    
     return submittedAttempt;
   },
 

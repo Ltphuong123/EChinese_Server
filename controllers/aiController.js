@@ -69,6 +69,16 @@ const aiController = {
             daily_count: 1,
           });
         }
+
+        // Cập nhật tiến độ thành tích ai_lesson
+        try {
+          const achievementService = require("../services/achievementService");
+          const newCount = currentUsage ? currentUsage.daily_count + 1 : 1;
+          await achievementService.updateProgress(userId, "ai_lesson", 1);
+        } catch (error) {
+          console.error("Lỗi khi cập nhật tiến độ thành tích ai_lesson:", error);
+          // Không throw để không ảnh hưởng đến flow chính
+        }
       }
 
       return res.status(200).json({

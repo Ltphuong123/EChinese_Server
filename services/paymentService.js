@@ -53,7 +53,7 @@ const paymentService = {
         recipient_id: userId,
         audience: 'user',
         type: 'system',
-        title: '🛒 Đơn hàng đã được tạo',
+        title: 'Đơn hàng đã được tạo',
         content: {
           html: `<p>Đơn hàng của bạn đã được tạo thành công.</p><p><strong>Gói:</strong> ${subscription.name}</p><p><strong>Giá:</strong> ${subscription.price.toLocaleString('vi-VN')} VNĐ</p><p><strong>Trạng thái:</strong> Chờ thanh toán</p><p><strong>Thông tin chuyển khoản:</strong></p><ul><li>Ngân hàng: ${bankInfo.bankName}</li><li>Số tài khoản: ${bankInfo.accountNumber}</li><li>Chủ tài khoản: ${bankInfo.accountName}</li><li>Chi nhánh: ${bankInfo.branch}</li></ul><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Gói:</strong> ${subscription.name}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Phương thức:</strong> ${paymentMethod}</li></ul><p><small>💳 Vui lòng thanh toán để kích hoạt gói.</small></p>`
         },
@@ -161,7 +161,7 @@ const paymentService = {
           recipient_id: updatedPayment.user_id,
           audience: 'user',
           type: 'system',
-          title: '✅ Thanh toán thành công',
+          title: 'Thanh toán thành công',
           content: {
             html: `<p>Thanh toán cho đơn hàng của bạn đã thành công!</p><p><strong>Gói:</strong> ${subscription?.name || 'Premium'}</p><p><strong>Số tiền:</strong> ${updatedPayment.amount.toLocaleString('vi-VN')} VNĐ</p><p><strong>Thời hạn:</strong> ${subscription?.duration_days || 30} ngày</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Mã giao dịch:</strong> ${updatedPayment.id}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Hết hạn:</strong> ${expiresAt}</li><li><strong>Phương thức:</strong> ${updatedPayment.payment_method}</li></ul><p><small>🎉 Cảm ơn bạn đã sử dụng dịch vụ!</small></p>`
           },
@@ -181,7 +181,7 @@ const paymentService = {
           recipient_id: updatedPayment.user_id,
           audience: 'user',
           type: 'system',
-          title: '❌ Thanh toán thất bại',
+          title: 'Thanh toán thất bại',
           content: {
             html: `<p>Thanh toán cho đơn hàng của bạn đã thất bại.</p><p><strong>Gói:</strong> ${subscription?.name || 'Premium'}</p><p><strong>Số tiền:</strong> ${updatedPayment.amount.toLocaleString('vi-VN')} VNĐ</p><p><strong>Lý do:</strong> Thanh toán bị từ chối</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Mã đơn:</strong> ${updatedPayment.id}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Phương thức:</strong> ${updatedPayment.payment_method}</li></ul><p><small>💡 Vui lòng thử lại hoặc liên hệ hỗ trợ.</small></p>`
           },

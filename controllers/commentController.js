@@ -51,7 +51,7 @@ const commentController = {
             recipient_id: post.user_id,
             audience: 'user',
             type: 'community',
-            title: '💬 Có người bình luận bài viết của bạn',
+            title: 'Có người bình luận bài viết của bạn',
             content: {
               html: `<p><strong>${commenter?.name || 'Một người dùng'}</strong> đã bình luận vào bài viết <strong>"${post.title}"</strong> của bạn.</p>
 <p><em>Nội dung bình luận:</em> "${commentPreview}..."</p>
@@ -90,7 +90,7 @@ ${parentCommentId ? '<p><small>💬 Đây là một phản hồi trong chuỗi b
               recipient_id: parentComment.user_id,
               audience: 'user',
               type: 'community',
-              title: '↩️ Có người trả lời bình luận của bạn',
+              title: 'Có người trả lời bình luận của bạn',
               content: {
                 html: `<p><strong>${commenter?.name || 'Một người dùng'}</strong> đã trả lời bình luận của bạn.</p>
 <p><em>Nội dung trả lời:</em> "${commentPreview}..."</p>
@@ -264,7 +264,7 @@ ${parentCommentId ? '<p><small>💬 Đây là một phản hồi trong chuỗi b
         recipient_id: comment.user_id,
         audience: 'user',
         type: 'community',
-        title: '✅ Bình luận của bạn đã được khôi phục',
+        title: 'Bình luận của bạn đã được khôi phục',
         content: {
           html: `<p>Bình luận của bạn đã được quản trị viên khôi phục.</p>
 <p><strong>Lý do khôi phục:</strong> ${restoreReason}</p>
@@ -349,7 +349,7 @@ ${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong
           recipient_id: removedComment.user_id,
           audience: 'user',
           type: 'violation',
-          title: '⚠️ Bình luận của bạn đã bị gỡ do vi phạm',
+          title: 'Bình luận của bạn đã bị gỡ do vi phạm',
           content: {
             html: `<p>Bình luận của bạn đã bị gỡ bởi quản trị viên.</p>
 <p><strong>Lý do:</strong> ${reason}</p>

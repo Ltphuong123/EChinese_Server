@@ -201,7 +201,7 @@ const achievementService = {
             recipient_id: userId,
             audience: 'user',
             type: 'achievement',
-            title: `🏆 Chúc mừng! Bạn đã đạt thành tích mới`,
+            title: `Chúc mừng! Bạn đã đạt thành tích mới`,
             content: { 
               html: `<p>Chúc mừng! Bạn đã đạt thành tích <strong>"${achievement.name}"</strong>!</p><p><em>${achievement.description || 'Thành tích đặc biệt'}</em></p><p><strong>Phần thưởng:</strong> +${achievement.points || 0} điểm cộng đồng</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Thành tích:</strong> ${achievement.icon || '🏆'} ${achievement.name}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Điểm nhận được:</strong> ${achievement.points || 0}</li><li><strong>Tiến độ:</strong> ${currentValue}/${requiredValue}</li></ul><p><small>🎉 Tiếp tục phát huy!</small></p>`
             },
@@ -312,7 +312,7 @@ const achievementService = {
   },
 
   //////////////////
-  updateProgress: async (userId, criteriaType, value) => {
+  updateProgress: async (userId, criteriaType, value, isAbsolute = false) => {
     // 1. Lấy tất cả các thành tích có cùng loại tiêu chí mà người dùng này CHƯA đạt được
     const relevantAchievements = await achievementModel.findUnachievedByCriteria2(userId, criteriaType);
     if (relevantAchievements.length === 0) {
@@ -333,8 +333,10 @@ const achievementService = {
       // Lấy tiến độ hiện tại, nếu không có thì là 0
       const currentProgressValue = existingRecord?.progress?.current || 0;
       
-      // Logic cộng dồn (bạn có thể thay đổi logic này nếu cần, ví dụ: lấy giá trị lớn nhất)
-      const newProgressValue = currentProgressValue + value;
+      // Logic tính toán giá trị mới
+      // - isAbsolute = true: dùng giá trị tuyệt đối (login_streak, community_points)
+      // - isAbsolute = false: cộng dồn (ai_lesson, ai_translate, mock_test)
+      const newProgressValue = isAbsolute ? value : (currentProgressValue + value);
       
       const requiredValue = achievement.criteria.value;
 

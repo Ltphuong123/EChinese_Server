@@ -197,7 +197,7 @@ const autoModerationService = {
           recipient_id: postData.user_id,
           audience: 'user',
           type: 'violation',
-          title: '🤖 Bài viết của bạn đã bị gỡ tự động',
+          title: 'Bài viết của bạn đã bị gỡ tự động',
           content: {
             html: `<p>Bài viết <strong>"${postData.title}"</strong> của bạn đã bị hệ thống AI tự động phát hiện và gỡ bỏ do vi phạm quy tắc cộng đồng.</p><p><strong>Lý do:</strong> ${removalReason}</p><p><strong>Độ nghiêm trọng:</strong> ${severity}</p><p><strong>Phát hiện bởi:</strong> AI tự động</p>${violatedRules.rows.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRules.rows.map(r => `<li><strong>${r.title}</strong> (${r.severity_default}): ${r.description}</li>`).join('')}</ul>` : ''}<p><strong>Chi tiết phát hiện:</strong></p><ul>${violations.map(v => `<li>Loại: ${v.type}, Nhãn: ${v.label}, Độ tin cậy: ${(v.confidence * 100).toFixed(1)}%</li>`).join('')}</ul><p><em>Nội dung bài viết:</em> "${contentPreview}..."</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Bài viết:</strong> ${postData.title}</li><li><strong>Phát hiện bởi:</strong> AI tự động</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Số vấn đề phát hiện:</strong> ${violations.length}</li></ul><p><small>⚖️ Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
           },
@@ -326,7 +326,7 @@ const autoModerationService = {
           recipient_id: commentData.user_id,
           audience: 'user',
           type: 'violation',
-          title: '🤖 Bình luận của bạn đã bị gỡ tự động',
+          title: 'Bình luận của bạn đã bị gỡ tự động',
           content: {
             html: `<p>Bình luận của bạn đã bị hệ thống AI tự động phát hiện và gỡ bỏ do vi phạm quy tắc cộng đồng.</p><p><strong>Lý do:</strong> ${removalReason}</p><p><strong>Độ nghiêm trọng:</strong> ${severity}</p><p><strong>Phát hiện bởi:</strong> AI tự động</p>${violatedRules.rows.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRules.rows.map(r => `<li><strong>${r.title}</strong> (${r.severity_default}): ${r.description}</li>`).join('')}</ul>` : ''}<p><strong>Chi tiết phát hiện:</strong></p><ul>${violations.map(v => `<li>Loại: ${v.type}, Nhãn: ${v.label}, Độ tin cậy: ${(v.confidence * 100).toFixed(1)}%</li>`).join('')}</ul><p><em>Nội dung bình luận:</em> "${commentPreview}..."</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Bài viết ID:</strong> ${commentData.post_id}</li><li><strong>Phát hiện bởi:</strong> AI tự động</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Số vấn đề phát hiện:</strong> ${violations.length}</li></ul><p><small>⚖️ Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
           },

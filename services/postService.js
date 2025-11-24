@@ -2,6 +2,7 @@
 
 const postModel = require("../models/postModel");
 const communityService = require("../services/communityService");
+const COMMUNITY_POINTS = require("../config/communityPoints");
 
 const postService = {
   createPost: async (postData, userId) => {
@@ -9,7 +10,27 @@ const postService = {
     const dataToCreate = { ...postData, user_id: userId };
 
     // TODO: Có thể thêm logic kiểm duyệt nội dung tự động ở đây
-    return await postModel.create(dataToCreate);
+    const newPost = await postModel.create(dataToCreate);
+
+    // 🎁 CỘNG ĐIỂM CHO NGƯỜI TẠO BÀI VIẾT
+    try {
+      const userModel = require("../models/userModel");
+      await userModel.addCommunityPoints(userId, COMMUNITY_POINTS.POST_CREATED);
+      console.log(`✅ User ${userId} nhận ${COMMUNITY_POINTS.POST_CREATED} điểm cho bài viết mới`);
+    } catch (error) {
+      console.error("❌ Lỗi khi cộng điểm cho bài viết:", error);
+      // Không throw để không ảnh hưởng flow chính
+    }
+
+    // 📊 CẬP NHẬT TIẾN ĐỘ ACHIEVEMENT
+    try {
+      const achievementService = require("./achievementService");
+      await achievementService.updateProgress(userId, "post_created", 1);
+    } catch (error) {
+      console.error("❌ Lỗi khi cập nhật achievement post_created:", error);
+    }
+
+    return newPost;
   },
 
   getPublicPosts: async (filters) => {
@@ -82,6 +103,9 @@ const postService = {
       throw new Error("Bài viết không tồn tại.");
     }
 
+    // Lấy thông tin chủ bài viết
+    const postOwnerId = postExists.user_id;
+
     // Kiểm tra xem người dùng đã like bài viết này chưa
     const existingLike = await postModel.findLike(postId, userId);
 
@@ -90,10 +114,40 @@ const postService = {
       // Nếu đã like -> Xóa like (unlike)
       await postModel.removeLike(postId, userId);
       action = "unliked";
+
+      // 💔 TRỪ ĐIỂM KHI UNLIKE (nếu không phải tự like)
+      if (userId !== postOwnerId) {
+        try {
+          const userModel = require("../models/userModel");
+          await userModel.addCommunityPoints(postOwnerId, -COMMUNITY_POINTS.POST_LIKED);
+          console.log(`➖ User ${postOwnerId} bị trừ ${COMMUNITY_POINTS.POST_LIKED} điểm do unlike`);
+        } catch (error) {
+          console.error("❌ Lỗi khi trừ điểm unlike:", error);
+        }
+      }
     } else {
       // Nếu chưa like -> Thêm like
       await postModel.addLike(postId, userId);
       action = "liked";
+
+      // 🎁 CỘNG ĐIỂM CHO CHỦ BÀI VIẾT (không cộng nếu tự like)
+      if (userId !== postOwnerId) {
+        try {
+          const userModel = require("../models/userModel");
+          await userModel.addCommunityPoints(postOwnerId, COMMUNITY_POINTS.POST_LIKED);
+          console.log(`✅ User ${postOwnerId} nhận ${COMMUNITY_POINTS.POST_LIKED} điểm từ like`);
+        } catch (error) {
+          console.error("❌ Lỗi khi cộng điểm like:", error);
+        }
+
+        // 📊 CẬP NHẬT TIẾN ĐỘ ACHIEVEMENT (tổng số like nhận được)
+        try {
+          const achievementService = require("./achievementService");
+          await achievementService.updateProgress(postOwnerId, "post_likes_received", 1);
+        } catch (error) {
+          console.error("❌ Lỗi khi cập nhật achievement post_likes_received:", error);
+        }
+      }
     }
 
     // Cập nhật lại số lượng like trong bảng Posts
@@ -234,6 +288,17 @@ const postService = {
 
     // 4. Gọi model để cập nhật
     await postModel.softDelete(postId, dataToRemove);
+
+    // 💔 TRỪ ĐIỂM NẾU BỊ ADMIN GỠ (vi phạm)
+    if (isAdmin && !isOwner) {
+      try {
+        const userModel = require("../models/userModel");
+        await userModel.addCommunityPoints(post.user_id, COMMUNITY_POINTS.POST_REMOVED);
+        console.log(`➖ User ${post.user_id} bị trừ ${Math.abs(COMMUNITY_POINTS.POST_REMOVED)} điểm do bài viết bị gỡ`);
+      } catch (error) {
+        console.error("❌ Lỗi khi trừ điểm bài viết bị gỡ:", error);
+      }
+    }
 
     // 5. (Tùy chọn) Ghi log hành động của admin
     if (isAdmin && !isOwner) {

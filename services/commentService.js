@@ -5,6 +5,7 @@ const postModel = require('../models/postModel'); // Để kiểm tra bài viế
 const communityService = require('../services/communityService');
 const notificationModel = require('../models/notificationModel');
 const userModel = require('../models/userModel');
+const COMMUNITY_POINTS = require('../config/communityPoints');
 
 const commentService = {
   createComment: async (postId, userId, content, parentCommentId) => {
@@ -32,6 +33,22 @@ const commentService = {
       content: contentObject,
       parent_comment_id: parentCommentId
     });
+
+    // 🎁 CỘNG ĐIỂM CHO NGƯỜI TẠO BÌNH LUẬN
+    try {
+      await userModel.addCommunityPoints(userId, COMMUNITY_POINTS.COMMENT_CREATED);
+      console.log(`✅ User ${userId} nhận ${COMMUNITY_POINTS.COMMENT_CREATED} điểm cho bình luận mới`);
+    } catch (error) {
+      console.error("❌ Lỗi khi cộng điểm cho bình luận:", error);
+    }
+
+    // 📊 CẬP NHẬT TIẾN ĐỘ ACHIEVEMENT
+    try {
+      const achievementService = require('./achievementService');
+      await achievementService.updateProgress(userId, "comment_created", 1);
+    } catch (error) {
+      console.error("❌ Lỗi khi cập nhật achievement comment_created:", error);
+    }
 
     // NOTE: Notification logic đã được xử lý trong commentController.js
     // Không cần gửi notification ở đây để tránh duplicate
@@ -124,6 +141,16 @@ const commentService = {
 
     // 4. Gọi model để cập nhật
     await commentModel.softDelete(commentId, dataToRemove);
+    
+    // 💔 TRỪ ĐIỂM NẾU BỊ ADMIN/CHỦ BÀI VIẾT GỠ (vi phạm)
+    if ((isAdmin || isPostOwner) && !isCommentOwner) {
+      try {
+        await userModel.addCommunityPoints(comment.user_id, COMMUNITY_POINTS.COMMENT_REMOVED);
+        console.log(`➖ User ${comment.user_id} bị trừ ${Math.abs(COMMUNITY_POINTS.COMMENT_REMOVED)} điểm do bình luận bị gỡ`);
+      } catch (error) {
+        console.error("❌ Lỗi khi trừ điểm bình luận bị gỡ:", error);
+      }
+    }
     
     // 5. (Tùy chọn) Ghi log hành động kiểm duyệt
     if (isAdmin || isPostOwner) {

@@ -153,7 +153,7 @@ const moderationService = {
             recipient_id: report.target_user_id,
             audience: "user",
             type: "violation",
-            title: `🗑️ ${contentType} của bạn đã bị gỡ`,
+            title: `${contentType} của bạn đã bị gỡ`,
             content: {
               html: `<p>${contentType} của bạn đã bị quản trị viên gỡ bỏ do vi phạm quy định cộng đồng.</p>${
                 targetDetails && report.target_type === "post"

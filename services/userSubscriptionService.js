@@ -556,7 +556,7 @@ const userSubscriptionService = {
               recipient_id: sub.user_id,
               audience: 'user',
               type: 'system',
-              title: '⏰ Gói đăng ký đã hết hạn',
+              title: 'Gói đăng ký đã hết hạn',
               content: {
                 html: `<p>Gói đăng ký <strong>"${sub.subscription_name}"</strong> của bạn đã hết hạn.</p><p><strong>Ngày hết hạn:</strong> ${expiryDate.toLocaleString('vi-VN')}</p><p><strong>Thời gian sử dụng:</strong> ${sub.duration_months} tháng</p><p>Bạn đã được tự động chuyển về <strong>gói Miễn phí</strong>.</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Gói:</strong> ${sub.subscription_name}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Trạng thái:</strong> Đã hết hạn</li><li><strong>Giá gia hạn:</strong> ${sub.price.toLocaleString('vi-VN')} VNĐ</li></ul><p><small>🔄 Gia hạn ngay để tiếp tục sử dụng!</small></p>`
               },
@@ -583,7 +583,7 @@ const userSubscriptionService = {
             recipient_id: sub.user_id,
             audience: 'user',
             type: 'system',
-            title: '⚠️ Gói đăng ký sắp hết hạn',
+            title: 'Gói đăng ký sắp hết hạn',
             content: {
               html: `<p>Gói đăng ký <strong>"${sub.subscription_name}"</strong> của bạn sắp hết hạn.</p><p><strong>Còn lại:</strong> ${daysUntilExpiry} ngày</p><p><strong>Ngày hết hạn:</strong> ${expiryDate.toLocaleDateString('vi-VN')}</p><p><strong>Tự động gia hạn:</strong> ${sub.auto_renew ? 'Có' : 'Không'}</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Gói:</strong> ${sub.subscription_name}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Hết hạn:</strong> ${expiryDate.toLocaleDateString('vi-VN')}</li><li><strong>Giá gia hạn:</strong> ${sub.price.toLocaleString('vi-VN')} VNĐ</li></ul><p><small>🔄 Gia hạn ngay để không bị gián đoạn!</small></p>`
             },

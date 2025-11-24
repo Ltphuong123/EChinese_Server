@@ -168,6 +168,7 @@ const paymentModel = {
         p.payment_method,
         p.payment_channel,
         p.gateway_transaction_id,
+        p.manual_proof_url,
         p.transaction_date,
         admin.name AS "processedByAdminName"
       ${baseQuery}

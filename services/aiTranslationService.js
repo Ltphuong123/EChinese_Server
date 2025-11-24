@@ -277,6 +277,17 @@ const aiTranslationService = {
         },
       });
 
+      // Cập nhật tiến độ thành tích ai_translate
+      if (userId) {
+        try {
+          const achievementService = require('./achievementService');
+          await achievementService.updateProgress(userId, "ai_translate", 1);
+        } catch (error) {
+          console.error("Lỗi khi cập nhật tiến độ thành tích ai_translate:", error);
+          // Không throw để không ảnh hưởng đến flow chính
+        }
+      }
+
       return {
         translation: {
           id: saved.id,

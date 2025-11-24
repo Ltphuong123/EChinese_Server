@@ -485,7 +485,7 @@ const userModel = {
             recipient_id: userId,
             audience: "user",
             type: "system",
-            title: "🎖️ Bạn đã nhận huy hiệu mới!",
+            title: "Bạn đã nhận huy hiệu mới!",
             content: `Chúc mừng! Bạn đã đạt huy hiệu "${badge.name}" (Level ${
               badge.level
             }). ${badge.rule_description || ""}. Điểm cộng đồng hiện tại: ${
@@ -564,7 +564,7 @@ const userModel = {
               recipient_id: userId,
               audience: "user",
               type: "achievement",
-              title: "🏆 Bạn đã đạt thành tích mới!",
+              title: "Bạn đã đạt thành tích mới!",
               content: {
                 html: `<h3>🎉 Chúc mừng! Bạn đã mở khóa thành tích mới!</h3>
 <p>Bạn đã đạt thành tích <strong>"${achievement.name}"</strong>.</p>
@@ -746,10 +746,23 @@ ${progress ? `<p>📈 <strong>Tiến độ:</strong> ${progress}</p>` : ""}
     const queryText = `
             UPDATE "Users" 
             SET community_points = community_points + $1 
-            WHERE id = $2;
+            WHERE id = $2
+            RETURNING community_points;
         `;
 
-    await db.query(queryText, [points, userId]);
+    const result = await db.query(queryText, [points, userId]);
+    const newTotalPoints = result.rows[0]?.community_points || 0;
+
+    // Cập nhật tiến độ thành tích community_points với giá trị tuyệt đối
+    try {
+      const achievementService = require('../services/achievementService');
+      await achievementService.updateProgress(userId, "community_points", newTotalPoints, true);
+    } catch (error) {
+      console.error("Lỗi khi cập nhật tiến độ thành tích community_points:", error);
+      // Không throw để không ảnh hưởng đến flow chính
+    }
+
+    return newTotalPoints;
   },
 };
 
