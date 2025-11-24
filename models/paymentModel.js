@@ -300,6 +300,12 @@ const paymentModel = {
     //     return result.rows[0];
     // },
 
+  deleteAll: async () => {
+    const queryText = `DELETE FROM "Payments";`;
+    const result = await db.query(queryText);
+    return result.rowCount;
+  },
+
 };
 
 module.exports = paymentModel;

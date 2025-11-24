@@ -437,6 +437,49 @@ const userController = {
     }
   },
 
+  addCommunityPoints: async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { points } = req.body;
+
+      if (!points || typeof points !== 'number') {
+        return res.status(400).json({
+          success: false,
+          message: 'Trường "points" là bắt buộc và phải là số.'
+        });
+      }
+
+      if (points === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Số điểm phải khác 0.'
+        });
+      }
+
+      const result = await userService.addCommunityPoints(userId, points);
+
+      res.status(200).json({
+        success: true,
+        message: `Đã ${points > 0 ? 'cộng' : 'trừ'} ${Math.abs(points)} điểm thành công.`,
+        data: {
+          userId: result.userId,
+          pointsAdded: points,
+          newTotal: result.newTotal
+        }
+      });
+
+    } catch (error) {
+      if (error.message.includes('not found') || error.message.includes('không tồn tại')) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi cộng điểm cộng đồng.',
+        error: error.message
+      });
+    }
+  },
+
   resetPassword: async (req, res) => {
     try {
       const userId = req.user.id; // Lấy ID người dùng từ token đã được xác thực

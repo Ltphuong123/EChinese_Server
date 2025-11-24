@@ -641,13 +641,61 @@ ${progress ? `<p>📈 <strong>Tiến độ:</strong> ${progress}</p>` : ""}
   },
 
   deleteById: async (userId) => {
-    // Nhờ có ON DELETE CASCADE, các dữ liệu liên quan trong các bảng
-    // UserSessions, UserDailyActivity, UserStreaks, UserAchievements,
-    // UserSubscriptions, Notebooks, AILessons, TranslationHistory, UserUsage,
-    // Violations, Appeals, RefreshTokens sẽ tự động được xóa.
-    const queryText = `DELETE FROM "Users" WHERE id = $1;`;
-    const result = await db.query(queryText, [userId]);
-    return result.rowCount > 0;
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Xóa tất cả dữ liệu liên quan theo thứ tự
+      
+      // 1. Xóa dữ liệu community
+      await client.query(`DELETE FROM "User_Answers" WHERE attempt_id IN (SELECT id FROM "User_Exam_Attempts" WHERE user_id = $1)`, [userId]);
+      await client.query(`DELETE FROM "User_Exam_Attempts" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "PostLikes" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "PostViews" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "Comments" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "Posts" WHERE user_id = $1`, [userId]);
+      
+      // 2. Xóa dữ liệu moderation
+      await client.query(`DELETE FROM "Appeals" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "Violations" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "Reports" WHERE reporter_id = $1`, [userId]);
+      
+      // 3. Xóa dữ liệu payment & subscription
+      await client.query(`DELETE FROM "Refunds" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "Payments" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "UserSubscriptions" WHERE user_id = $1`, [userId]);
+      
+      // 4. Xóa dữ liệu AI & learning
+      await client.query(`DELETE FROM "TranslationHistory" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "AILessons" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "Notebooks" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "UserUsage" WHERE user_id = $1`, [userId]);
+      
+      // 5. Xóa dữ liệu achievements & activity
+      await client.query(`DELETE FROM "UserAchievements" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "UserStreaks" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "UserDailyActivity" WHERE user_id = $1`, [userId]);
+      
+      // 6. Xóa dữ liệu session & auth
+      await client.query(`DELETE FROM "UserSessions" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "RefreshTokens" WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM "DeviceTokens" WHERE user_id = $1`, [userId]);
+      
+      // 7. Xóa notifications
+      await client.query(`DELETE FROM "Notifications" WHERE recipient_id = $1`, [userId]);
+      
+      // 8. Cuối cùng xóa user
+      const result = await client.query(`DELETE FROM "Users" WHERE id = $1`, [userId]);
+      
+      await client.query('COMMIT');
+      return result.rowCount > 0;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error deleting user:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 
   resetUserQuota: async (userId, feature) => {

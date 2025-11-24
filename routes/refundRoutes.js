@@ -17,5 +17,11 @@ router.use(userPath, authMiddleware.verifyToken); // Chỉ cần đăng nhập
 router.post(userPath, refundController.createUserRefundRequest);
 router.get(userPath, refundController.getUserRefundHistory);
 
+// DELETE /api/monetization/refunds/all - Xóa tất cả refunds (chỉ super admin)
+router.delete(
+  `${adminPath}/all`,
+  [authMiddleware.verifyToken, authMiddleware.isSuperAdmin],
+  refundController.deleteAllRefunds
+);
 
 module.exports = router;

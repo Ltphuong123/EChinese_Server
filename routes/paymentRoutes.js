@@ -32,4 +32,11 @@ router.put(`${basePath}/bulk-status`, paymentController.bulkUpdatePaymentStatus)
 // PUT /api/monetization/payments/:paymentId/status - Cập nhật một giao dịch
 router.put(`${basePath}/:paymentId/status`, paymentController.updatePaymentStatus);
 
+// DELETE /api/monetization/payments/all - Xóa tất cả payments (chỉ super admin)
+router.delete(
+  `${basePath}/all`,
+  [authMiddleware.verifyToken, authMiddleware.isSuperAdmin],
+  paymentController.deleteAllPayments
+);
+
 module.exports = router;

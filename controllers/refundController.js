@@ -76,6 +76,45 @@ processRefund: async (req, res) => {
       } catch (error) {
           res.status(500).json({ success: false, message: 'Lỗi khi lấy lịch sử.', error: error.message });
       }
+  },
+
+  deleteAllRefunds: async (req, res) => {
+    try {
+      const { confirmationCode } = req.body;
+      const adminId = req.user.id;
+
+      if (!confirmationCode) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu mã xác nhận. Vui lòng cung cấp confirmationCode trong body.'
+        });
+      }
+
+      const result = await refundService.deleteAllRefunds(adminId, confirmationCode);
+
+      res.status(200).json({
+        success: true,
+        message: 'Đã xóa tất cả refunds thành công.',
+        data: {
+          deletedCount: result.deletedCount,
+          performed_by: adminId,
+          performed_at: new Date()
+        }
+      });
+
+    } catch (error) {
+      if (error.message.includes('Mã xác nhận')) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+      res.status(500).json({ 
+        success: false, 
+        message: 'Lỗi khi xóa refunds', 
+        error: error.message 
+      });
+    }
   }
 };
 

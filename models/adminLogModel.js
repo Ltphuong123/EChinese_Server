@@ -101,6 +101,16 @@ const adminLogModel = {
     };
   },
 
+  /**
+   * Xóa tất cả admin logs
+   * @returns {Promise<number>} Số lượng bản ghi đã xóa
+   */
+  deleteAll: async () => {
+    const queryText = `DELETE FROM "AdminLogs";`;
+    const result = await db.query(queryText);
+    return result.rowCount;
+  }
+
 };
 
 module.exports = adminLogModel;

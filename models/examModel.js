@@ -1092,6 +1092,25 @@ const examModel = {
 
       // --- Xóa từ dưới lên trên ---
 
+      // 0. Xóa lịch sử làm bài (User_Exam_Attempts) và dữ liệu liên quan
+      // Tìm tất cả attempt IDs của bài thi này
+      const getAttemptIdsQuery = `SELECT id FROM "User_Exam_Attempts" WHERE exam_id = $1;`;
+      const attemptsResult = await client.query(getAttemptIdsQuery, [examId]);
+      const attemptIds = attemptsResult.rows.map((row) => row.id);
+
+      if (attemptIds.length > 0) {
+        // Xóa câu trả lời của user trong các lần làm bài
+        await client.query(
+          `DELETE FROM "User_Answers" WHERE attempt_id = ANY($1::uuid[])`,
+          [attemptIds]
+        );
+        // Xóa các lần làm bài
+        await client.query(
+          `DELETE FROM "User_Exam_Attempts" WHERE id = ANY($1::uuid[])`,
+          [attemptIds]
+        );
+      }
+
       // 1. Tìm tất cả Question IDs thuộc bài thi
       const getQuestionIdsQuery = `
         SELECT q.id FROM "Questions" q

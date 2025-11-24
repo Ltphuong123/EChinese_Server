@@ -18,7 +18,7 @@ const moderationModel = {
       target_id,
       reason,
       details,
-      attachments || [],
+      JSON.stringify(attachments || []),
     ]);
     return result.rows[0];
   },

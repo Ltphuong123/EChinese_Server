@@ -7,12 +7,12 @@ const moderationController = {
     try {
       const { target_type, target_id, reason, details, attachments } = req.body;
 
-      // Validation cơ bản
-      if (!target_type || !target_id || !reason) {
+      // Validation cơ bản - target_id không bắt buộc
+      if (!target_type || !reason) {
         return res.status(400).json({
           success: false,
           message:
-            "Các trường 'target_type', 'target_id', và 'reason' là bắt buộc.",
+            "Các trường 'target_type' và 'reason' là bắt buộc.",
         });
       }
 

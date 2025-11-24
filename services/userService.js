@@ -517,6 +517,23 @@ const userService = {
     return await userModel.resetUserQuota(userId, feature);
   },
 
+  addCommunityPoints: async (userId, points) => {
+    // Kiểm tra user có tồn tại không
+    const user = await userModel.findUserById(userId);
+    if (!user) {
+      throw new Error('Người dùng không tồn tại.');
+    }
+
+    // Cộng điểm
+    const result = await userModel.addCommunityPoints(userId, points);
+
+    return {
+      userId,
+      newTotal: result.community_points,
+      pointsAdded: points
+    };
+  },
+
   getUserUsageInfo: async (userId) => {
     // 1. Lấy gói đăng ký đang hoạt động của người dùng
     const activeUserSub =

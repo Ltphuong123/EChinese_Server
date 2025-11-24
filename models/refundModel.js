@@ -166,7 +166,11 @@ const refundModel = {
         }
     },
 
-
+  deleteAll: async () => {
+    const queryText = `DELETE FROM "RefundRequests";`;
+    const result = await db.query(queryText);
+    return result.rowCount;
+  },
 
 };
 

@@ -43,6 +43,25 @@ const adminLogService = {
         totalPages
       }
     };
+  },
+
+  /**
+   * Xóa tất cả admin logs (chỉ super admin)
+   * @param {string} adminId - ID của super admin thực hiện
+   * @param {string} confirmationCode - Mã xác nhận
+   * @returns {Promise<object>}
+   */
+  deleteAllLogs: async (adminId, confirmationCode) => {
+    // Mã xác nhận để tránh xóa nhầm
+    const REQUIRED_CODE = process.env.DELETE_ALL_LOGS_CODE || 'DELETE_ALL_ADMIN_LOGS';
+    
+    if (confirmationCode !== REQUIRED_CODE) {
+      throw new Error('Mã xác nhận không đúng. Vui lòng kiểm tra lại.');
+    }
+
+    const deletedCount = await adminLogModel.deleteAll();
+    
+    return { deletedCount };
   }
 
 };

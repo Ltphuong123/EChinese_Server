@@ -21,4 +21,11 @@ router.get(
   adminLogController.getAdminLogs
 );
 
+// DELETE /api/admin/logs/all - Xóa tất cả admin logs (chỉ super admin)
+router.delete(
+  '/admin/logs/all',
+  [authMiddleware.verifyToken, authMiddleware.isSuperAdmin],
+  adminLogController.deleteAllAdminLogs
+);
+
 module.exports = router;

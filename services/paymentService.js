@@ -238,6 +238,18 @@ const paymentService = {
   getHistoryForUser: async (userId) => {
     return await paymentModel.findByUserId(userId);
   },
+
+  deleteAllPayments: async (adminId, confirmationCode) => {
+    const REQUIRED_CODE = process.env.DELETE_ALL_PAYMENTS_CODE || 'DELETE_ALL_PAYMENTS';
+    
+    if (confirmationCode !== REQUIRED_CODE) {
+      throw new Error('Mã xác nhận không đúng. Vui lòng kiểm tra lại.');
+    }
+
+    const deletedCount = await paymentModel.deleteAll();
+    
+    return { deletedCount };
+  },
 };
 
 module.exports = paymentService;

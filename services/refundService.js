@@ -228,7 +228,17 @@ const refundService = {
     },
 
 
+  deleteAllRefunds: async (adminId, confirmationCode) => {
+    const REQUIRED_CODE = process.env.DELETE_ALL_REFUNDS_CODE || 'DELETE_ALL_REFUNDS';
+    
+    if (confirmationCode !== REQUIRED_CODE) {
+      throw new Error('Mã xác nhận không đúng. Vui lòng kiểm tra lại.');
+    }
 
+    const deletedCount = await refundModel.deleteAll();
+    
+    return { deletedCount };
+  },
 
 };
 

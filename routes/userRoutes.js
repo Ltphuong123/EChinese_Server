@@ -199,6 +199,12 @@ router.post(
   userController.resetUserQuota
 );
 
+router.post(
+  "/admin/users/:userId/add-points",
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  userController.addCommunityPoints
+);
+
 router.delete(
   "/admin/users/:userId",
   [authMiddleware.verifyToken, authMiddleware.isSuperAdmin], // <-- Cực kỳ khuyến khích chỉ cho Super Admin
