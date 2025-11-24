@@ -1,11 +1,25 @@
-const db = require('../config/db');
+const db = require("../config/db");
 
 const moderationModel = {
   // --- Reports ---
   createReport: async (data) => {
-    const { reporter_id, target_type, target_id, reason, details } = data;
-    const query = `INSERT INTO "Reports" (reporter_id, target_type, target_id, reason, details) VALUES ($1, $2, $3, $4, $5) RETURNING *;`;
-    const result = await db.query(query, [reporter_id, target_type, target_id, reason, details]);
+    const {
+      reporter_id,
+      target_type,
+      target_id,
+      reason,
+      details,
+      attachments,
+    } = data;
+    const query = `INSERT INTO "Reports" (reporter_id, target_type, target_id, reason, details, attachments) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;`;
+    const result = await db.query(query, [
+      reporter_id,
+      target_type,
+      target_id,
+      reason,
+      details,
+      attachments || [],
+    ]);
     return result.rows[0];
   },
 
@@ -16,9 +30,9 @@ const moderationModel = {
 
   //   if (status && status !== 'all') { params.push(status); where += ` AND r.status = $${params.length}`; }
   //   if (targetType && targetType !== 'all') { params.push(targetType); where += ` AND r.target_type = $${params.length}`; }
-  //   if (search) { 
-  //       params.push(`%${search}%`); 
-  //       where += ` AND (r.reason ILIKE $${params.length} OR r.details ILIKE $${params.length} OR reporter.name ILIKE $${params.length})`; 
+  //   if (search) {
+  //       params.push(`%${search}%`);
+  //       where += ` AND (r.reason ILIKE $${params.length} OR r.details ILIKE $${params.length} OR reporter.name ILIKE $${params.length})`;
   //   }
 
   //   const baseQuery = `
@@ -37,7 +51,7 @@ const moderationModel = {
 
   //   // --- Truy vấn lấy dữ liệu ---
   //   const selectQuery = `
-  //     SELECT 
+  //     SELECT
   //       r.*,
   //       jsonb_build_object(
   //         'id', reporter.id,
@@ -52,8 +66,8 @@ const moderationModel = {
   //         WHEN 'user' THEN jsonb_build_object('id', target_user.id, 'name', target_user.name, 'email', target_user.email)
   //         ELSE jsonb_build_object('id', r.target_id, 'title', r.reason)
   //       END as "targetContent"
-  //     ${baseQuery} 
-  //     ORDER BY r.created_at DESC 
+  //     ${baseQuery}
+  //     ORDER BY r.created_at DESC
   //     LIMIT $${params.length + 1} OFFSET $${params.length + 2};
   //   `;
 
@@ -69,27 +83,27 @@ const moderationModel = {
     const params = [];
 
     // Filter by status
-    if (status) { 
-      params.push(status); 
-      where += ` AND r.status = $${params.length}`; 
+    if (status) {
+      params.push(status);
+      where += ` AND r.status = $${params.length}`;
     }
-    
+
     // Filter by target_type
-    if (target_type) { 
-      params.push(target_type); 
-      where += ` AND r.target_type = $${params.length}`; 
+    if (target_type) {
+      params.push(target_type);
+      where += ` AND r.target_type = $${params.length}`;
     }
-    
+
     // Search by reason, details, reporter name, username, or report ID
-    if (search) { 
-      params.push(`%${search}%`); 
+    if (search) {
+      params.push(`%${search}%`);
       where += ` AND (
         r.reason ILIKE $${params.length} 
         OR r.details ILIKE $${params.length} 
         OR reporter.name ILIKE $${params.length}
         OR reporter.username ILIKE $${params.length}
         OR r.id::text ILIKE $${params.length}
-      )`; 
+      )`;
     }
 
     const baseQuery = `
@@ -115,6 +129,7 @@ const moderationModel = {
         r.target_id,
         r.reason,
         r.details,
+        COALESCE(r.attachments, '[]'::jsonb) as attachments,
         r.status,
         r.resolved_by,
         r.resolved_at,
@@ -181,24 +196,26 @@ const moderationModel = {
       LIMIT $${params.length + 1} OFFSET $${params.length + 2};
     `;
 
-    const reportsResult = await db.query(selectQuery, [...params, limit, offset]);
+    const reportsResult = await db.query(selectQuery, [
+      ...params,
+      limit,
+      offset,
+    ]);
     return { reports: reportsResult.rows, totalItems };
   },
 
-  
-
   findTargetAuthorId: async (targetType, targetId) => {
-    let queryText = '';
+    let queryText = "";
     switch (targetType) {
-      case 'post':
+      case "post":
         queryText = `SELECT user_id FROM "Posts" WHERE id = $1;`;
         break;
-      case 'comment':
+      case "comment":
         queryText = `SELECT user_id FROM "Comments" WHERE id = $1;`;
         break;
-      case 'user':
+      case "user":
         // Nếu đối tượng bị báo cáo là user, thì author chính là user đó
-        return targetId; 
+        return targetId;
       default:
         // 'bug', 'other' không có tác giả
         return null;
@@ -207,19 +224,18 @@ const moderationModel = {
     return result.rows[0]?.user_id || null;
   },
 
-  
   // --- Violations ---
   findViolations: async (filters) => {
     const { limit, offset, search, severity, targetType } = filters;
-    
-    const queryParams = [];
-    let whereClauses = 'WHERE 1=1';
 
-    if (severity && severity !== 'all') {
+    const queryParams = [];
+    let whereClauses = "WHERE 1=1";
+
+    if (severity && severity !== "all") {
       queryParams.push(severity);
       whereClauses += ` AND v.severity = $${queryParams.length}`;
     }
-    if (targetType && targetType !== 'all') {
+    if (targetType && targetType !== "all") {
       queryParams.push(targetType);
       whereClauses += ` AND v.target_type = $${queryParams.length}`;
     }
@@ -310,17 +326,29 @@ const moderationModel = {
       LIMIT $${queryParams.length + 1}
       OFFSET $${queryParams.length + 2};
     `;
-    
-    const violationsResult = await db.query(selectQuery, [...queryParams, limit, offset]);
+
+    const violationsResult = await db.query(selectQuery, [
+      ...queryParams,
+      limit,
+      offset,
+    ]);
     return { violations: violationsResult.rows, totalItems };
   },
 
   createViolationWithRules: async (violationData, ruleIds) => {
-    const { user_id, target_type, target_id, severity, detected_by, handled, resolution } = violationData;
+    const {
+      user_id,
+      target_type,
+      target_id,
+      severity,
+      detected_by,
+      handled,
+      resolution,
+    } = violationData;
     const client = await db.pool.connect();
 
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN");
 
       // Thao tác 1: Tạo bản ghi Violation chính
       const violationQuery = `
@@ -329,7 +357,13 @@ const moderationModel = {
         RETURNING *;
       `;
       const violationResult = await client.query(violationQuery, [
-        user_id, target_type, target_id, severity, detected_by, handled, resolution
+        user_id,
+        target_type,
+        target_id,
+        severity,
+        detected_by,
+        handled,
+        resolution,
       ]);
       const newViolation = violationResult.rows[0];
 
@@ -342,14 +376,13 @@ const moderationModel = {
         await client.query(violationRulesQuery, [newViolation.id, ruleIds]);
       }
 
-      await client.query('COMMIT');
+      await client.query("COMMIT");
 
       // Trả về violation cùng với mảng ruleIds để tiện cho frontend
       return { ...newViolation, rules: ruleIds };
-
     } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('Lỗi transaction khi tạo violation:', error);
+      await client.query("ROLLBACK");
+      console.error("Lỗi transaction khi tạo violation:", error);
       throw error;
     } finally {
       client.release();
@@ -445,12 +478,16 @@ const moderationModel = {
     return result.rows;
   },
 
-  
   // --- Appeals ---
-   createAppeal: async (data) => {
+  createAppeal: async (data) => {
     const { violation_id, user_id, reason, violation_snapshot } = data;
     const query = `INSERT INTO "Appeals" (violation_id, user_id, reason, violation_snapshot) VALUES ($1, $2, $3, $4) RETURNING *;`;
-    const result = await db.query(query, [violation_id, user_id, reason, violation_snapshot]);
+    const result = await db.query(query, [
+      violation_id,
+      user_id,
+      reason,
+      violation_snapshot,
+    ]);
     return result.rows[0];
   },
 
@@ -470,8 +507,14 @@ const moderationModel = {
     let where = `WHERE 1=1`;
     const params = [];
 
-    if (status && status !== 'all') { params.push(status); where += ` AND a.status = $${params.length}`; }
-    if (search) { params.push(`%${search}%`); where += ` AND (a.reason ILIKELIKE $${params.length} OR u.name ILIKE $${params.length})`; }
+    if (status && status !== "all") {
+      params.push(status);
+      where += ` AND a.status = $${params.length}`;
+    }
+    if (search) {
+      params.push(`%${search}%`);
+      where += ` AND (a.reason ILIKELIKE $${params.length} OR u.name ILIKE $${params.length})`;
+    }
 
     const baseQuery = `
       FROM "Appeals" a
@@ -618,10 +661,13 @@ const moderationModel = {
       LIMIT $${params.length + 1} OFFSET $${params.length + 2};
     `;
 
-    const appealsResult = await db.query(selectQuery, [...params, limit, offset]);
+    const appealsResult = await db.query(selectQuery, [
+      ...params,
+      limit,
+      offset,
+    ]);
     return { appeals: appealsResult.rows, totalItems };
   },
-
 
   findAppealById: async (appealId) => {
     const query = `
@@ -634,6 +680,37 @@ const moderationModel = {
     return result.rows[0];
   },
 
+  findAppealsByViolationId: async (violationId) => {
+    const query = `
+      SELECT 
+        a.id,
+        a.violation_id,
+        a.user_id,
+        a.reason,
+        a.status,
+        a.created_at,
+        a.resolved_at,
+        a.resolved_by,
+        a.notes,
+        jsonb_build_object(
+          'id', u.id,
+          'name', u.name,
+          'avatar_url', u.avatar_url,
+          'email', u.email,
+          'role', u.role,
+          'level', u.level,
+          'badge_level', u.badge_level,
+          'community_points', u.community_points
+        ) as user
+      FROM "Appeals" a
+      JOIN "Users" u ON a.user_id = u.id
+      WHERE a.violation_id = $1
+      ORDER BY a.created_at DESC;
+    `;
+    const result = await db.query(query, [violationId]);
+    return result.rows;
+  },
+
   processAppeal: async (appealId, data) => {
     const { status, resolved_by, notes } = data;
     const query = `
@@ -641,10 +718,15 @@ const moderationModel = {
       SET status = $1, resolved_by = $2, notes = $3, resolved_at = CURRENT_TIMESTAMP 
       WHERE id = $4 RETURNING *;
     `;
-    const result = await db.query(query, [status, resolved_by, notes, appealId]);
+    const result = await db.query(query, [
+      status,
+      resolved_by,
+      notes,
+      appealId,
+    ]);
     return result.rows[0];
   },
-  
+
   /**
    * Tìm một Violation theo ID (dùng để lấy snapshot).
    */
@@ -655,21 +737,16 @@ const moderationModel = {
   },
 
   logAction: async (logData) => {
-      const { target_type, target_id, action, reason, performed_by } = logData;
-      const query = `INSERT INTO "ModerationLogs" (target_type, target_id, action, reason, performed_by) VALUES ($1, $2, $3, $4, $5);`;
-      await db.query(query, [target_type, target_id, action, reason, performed_by]);
+    const { target_type, target_id, action, reason, performed_by } = logData;
+    const query = `INSERT INTO "ModerationLogs" (target_type, target_id, action, reason, performed_by) VALUES ($1, $2, $3, $4, $5);`;
+    await db.query(query, [
+      target_type,
+      target_id,
+      action,
+      reason,
+      performed_by,
+    ]);
   },
-
-
-
-
-
-
-
-
-
-
-
 
   /**
    * --- HÀM HELPER TẬP TRUNG ---
@@ -691,8 +768,24 @@ const moderationModel = {
 
   createViolationAuto: async (violationInput) => {
     // 1. Validation đầu vào
-    const { userId, targetType, targetId, severity, ruleIds, detectedBy, resolution } = violationInput;
-    if (!userId || !targetType || !targetId || !severity || !ruleIds || !detectedBy || !resolution) {
+    const {
+      userId,
+      targetType,
+      targetId,
+      severity,
+      ruleIds,
+      detectedBy,
+      resolution,
+    } = violationInput;
+    if (
+      !userId ||
+      !targetType ||
+      !targetId ||
+      !severity ||
+      !ruleIds ||
+      !detectedBy ||
+      !resolution
+    ) {
       throw new Error("Dữ liệu đầu vào để tạo vi phạm không đầy đủ.");
     }
 
@@ -708,14 +801,20 @@ const moderationModel = {
     };
 
     // 3. Gọi model để thực hiện tạo trong transaction
-    const newViolation = await moderationModel.createViolationWithRules(violationData, ruleIds);
+    const newViolation = await moderationModel.createViolationWithRules(
+      violationData,
+      ruleIds
+    );
     if (!newViolation) {
-        throw new Error("Tạo vi phạm trong database thất bại.");
+      throw new Error("Tạo vi phạm trong database thất bại.");
     }
-    
+
     // 4. (Tùy chọn) Liên kết vi phạm với báo cáo nếu có
     if (violationInput.relatedReportId) {
-        await moderationModel.linkViolationToReport(violationInput.relatedReportId, newViolation.id);
+      await moderationModel.linkViolationToReport(
+        violationInput.relatedReportId,
+        newViolation.id
+      );
     }
 
     // 5. (Tùy chọn) Thực hiện các hành động sau khi tạo vi phạm
@@ -725,7 +824,7 @@ const moderationModel = {
 
     return newViolation;
   },
-  
+
   /**
    * Cập nhật hàm updateReportStatus để sử dụng hàm helper mới.
   //  */
@@ -734,7 +833,7 @@ const moderationModel = {
   //   const reportUpdateData = { /* ... */ };
   //   const updatedReport = await moderationModel.updateReportStatus(reportId, reportUpdateData);
   //   if (!updatedReport) throw new Error("Không tìm thấy báo cáo.");
-    
+
   //   // 2. Logic tạo vi phạm tự động
   //   if (payload.status === 'resolved' && payload.violation_details) {
   //     const targetAuthorId = await moderationModel.findTargetAuthorId(updatedReport.target_type, updatedReport.target_id);
@@ -757,7 +856,6 @@ const moderationModel = {
   //   return updatedReport;
   // },
 
-
   findReportById: async (reportId) => {
     const query = `
       SELECT 
@@ -777,7 +875,6 @@ const moderationModel = {
     return result.rows[0];
   },
 
-
   updateReportStatus: async (reportId, data) => {
     const { status, resolved_by, resolution } = data;
     const query = `
@@ -790,22 +887,42 @@ const moderationModel = {
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $4 
       RETURNING *;`;
-    const result = await db.query(query, [status, resolved_by, resolution, reportId]);
+    const result = await db.query(query, [
+      status,
+      resolved_by,
+      resolution,
+      reportId,
+    ]);
     return result.rows[0];
   },
 
   createViolation: async (violationData) => {
-    const { user_id, target_type, target_id, severity, detected_by, handled, resolution } = violationData;
+    const {
+      user_id,
+      target_type,
+      target_id,
+      severity,
+      detected_by,
+      handled,
+      resolution,
+    } = violationData;
     const query = `
       INSERT INTO "Violations" (user_id, target_type, target_id, severity, detected_by, handled, resolution, resolved_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
       RETURNING *;
     `;
-    const values = [user_id, target_type, target_id, severity, detected_by, handled, resolution];
+    const values = [
+      user_id,
+      target_type,
+      target_id,
+      severity,
+      detected_by,
+      handled,
+      resolution,
+    ];
     const result = await db.query(query, values);
     return result.rows[0];
   },
-
 
   linkViolationToReport: async (reportId, violationId) => {
     const query = `UPDATE "Reports" SET related_violation_id = $1 WHERE id = $2;`;
@@ -829,35 +946,35 @@ const moderationModel = {
         AND n.nspname = 'public'
         AND conname = 'Violations_target_type_check';
     `;
-    
+
     const result = await db.query(query);
-    
+
     if (result.rows.length === 0) {
       return {
-        constraint_name: 'Violations_target_type_check',
+        constraint_name: "Violations_target_type_check",
         allowed_values: [],
-        constraint_definition: 'Constraint not found',
-        note: 'Có thể constraint chưa được tạo hoặc đã bị xóa'
+        constraint_definition: "Constraint not found",
+        note: "Có thể constraint chưa được tạo hoặc đã bị xóa",
       };
     }
-    
+
     // Parse constraint definition để lấy các giá trị
     // Ví dụ: CHECK ((target_type)::text = ANY (ARRAY['post'::character varying, 'comment'::character varying, 'user'::character varying]::text[]))
     const constraintDef = result.rows[0].constraint_definition;
-    
+
     // Extract các giá trị từ constraint definition
     const matches = constraintDef.match(/'([^']+)'/g);
-    const allowedValues = matches ? matches.map(m => m.replace(/'/g, '')) : [];
-    
+    const allowedValues = matches
+      ? matches.map((m) => m.replace(/'/g, ""))
+      : [];
+
     return {
       constraint_name: result.rows[0].constraint_name,
       allowed_values: allowedValues,
       constraint_definition: constraintDef,
-      note: 'Các giá trị được phép cho target_type trong bảng Violations'
+      note: "Các giá trị được phép cho target_type trong bảng Violations",
     };
-  }
-
+  },
 };
 
 module.exports = moderationModel;
-
