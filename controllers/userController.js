@@ -707,26 +707,76 @@ const userController = {
           .json({ success: false, message: "Lý do cấm là bắt buộc." });
       }
 
-      const bannedUser = await userService.banUser(userId, {
+      const result = await userService.banUser(userId, {
         reason,
         ruleIds,
         resolution,
         severity,
       });
 
-      // Gửi thông báo cho user
+      // Tính ngày hết hạn khiếu nại (7 ngày từ bây giờ)
+      const appealDeadline = new Date();
+      appealDeadline.setDate(appealDeadline.getDate() + 7);
+      const deadlineStr = appealDeadline.toLocaleDateString('vi-VN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      // Tạo nội dung thông báo chi tiết
+      const notificationContent = `
+        <div style="padding: 16px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+          <h3 style="color: #856404; margin-top: 0;">⚠️ Tài khoản của bạn đã bị cấm</h3>
+          
+          <div style="margin: 16px 0;">
+            <strong>Lý do:</strong>
+            <p style="margin: 8px 0;">${reason}</p>
+          </div>
+
+          ${resolution ? `
+          <div style="margin: 16px 0;">
+            <strong>Chi tiết vi phạm:</strong>
+            <p style="margin: 8px 0;">${resolution}</p>
+          </div>
+          ` : ''}
+
+          <div style="margin: 16px 0; padding: 12px; background-color: #fff; border-radius: 4px;">
+            <strong style="color: #d32f2f;">⏰ Thời hạn khiếu nại:</strong>
+            <p style="margin: 8px 0;">Bạn có <strong>7 ngày</strong> (đến <strong>${deadlineStr}</strong>) để gửi khiếu nại nếu bạn cho rằng đây là quyết định sai lầm.</p>
+            <p style="margin: 8px 0; color: #d32f2f;"><strong>Lưu ý:</strong> Sau thời hạn này, tài khoản của bạn sẽ bị cấm vĩnh viễn và không thể khôi phục.</p>
+          </div>
+
+          <div style="margin: 16px 0;">
+            <p>Để gửi khiếu nại, vui lòng:</p>
+            <ol style="margin: 8px 0; padding-left: 20px;">
+              <li>Truy cập mục "Vi phạm của tôi" trong tài khoản</li>
+              <li>Chọn vi phạm cần khiếu nại</li>
+              <li>Gửi khiếu nại kèm theo bằng chứng (nếu có)</li>
+            </ol>
+          </div>
+
+          <p style="margin-top: 16px; color: #666; font-size: 14px;">
+            Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ với đội ngũ hỗ trợ.
+          </p>
+        </div>
+      `;
+
+      // Gửi thông báo chi tiết cho user
       await require("../models/notificationModel").create({
         recipient_id: userId,
         audience: "user",
         type: "system",
-        title: "Tài khoản của bạn đã bị cấm",
-        content: JSON.stringify({ html: reason }),
+        title: "⚠️ Tài khoản của bạn đã bị cấm - Bạn có 7 ngày để khiếu nại",
+        content: JSON.stringify({ html: notificationContent }),
       });
 
       res.status(200).json({
         success: true,
         message: "Cấm người dùng thành công.",
-        user: bannedUser,
+        user: result.bannedUser,
+        violation: result.violation,
       });
     } catch (error) {
       if (

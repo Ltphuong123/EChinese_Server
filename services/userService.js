@@ -79,9 +79,10 @@ const userService = {
     if (!user) {
       throw new Error("Tên đăng nhập không tồn tại.");
     }
-    if (!user.is_active) {
-      throw new Error("Tài khoản đã bị vô hiệu hóa.");
-    }
+    // Bỏ kiểm tra is_active - cho phép người dùng bị cấm vẫn đăng nhập được
+    // if (!user.is_active) {
+    //   throw new Error("Tài khoản đã bị vô hiệu hóa.");
+    // }
 
     if (
       !user.password_hash ||
@@ -851,13 +852,56 @@ const userService = {
       throw new Error("Người dùng đã bị cấm trước đó.");
     }
 
-    // Cập nhật is_active = false
-    await db.query(`UPDATE "Users" SET is_active = false WHERE id = $1`, [
-      userId,
-    ]);
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    // Lấy lại user đã cập nhật
-    return await userModel.findUserDetailsById(userId);
+      // Cập nhật is_active = false
+      await client.query(`UPDATE "Users" SET is_active = false WHERE id = $1`, [userId]);
+
+      // Tạo violation record cho hành vi ban user
+      const violationQuery = `
+        INSERT INTO "Violations" (user_id, target_type, target_id, severity, detected_by, handled, resolution, resolved_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+        RETURNING *;
+      `;
+      const violationResult = await client.query(violationQuery, [
+        userId,
+        'user', // target_type = 'user' cho vi phạm cấp tài khoản
+        userId, // target_id = userId để chỉ rõ tài khoản bị vi phạm
+        severity || 'high', // Mặc định là 'high' nếu không có
+        'admin', // detected_by
+        true, // handled = true vì đã xử lý bằng cách ban
+        resolution || reason || 'Tài khoản bị cấm', // resolution
+      ]);
+      const newViolation = violationResult.rows[0];
+
+      // Tạo các liên kết trong bảng ViolationRules nếu có ruleIds
+      if (ruleIds && ruleIds.length > 0) {
+        const violationRulesQuery = `
+          INSERT INTO "ViolationRules" (violation_id, rule_id)
+          SELECT $1, unnest($2::uuid[]);
+        `;
+        await client.query(violationRulesQuery, [newViolation.id, ruleIds]);
+      }
+
+      await client.query('COMMIT');
+
+      // Lấy lại user đã cập nhật
+      const updatedUser = await userModel.findUserDetailsById(userId);
+
+      // Trả về cả user và violation
+      return {
+        bannedUser: updatedUser,
+        violation: newViolation,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Lỗi khi ban user và tạo violation:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 
   // Unban user
