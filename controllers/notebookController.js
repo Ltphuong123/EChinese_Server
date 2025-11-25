@@ -399,6 +399,56 @@ const notebookController = {
     }
   },
 
+  async addVocabulariesByLevelsToNotebook(req, res) {
+    try {
+      const { notebookId } = req.params;
+      const { levels, excludeExisting = true } = req.body;
+      const { id: userId, role } = req.user;
+
+      // Validation
+      if (!levels || !Array.isArray(levels) || levels.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Trường "levels" phải là một mảng và không được rỗng.',
+        });
+      }
+
+      const result = await notebookService.addVocabulariesByLevels(
+        notebookId,
+        userId,
+        role,
+        levels,
+        excludeExisting
+      );
+
+      res.status(200).json({
+        success: true,
+        message: `Đã thêm thành công ${result.addedCount} từ vựng vào sổ tay`,
+        data: {
+          addedCount: result.addedCount,
+          skippedCount: result.skippedCount,
+          totalVocabsInLevels: result.totalVocabsInLevels,
+          breakdown: result.breakdown
+        }
+      });
+    } catch (error) {
+      if (
+        error.message.includes("không tồn tại") ||
+        error.message.includes("không có quyền")
+      ) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      if (error.message.includes("Sổ tay hệ thống")) {
+        return res.status(403).json({ success: false, message: error.message });
+      }
+      res.status(500).json({ 
+        success: false, 
+        message: "Lỗi khi thêm từ vựng theo cấp độ",
+        error: error.message 
+      });
+    }
+  },
+
   getNotebookDetails2: async (req, res) => {
     try {
       const { id: notebookId } = req.params;

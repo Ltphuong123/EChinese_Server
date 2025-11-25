@@ -53,6 +53,13 @@ router.put(
 
 router.post('/admin/vocabularies/word-types', vocabularyController.createWordType);
 
+// Thêm từ vựng vào sổ tay theo nhiều cấp độ
+router.post(
+  '/admin/notebooks/:notebookId/vocabularies/by-level',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  require('../controllers/notebookController').addVocabulariesByLevelsToNotebook
+);
+
 module.exports = router;
 
 // Lấy tất cả: GET /api/admin/vocabularies

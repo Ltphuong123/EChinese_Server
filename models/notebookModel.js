@@ -517,6 +517,100 @@ const notebookModel = {
     }
   },
 
+  async addVocabulariesByLevels(notebookId, levels, excludeExisting = true) {
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Đếm tổng số từ vựng trong các cấp độ được chọn
+      const countTotalQuery = `
+        SELECT COUNT(*) as total FROM "Vocabulary" 
+        WHERE level && $1::text[]
+      `;
+      const totalResult = await client.query(countTotalQuery, [levels]);
+      const totalVocabsInLevels = parseInt(totalResult.rows[0].total, 10);
+
+      // Đếm chi tiết theo từng cấp độ
+      const breakdownQuery = `
+        SELECT 
+          unnest(level) as level_name,
+          COUNT(*) as count
+        FROM "Vocabulary"
+        WHERE level && $1::text[]
+        GROUP BY level_name
+      `;
+      const breakdownResult = await client.query(breakdownQuery, [levels]);
+
+      // Thêm từ vựng vào sổ tay
+      const insertQuery = `
+        WITH vocabs_to_add AS (
+          SELECT id FROM "Vocabulary" WHERE level && $1::text[]
+        )
+        INSERT INTO "NotebookVocabItems" (notebook_id, vocab_id, status)
+        SELECT $2, id, $3
+        FROM vocabs_to_add
+        ${excludeExisting ? 'ON CONFLICT (notebook_id, vocab_id) DO NOTHING' : ''}
+        RETURNING vocab_id;
+      `;
+      const insertResult = await client.query(insertQuery, [levels, notebookId, VOCAB_STATUS.NOT_LEARNED]);
+      const addedCount = insertResult.rowCount;
+      const skippedCount = totalVocabsInLevels - addedCount;
+
+      // Tính breakdown chi tiết cho từng level
+      const breakdown = {};
+      for (const level of levels) {
+        // Đếm số từ đã thêm cho level này
+        const addedForLevelQuery = `
+          SELECT COUNT(*) as added
+          FROM "NotebookVocabItems" nvi
+          JOIN "Vocabulary" v ON nvi.vocab_id = v.id
+          WHERE nvi.notebook_id = $1 AND $2 = ANY(v.level)
+        `;
+        const addedForLevelResult = await client.query(addedForLevelQuery, [notebookId, level]);
+        const addedForLevel = parseInt(addedForLevelResult.rows[0].added, 10);
+
+        // Đếm tổng số từ trong level này
+        const totalForLevelQuery = `
+          SELECT COUNT(*) as total
+          FROM "Vocabulary"
+          WHERE $1 = ANY(level)
+        `;
+        const totalForLevelResult = await client.query(totalForLevelQuery, [level]);
+        const totalForLevel = parseInt(totalForLevelResult.rows[0].total, 10);
+
+        breakdown[level] = {
+          added: addedForLevel,
+          skipped: totalForLevel - addedForLevel
+        };
+      }
+
+      // Cập nhật vocab_count
+      const updateCountQuery = `
+        UPDATE "Notebooks"
+        SET vocab_count = (SELECT COUNT(*) FROM "NotebookVocabItems" WHERE notebook_id = $1)
+        WHERE id = $1 RETURNING vocab_count;
+      `;
+      const updateResult = await client.query(updateCountQuery, [notebookId]);
+      if (updateResult.rowCount === 0) throw new Error('Notebook không tồn tại.');
+
+      await client.query('COMMIT');
+
+      return {
+        addedCount,
+        skippedCount,
+        totalVocabsInLevels,
+        breakdown
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Lỗi trong transaction khi thêm từ vựng theo nhiều levels:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
 
 
 

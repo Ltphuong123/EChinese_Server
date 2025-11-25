@@ -166,6 +166,27 @@ const notebookService = {
     return notebookModel.addVocabulariesByLevel(notebookId, level);
   },
 
+  async addVocabulariesByLevels(notebookId, userId, userRole, levels, excludeExisting) {
+    const isAdmin = userRole === "admin" || userRole === "super admin";
+
+    // Bước 1: Kiểm tra quyền sở hữu
+    const notebook = await notebookModel.findById(notebookId);
+    if (!notebook) {
+      throw new Error("Sổ tay không tồn tại.");
+    }
+    if (!isAdmin) {
+      if (notebook.user_id === null) {
+        throw new Error("Sổ tay hệ thống không thể chỉnh sửa.");
+      }
+      if (notebook.user_id !== userId) {
+        throw new Error("Bạn không có quyền thêm từ vựng vào sổ tay này.");
+      }
+    }
+
+    // Bước 2: Gọi model để thực hiện logic phức tạp
+    return notebookModel.addVocabulariesByLevels(notebookId, levels, excludeExisting);
+  },
+
   updateUserNotebook: async (notebookId, userId, payload) => {
     // Chỉ cho phép người dùng cập nhật một số trường nhất định
     const allowedUpdates = ["name", "options"];

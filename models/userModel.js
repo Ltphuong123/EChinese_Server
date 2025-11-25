@@ -220,16 +220,31 @@ const userModel = {
     const queryParams = [];
 
     // --- Xây dựng câu truy vấn COUNT ---
-    let countQuery = `SELECT COUNT(*) FROM "Users" WHERE 1=1`;
+    let countQuery = `SELECT COUNT(*) FROM "Users" u WHERE 1=1`;
 
-    // --- Xây dựng câu truy vấn SELECT ---
-    // Luôn chỉ định rõ các cột để tránh lấy password_hash
+    // --- Xây dựng câu truy vấn SELECT với JOIN để lấy thông tin subscription ---
     let selectQuery = `
       SELECT 
-        id, username, name, avatar_url, email, role, is_active, 
-        "isVerify", community_points, level, badge_level, language, 
-        created_at, last_login 
-      FROM "Users" WHERE 1=1
+        u.id, u.username, u.name, u.avatar_url, u.email, u.provider, u.provider_id, 
+        u.role, u.is_active, u."isVerify", u.community_points, u.level, u.badge_level, 
+        u.language, u.created_at, u.last_login,
+        CASE 
+          WHEN us.id IS NOT NULL THEN json_build_object(
+            'id', s.id,
+            'name', s.name,
+            'duration_months', s.duration_months,
+            'price', s.price,
+            'expiry_date', us.expiry_date,
+            'is_active', us.is_active
+          )
+          ELSE NULL
+        END as subscription
+      FROM "Users" u
+      LEFT JOIN "UserSubscriptions" us ON u.id = us.user_id 
+        AND us.is_active = true 
+        AND us.expiry_date > CURRENT_TIMESTAMP
+      LEFT JOIN "Subscriptions" s ON us.subscription_id = s.id
+      WHERE 1=1
     `;
 
     // --- Thêm điều kiện LỌC và TÌM KIẾM động ---
@@ -237,7 +252,7 @@ const userModel = {
     // Lọc theo vai trò (roleFilter)
     if (roleFilter && roleFilter !== "all") {
       queryParams.push(roleFilter);
-      const roleCondition = ` AND role = $${queryParams.length}`;
+      const roleCondition = ` AND u.role = $${queryParams.length}`;
       countQuery += roleCondition;
       selectQuery += roleCondition;
     }
@@ -255,7 +270,7 @@ const userModel = {
     const totalItems = parseInt(totalResult.rows[0].count, 10);
 
     // --- Thêm SẮP XẾP và PHÂN TRANG vào câu truy vấn SELECT ---
-    selectQuery += ` ORDER BY created_at DESC`;
+    selectQuery += ` ORDER BY u.created_at DESC`;
 
     queryParams.push(limit);
     selectQuery += ` LIMIT $${queryParams.length}`;
