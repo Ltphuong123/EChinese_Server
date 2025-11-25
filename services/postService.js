@@ -16,7 +16,9 @@ const postService = {
     try {
       const userModel = require("../models/userModel");
       await userModel.addCommunityPoints(userId, COMMUNITY_POINTS.POST_CREATED);
-      console.log(`✅ User ${userId} nhận ${COMMUNITY_POINTS.POST_CREATED} điểm cho bài viết mới`);
+      console.log(
+        `✅ User ${userId} nhận ${COMMUNITY_POINTS.POST_CREATED} điểm cho bài viết mới`
+      );
     } catch (error) {
       console.error("❌ Lỗi khi cộng điểm cho bài viết:", error);
       // Không throw để không ảnh hưởng flow chính
@@ -47,11 +49,11 @@ const postService = {
     const totalPages = Math.ceil(totalItems / limit);
     return {
       data: posts,
-      meta: { 
-        total: totalItems, 
-        page: parseInt(page), 
-        limit: parseInt(limit), 
-        totalPages 
+      meta: {
+        total: totalItems,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages,
       },
     };
   },
@@ -119,8 +121,13 @@ const postService = {
       if (userId !== postOwnerId) {
         try {
           const userModel = require("../models/userModel");
-          await userModel.addCommunityPoints(postOwnerId, -COMMUNITY_POINTS.POST_LIKED);
-          console.log(`➖ User ${postOwnerId} bị trừ ${COMMUNITY_POINTS.POST_LIKED} điểm do unlike`);
+          await userModel.addCommunityPoints(
+            postOwnerId,
+            -COMMUNITY_POINTS.POST_LIKED
+          );
+          console.log(
+            `➖ User ${postOwnerId} bị trừ ${COMMUNITY_POINTS.POST_LIKED} điểm do unlike`
+          );
         } catch (error) {
           console.error("❌ Lỗi khi trừ điểm unlike:", error);
         }
@@ -134,8 +141,13 @@ const postService = {
       if (userId !== postOwnerId) {
         try {
           const userModel = require("../models/userModel");
-          await userModel.addCommunityPoints(postOwnerId, COMMUNITY_POINTS.POST_LIKED);
-          console.log(`✅ User ${postOwnerId} nhận ${COMMUNITY_POINTS.POST_LIKED} điểm từ like`);
+          await userModel.addCommunityPoints(
+            postOwnerId,
+            COMMUNITY_POINTS.POST_LIKED
+          );
+          console.log(
+            `✅ User ${postOwnerId} nhận ${COMMUNITY_POINTS.POST_LIKED} điểm từ like`
+          );
         } catch (error) {
           console.error("❌ Lỗi khi cộng điểm like:", error);
         }
@@ -143,9 +155,16 @@ const postService = {
         // 📊 CẬP NHẬT TIẾN ĐỘ ACHIEVEMENT (tổng số like nhận được)
         try {
           const achievementService = require("./achievementService");
-          await achievementService.updateProgress(postOwnerId, "post_likes_received", 1);
+          await achievementService.updateProgress(
+            postOwnerId,
+            "post_likes_received",
+            1
+          );
         } catch (error) {
-          console.error("❌ Lỗi khi cập nhật achievement post_likes_received:", error);
+          console.error(
+            "❌ Lỗi khi cập nhật achievement post_likes_received:",
+            error
+          );
         }
       }
     }
@@ -255,6 +274,40 @@ const postService = {
     };
   },
 
+  // Service cho API getMyViewedPosts
+  getViewedPosts: async (userId, filters) => {
+    const { page, limit } = filters;
+    const offset = (page - 1) * limit;
+
+    const { posts, totalItems } = await postModel.findViewedByUserId(userId, {
+      limit,
+      offset,
+    });
+
+    const totalPages = Math.ceil(totalItems / limit);
+    return {
+      data: posts,
+      meta: { total: totalItems, page, limit, totalPages },
+    };
+  },
+
+  // Service cho API getMyLikedPosts
+  getLikedPosts: async (userId, filters) => {
+    const { page, limit } = filters;
+    const offset = (page - 1) * limit;
+
+    const { posts, totalItems } = await postModel.findLikedByUserId(userId, {
+      limit,
+      offset,
+    });
+
+    const totalPages = Math.ceil(totalItems / limit);
+    return {
+      data: posts,
+      meta: { total: totalItems, page, limit, totalPages },
+    };
+  },
+
   removePost: async (postId, user, reason) => {
     // 1. Lấy thông tin bài viết để kiểm tra
     const post = await postModel.findRawById(postId); // Cần 1 hàm lấy dữ liệu thô, không cần join
@@ -293,8 +346,15 @@ const postService = {
     if (isAdmin && !isOwner) {
       try {
         const userModel = require("../models/userModel");
-        await userModel.addCommunityPoints(post.user_id, COMMUNITY_POINTS.POST_REMOVED);
-        console.log(`➖ User ${post.user_id} bị trừ ${Math.abs(COMMUNITY_POINTS.POST_REMOVED)} điểm do bài viết bị gỡ`);
+        await userModel.addCommunityPoints(
+          post.user_id,
+          COMMUNITY_POINTS.POST_REMOVED
+        );
+        console.log(
+          `➖ User ${post.user_id} bị trừ ${Math.abs(
+            COMMUNITY_POINTS.POST_REMOVED
+          )} điểm do bài viết bị gỡ`
+        );
       } catch (error) {
         console.error("❌ Lỗi khi trừ điểm bài viết bị gỡ:", error);
       }
@@ -425,20 +485,17 @@ const postService = {
    */
   permanentDeleteAllPosts: async (adminId, confirmationCode) => {
     // Mã xác nhận để tránh xóa nhầm
-    const REQUIRED_CODE =  'DELETE_ALL_POSTS_PERMANENTLY';
-    
+    const REQUIRED_CODE = "DELETE_ALL_POSTS_PERMANENTLY";
+
     if (confirmationCode !== REQUIRED_CODE) {
-      throw new Error('Mã xác nhận không đúng. Thao tác bị hủy.');
+      throw new Error("Mã xác nhận không đúng. Thao tác bị hủy.");
     }
 
     // Thực hiện xóa
     const stats = await postModel.permanentDeleteAll();
-    
+
     return stats;
   },
 };
 
 module.exports = postService;
-
-
-  

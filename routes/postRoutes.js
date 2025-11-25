@@ -47,13 +47,11 @@ router.get(`/community/posts/:postId/views`, postController.getPostViews);
 
 router.get(`/community/posts/:postId/likes`, postController.getPostLikes);
 
-
 router.delete(
   `${BASE_PATH}/:postId`,
   authMiddleware.verifyToken,
   postController.removePost
 );
-
 
 router.put(
   `/community/posts/:postId/restore`,
@@ -68,12 +66,25 @@ router.post(
   postController.moderatePost
 );
 
-
 // ⚠️ DANGER ZONE - Xóa TẤT CẢ bài đăng trong hệ thống (chỉ super admin)
 router.delete(
   `/community/posts/all/permanent`,
   [authMiddleware.verifyToken, authMiddleware.isSuperAdmin],
   postController.permanentDeleteAllPosts
+);
+
+// API lấy bài viết mà người dùng đã xem
+router.get(
+  "/users/me/posts/viewed",
+  authMiddleware.verifyToken,
+  postController.getMyViewedPosts
+);
+
+// API lấy bài viết mà người dùng đã thích
+router.get(
+  "/users/me/posts/liked",
+  authMiddleware.verifyToken,
+  postController.getMyLikedPosts
 );
 
 module.exports = router;
