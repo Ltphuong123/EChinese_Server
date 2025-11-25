@@ -78,6 +78,10 @@ const paymentService = {
   },
 
   createPayment: async (paymentData, user_id) => {
+    // Biến để bật/tắt tự động xác nhận thanh toán
+    // const AUTO_CONFIRM_PAYMENT = process.env.AUTO_CONFIRM_PAYMENT === 'true';
+    const AUTO_CONFIRM_PAYMENT = true;
+    
     const client = await db.pool.connect();
     try {
       await client.query('BEGIN');
@@ -91,14 +95,20 @@ const paymentService = {
       };
 
       const newPayment = await paymentModel.create(fullPaymentData, client);
-
-      // Nếu trạng thái là 'manual_confirmed', kích hoạt gói ngay
-      // if (newPayment.status === 'manual_confirmed') {
-      //   // Hàm này đã được viết từ trước, tái sử dụng nó
-      //   await activateSubscriptionForPayment(newPayment, client);
-      // }
       
       await client.query('COMMIT');
+      
+      // Nếu bật tự động xác nhận, gọi updateStatus để xác nhận thanh toán
+      if (AUTO_CONFIRM_PAYMENT && newPayment.status === 'pending') {
+        // Gọi hàm updateStatus để xử lý xác nhận (bao gồm kích hoạt gói và gửi thông báo)
+        const confirmedPayment = await paymentService.updateStatus(
+          newPayment.id,
+          'manual_confirmed',
+          null // không có admin_id vì tự động
+        );
+        return confirmedPayment;
+      }
+      
       return newPayment;
       
     } catch (error) {
