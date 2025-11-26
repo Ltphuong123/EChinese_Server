@@ -497,6 +497,25 @@ const moderationController = {
       });
     }
   },
+
+  deleteReport: async (req, res) => {
+    try {
+      const { reportId } = req.params;
+
+      await moderationService.deleteReport(reportId);
+
+      res.status(204).send();
+    } catch (error) {
+      if (error.message.includes("không tồn tại")) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi xóa báo cáo",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = moderationController;

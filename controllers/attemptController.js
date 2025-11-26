@@ -177,6 +177,54 @@ const attemptController = {
         error: error.message
       });
     }
+  },
+
+  /**
+   * GET /api/leaderboard/exam-level/:examLevelId
+   * Lấy bảng xếp hạng top 5 theo exam_level
+   */
+  getLeaderboardByExamLevel: async (req, res) => {
+    try {
+      const { examLevelId } = req.params;
+      const leaderboard = await attemptService.getLeaderboardByExamLevel(examLevelId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Lấy bảng xếp hạng thành công',
+        data: leaderboard
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi lấy bảng xếp hạng',
+        error: error.message
+      });
+    }
+  },
+
+  /**
+   * GET /api/leaderboard/exam-type/:examTypeId
+   * Lấy bảng xếp hạng top 5 theo exam_type
+   */
+  getLeaderboardByExamType: async (req, res) => {
+    try {
+      const { examTypeId } = req.params;
+      const leaderboard = await attemptService.getLeaderboardByExamType(examTypeId);
+
+      res.status(200).json({
+        success: true,
+        message: 'Lấy bảng xếp hạng thành công',
+        data: leaderboard
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi khi lấy bảng xếp hạng',
+        error: error.message
+      });
+    }
   }
 };
 

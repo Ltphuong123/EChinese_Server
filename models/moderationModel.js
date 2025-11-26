@@ -929,6 +929,12 @@ const moderationModel = {
     await db.query(query, [violationId, reportId]);
   },
 
+  deleteReport: async (reportId) => {
+    const query = `DELETE FROM "Reports" WHERE id = $1;`;
+    const result = await db.query(query, [reportId]);
+    return result.rowCount;
+  },
+
   /**
    * Lấy danh sách các giá trị constraint của target_type trong bảng Violations
    * Query từ information_schema để lấy constraint check

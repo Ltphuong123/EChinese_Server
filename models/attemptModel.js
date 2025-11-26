@@ -149,78 +149,111 @@ const attemptModel = {
   
   getFinalResult: async (attemptId, userId) => {
     const queryText = `
-        SELECT
-            a.id, a.start_time, a.end_time, a.score_total, a.is_passed,
-            ex.name as exam_name,
-            (
-                SELECT jsonb_agg(jsonb_build_object(
-                    'section_id', s.id,
-                    'section_name', s.name,
-                    'score', uss.score,
-                    'correct_count', (
-                        SELECT COUNT(*)
-                        FROM "User_Answers" ua
-                        JOIN "Questions" q ON ua.question_id = q.id
-                        JOIN "Subsections" ss ON q.subsection_id = ss.id
-                        WHERE ss.section_id = s.id 
-                        AND ua.attempt_id = a.id 
-                        AND ua.is_correct = true
-                    ),
-                    'total_questions', (
-                        SELECT COUNT(*)
-                        FROM "Questions" q
-                        JOIN "Subsections" ss ON q.subsection_id = ss.id
-                        WHERE ss.section_id = s.id
-                    )
-                ))
-                FROM "User_Section_Scores" uss
-                JOIN "Sections" s ON uss.section_id = s.id
-                WHERE uss.attempt_id = a.id
-            ) as section_scores,
-            (
-                SELECT jsonb_agg(question_details ORDER BY question_details.question_order ASC)
+      SELECT
+        a.id as attempt_id,
+        a.start_time,
+        a.end_time,
+        a.score_total,
+        a.is_passed,
+        a.attempt_number,
+        e.*,
+        et.name AS exam_type_name,
+        el.name AS exam_level_name,
+        (
+          SELECT jsonb_agg(section_scores_agg)
+          FROM (
+            SELECT
+              uss.section_id,
+              s.name as section_name,
+              uss.score,
+              (
+                SELECT COUNT(*)
+                FROM "User_Answers" ua
+                JOIN "Questions" q ON ua.question_id = q.id
+                JOIN "Subsections" ss ON q.subsection_id = ss.id
+                WHERE ss.section_id = s.id 
+                AND ua.attempt_id = a.id 
+                AND ua.is_correct = true
+              ) as correct_count,
+              (
+                SELECT COUNT(*)
+                FROM "Questions" q
+                JOIN "Subsections" ss ON q.subsection_id = ss.id
+                WHERE ss.section_id = s.id
+              ) as total_questions
+            FROM "User_Section_Scores" uss
+            JOIN "Sections" s ON uss.section_id = s.id
+            WHERE uss.attempt_id = a.id
+            ORDER BY s."order" ASC
+          ) as section_scores_agg
+        ) as section_scores,
+        (
+          SELECT jsonb_agg(sections_agg ORDER BY sections_agg."order" ASC)
+          FROM (
+            SELECT
+              s.*,
+              (
+                SELECT jsonb_agg(subsections_agg ORDER BY subsections_agg."order" ASC)
                 FROM (
-                    SELECT
-                        q.id as question_id,
-                        q.content as question_content,
-                        q."order" as question_order,
-                        ua.user_response,
-                        ua.is_correct,
-                        q.correct_answer as correct_answer_text, -- Dành cho câu điền từ/sắp xếp
-                        (
-                            SELECT jsonb_agg(ca.answer)
+                  SELECT
+                    ss.*,
+                    (
+                      SELECT jsonb_agg(prompts_agg ORDER BY prompts_agg."order" ASC)
+                      FROM (
+                        SELECT
+                          p.id,
+                          p.subsection_id,
+                          p.content,
+                          p.image AS image_json,
+                          p.audio_url,
+                          p."order"
+                        FROM "Prompts" p
+                        WHERE p.subsection_id = ss.id
+                      ) AS prompts_agg
+                    ) AS prompts,
+                    (
+                      SELECT jsonb_agg(questions_agg ORDER BY questions_agg."order" ASC)
+                      FROM (
+                        SELECT
+                          q.*,
+                          (SELECT pq.prompt_id FROM "Prompt_Questions" pq WHERE pq.question_id = q.id LIMIT 1) as prompt_id,
+                          ua.user_response,
+                          ua.is_correct,
+                          (
+                            SELECT jsonb_agg(o.* ORDER BY o."order" ASC)
+                            FROM "Options" o
+                            WHERE o.question_id = q.id
+                          ) AS options,
+                          (
+                            SELECT jsonb_agg(ca.*)
                             FROM "Correct_Answers" ca
                             WHERE ca.question_id = q.id
-                        ) as correct_answers_list, -- Dành cho câu điền từ/sắp xếp có nhiều đáp án
-                        (
-                            SELECT jsonb_build_object('id', ex.id, 'content', ex.content)
+                          ) AS correct_answers,
+                          (
+                            SELECT jsonb_build_object('id', ex.id, 'content', ex.content, 'question_id', ex.question_id)
                             FROM "Explanations" ex
                             WHERE ex.question_id = q.id
                             LIMIT 1
-                        ) AS explanation,
-                        -- Gom tất cả các options của câu hỏi
-                        (
-                            SELECT jsonb_agg(
-                                jsonb_build_object(
-                                    'id', o.id,
-                                    'label', o.label,
-                                    'content', o.content,
-                                    'is_correct', o.is_correct -- TRẢ VỀ ĐÁP ÁN ĐÚNG
-                                ) ORDER BY o."order" ASC
-                            )
-                            FROM "Options" o
-                            WHERE o.question_id = q.id
-                        ) AS options
-                    FROM "Questions" q
-                    LEFT JOIN "User_Answers" ua ON q.id = ua.question_id AND ua.attempt_id = a.id
-                    JOIN "Subsections" ss ON q.subsection_id = ss.id
-                    JOIN "Sections" s ON ss.section_id = s.id
-                    WHERE s.exam_id = a.exam_id
-                ) as question_details
-            ) as questions
-        FROM "User_Exam_Attempts" a
-        JOIN "Exams" ex ON a.exam_id = ex.id
-        WHERE a.id = $1 AND a.user_id = $2 AND a.score_total IS NOT NULL;
+                          ) AS explanation
+                        FROM "Questions" q
+                        LEFT JOIN "User_Answers" ua ON q.id = ua.question_id AND ua.attempt_id = a.id
+                        WHERE q.subsection_id = ss.id
+                      ) AS questions_agg
+                    ) AS questions
+                  FROM "Subsections" ss
+                  WHERE ss.section_id = s.id
+                ) AS subsections_agg
+              ) AS subsections
+            FROM "Sections" s
+            WHERE s.exam_id = e.id
+          ) AS sections_agg
+        ) AS sections
+      FROM "User_Exam_Attempts" a
+      JOIN "Exams" e ON a.exam_id = e.id
+      LEFT JOIN "Exam_Types" et ON e.exam_type_id = et.id
+      LEFT JOIN "Exam_Levels" el ON e.exam_level_id = el.id
+      WHERE a.id = $1 AND a.user_id = $2 AND a.score_total IS NOT NULL
+      GROUP BY a.id, e.id, et.name, el.name;
     `;
     const result = await db.query(queryText, [attemptId, userId]);
     return result.rows[0];

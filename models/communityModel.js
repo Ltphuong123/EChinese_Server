@@ -15,20 +15,25 @@ getDashboardStats: async () => {
       WHERE deleted_at IS NULL;
     `;
 
-    // "Nội dung đã gỡ" chỉ tính nội dung bị admin/moderator gỡ, không tính người dùng tự xóa
-    // Đếm bài viết bị gỡ bởi người khác (deleted_by khác user_id)
+    // "Nội dung đã gỡ" chỉ tính nội dung bị admin/moderator/AI gỡ, không tính người dùng tự xóa
+    // Đếm bài viết bị gỡ bởi moderator (deleted_by khác user_id HOẶC deleted_by = null với status = 'removed')
     const removedPostCountQuery = `
       SELECT COUNT(*) FROM "Posts" 
       WHERE status = 'removed' 
-        AND deleted_by IS NOT NULL 
-        AND deleted_by != user_id;
+        AND (
+          deleted_by IS NULL 
+          OR deleted_by != user_id
+        );
     `;
     
-    // Đếm bình luận bị gỡ bởi người khác (deleted_by khác user_id)
+    // Đếm bình luận bị gỡ bởi moderator (deleted_by khác user_id HOẶC deleted_by = null)
     const removedCommentCountQuery = `
       SELECT COUNT(*) FROM "Comments" 
-      WHERE deleted_by IS NOT NULL 
-        AND deleted_by != user_id;
+      WHERE deleted_at IS NOT NULL
+        AND (
+          deleted_by IS NULL 
+          OR deleted_by != user_id
+        );
     `;
 
 

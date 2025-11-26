@@ -310,6 +310,104 @@ const attemptService = {
     return result.rows;
   },
 
+  /**
+   * Lấy bảng xếp hạng top 5 theo exam_level
+   * Điểm = Tổng điểm cao nhất của mỗi đề thi khác nhau trong exam_level đó
+   * @param {string} examLevelId - ID của exam_level
+   * @returns {Promise<Array>} Top 5 người có tổng điểm cao nhất
+   */
+  getLeaderboardByExamLevel: async (examLevelId) => {
+    const query = `
+      WITH user_best_scores AS (
+        -- Lấy điểm cao nhất của mỗi user cho mỗi đề thi
+        SELECT 
+          uea.user_id,
+          uea.exam_id,
+          MAX(uea.score_total) as best_score
+        FROM "User_Exam_Attempts" uea
+        JOIN "Exams" e ON uea.exam_id = e.id
+        WHERE e.exam_level_id = $1
+          AND uea.score_total IS NOT NULL
+        GROUP BY uea.user_id, uea.exam_id
+      ),
+      user_total_scores AS (
+        -- Tính tổng điểm cao nhất của các đề thi khác nhau
+        SELECT 
+          user_id,
+          SUM(best_score) as total_score,
+          COUNT(DISTINCT exam_id) as exams_completed
+        FROM user_best_scores
+        GROUP BY user_id
+      )
+      SELECT 
+        uts.user_id,
+        u.name as user_name,
+        u.username,
+        u.avatar_url,
+        uts.total_score,
+        uts.exams_completed,
+        el.name as exam_level_name,
+        ROW_NUMBER() OVER (ORDER BY uts.total_score DESC, uts.exams_completed DESC) as rank
+      FROM user_total_scores uts
+      JOIN "Users" u ON uts.user_id = u.id
+      JOIN "Exam_Levels" el ON el.id = $1
+      ORDER BY uts.total_score DESC, uts.exams_completed DESC
+      LIMIT 5;
+    `;
+
+    const result = await db.query(query, [examLevelId]);
+    return result.rows;
+  },
+
+  /**
+   * Lấy bảng xếp hạng top 5 theo exam_type
+   * Điểm = Tổng điểm cao nhất của mỗi đề thi khác nhau trong exam_type đó
+   * @param {string} examTypeId - ID của exam_type
+   * @returns {Promise<Array>} Top 5 người có tổng điểm cao nhất
+   */
+  getLeaderboardByExamType: async (examTypeId) => {
+    const query = `
+      WITH user_best_scores AS (
+        -- Lấy điểm cao nhất của mỗi user cho mỗi đề thi
+        SELECT 
+          uea.user_id,
+          uea.exam_id,
+          MAX(uea.score_total) as best_score
+        FROM "User_Exam_Attempts" uea
+        JOIN "Exams" e ON uea.exam_id = e.id
+        WHERE e.exam_type_id = $1
+          AND uea.score_total IS NOT NULL
+        GROUP BY uea.user_id, uea.exam_id
+      ),
+      user_total_scores AS (
+        -- Tính tổng điểm cao nhất của các đề thi khác nhau
+        SELECT 
+          user_id,
+          SUM(best_score) as total_score,
+          COUNT(DISTINCT exam_id) as exams_completed
+        FROM user_best_scores
+        GROUP BY user_id
+      )
+      SELECT 
+        uts.user_id,
+        u.name as user_name,
+        u.username,
+        u.avatar_url,
+        uts.total_score,
+        uts.exams_completed,
+        et.name as exam_type_name,
+        ROW_NUMBER() OVER (ORDER BY uts.total_score DESC, uts.exams_completed DESC) as rank
+      FROM user_total_scores uts
+      JOIN "Users" u ON uts.user_id = u.id
+      JOIN "Exam_Types" et ON et.id = $1
+      ORDER BY uts.total_score DESC, uts.exams_completed DESC
+      LIMIT 5;
+    `;
+
+    const result = await db.query(query, [examTypeId]);
+    return result.rows;
+  },
+
 
 };
 

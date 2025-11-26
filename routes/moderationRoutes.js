@@ -28,6 +28,10 @@ router.put(
   `${ADMIN_BASE}/reports/:reportId/status`,
   moderationController.updateReportStatus
 );
+router.delete(
+  `${ADMIN_BASE}/reports/:reportId`,
+  moderationController.deleteReport
+);
 
 // Violations
 router.post(`${ADMIN_BASE}/violations`, moderationController.createViolation);

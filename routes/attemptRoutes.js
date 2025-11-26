@@ -24,15 +24,11 @@ router.get('/attempts/:attemptId/result', attemptController.getAttemptResult);
 // API Lấy lịch sử làm bài theo exam_type_id + exam_level_id + name
 router.get('/attempts/history/by-exam-info', attemptController.getAttemptHistoryByExamInfo);
 
-// // Bắt đầu một lượt làm bài mới
-// router.post('/exams/:id/start-attempt', authMiddleware.verifyToken, attemptController.startAttempt);
-// // Lưu một câu trả lời
-// router.post('/attempts/:attemptId/answers', attemptController.saveUserAnswer);
+// API Lấy bảng xếp hạng theo exam_level
+router.get('/leaderboard/exam-level/:examLevelId', attemptController.getLeaderboardByExamLevel);
 
-// // Nộp bài
-// router.post('/attempts/:attemptId/submit', attemptController.submitAttempt);
+// API Lấy bảng xếp hạng theo exam_type
+router.get('/leaderboard/exam-type/:examTypeId', attemptController.getLeaderboardByExamType);
 
-// // Xem kết quả
-// router.get('/attempts/:attemptId/results', attemptController.getAttemptResults);
 
 module.exports = router;

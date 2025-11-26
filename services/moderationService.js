@@ -355,6 +355,15 @@ const moderationService = {
   getViolationTargetTypes: async () => {
     return await moderationModel.getViolationTargetTypes();
   },
+
+  deleteReport: async (reportId) => {
+    const deletedCount = await moderationModel.deleteReport(reportId);
+    
+    // Nếu không có hàng nào bị xóa, nghĩa là report không tồn tại
+    if (deletedCount === 0) {
+      throw new Error("Báo cáo không tồn tại.");
+    }
+  },
 };
 
 module.exports = moderationService;
