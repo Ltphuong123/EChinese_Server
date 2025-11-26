@@ -15,15 +15,20 @@ getDashboardStats: async () => {
       WHERE deleted_at IS NULL;
     `;
 
-    // "Nội dung đã gỡ" có thể hiểu là tổng số bài viết và bình luận có status = 'removed' hoặc bị xóa mềm.
-    // Cách tiếp cận 1: Đếm các bản ghi có status = 'removed' (do admin gỡ)
-        const removedPostCountQuery = `
-      SELECT COUNT(*) FROM "Posts" WHERE status = 'removed';
+    // "Nội dung đã gỡ" chỉ tính nội dung bị admin/moderator gỡ, không tính người dùng tự xóa
+    // Đếm bài viết bị gỡ bởi người khác (deleted_by khác user_id)
+    const removedPostCountQuery = `
+      SELECT COUNT(*) FROM "Posts" 
+      WHERE status = 'removed' 
+        AND deleted_by IS NOT NULL 
+        AND deleted_by != user_id;
     `;
     
-    // Câu truy vấn để đếm số bình luận đã gỡ
+    // Đếm bình luận bị gỡ bởi người khác (deleted_by khác user_id)
     const removedCommentCountQuery = `
-      SELECT COUNT(*) FROM "Comments" WHERE deleted_by IS NOT NULL;
+      SELECT COUNT(*) FROM "Comments" 
+      WHERE deleted_by IS NOT NULL 
+        AND deleted_by != user_id;
     `;
 
 
