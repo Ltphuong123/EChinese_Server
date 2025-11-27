@@ -24,6 +24,8 @@ router.use(ADMIN_BASE, [authMiddleware.verifyToken, authMiddleware.isAdmin]);
 
 // Reports
 router.get(`${ADMIN_BASE}/reports`, moderationController.getReports);
+router.get(`${ADMIN_BASE}/reports/count/in-progress`, moderationController.getInProgressReportsCount);
+router.get(`${ADMIN_BASE}/reports/count/pending`, moderationController.getPendingReportsCount);
 router.put(
   `${ADMIN_BASE}/reports/:reportId/status`,
   moderationController.updateReportStatus
@@ -58,6 +60,12 @@ router.get(
 router.put(
   `${ADMIN_BASE}/appeals/:appealId/process`,
   moderationController.processAppeal
+);
+
+// User Verification
+router.put(
+  `${ADMIN_BASE}/users/verify-all`,
+  moderationController.verifyAllUsers
 );
 
 module.exports = router;

@@ -165,11 +165,11 @@ const moderationService = {
                       contentPreview.length >= 150 ? "..." : ""
                     }"</p>`
                   : ""
-              }<hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Loại nội dung:</strong> ${contentType}</li><li><strong>Gỡ bởi:</strong> Quản trị viên</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString(
+              }<hr><p><small><strong>Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Loại nội dung:</strong> ${contentType}</li><li><strong>Gỡ bởi:</strong> Quản trị viên</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString(
                 "vi-VN"
               )}</li><li><strong>Mã báo cáo:</strong> ${
                 report.id
-              }</li></ul><p><small>⚖️ Vui lòng tuân thủ quy định cộng đồng.</small></p>`,
+              }</li></ul><p><small>Vui lòng tuân thủ quy định cộng đồng.</small></p>`,
             },
             redirect_type: "community_rules",
             data: {
@@ -179,7 +179,7 @@ const moderationService = {
             expires_at: null,
             priority: 2,
             from_system: true,
-          });
+          }, true);
         }
       } catch (enfErr) {
         console.error("Lỗi khi thực thi biện pháp xử lý/Thông báo:", enfErr);
@@ -363,6 +363,17 @@ const moderationService = {
     if (deletedCount === 0) {
       throw new Error("Báo cáo không tồn tại.");
     }
+  },
+
+  // Lấy số lượng báo cáo theo trạng thái
+  getReportCountByStatus: async (status) => {
+    return await moderationModel.countReportsByStatus(status);
+  },
+
+  // Xác thực tất cả người dùng
+  verifyAllUsers: async () => {
+    const userModel = require("../models/userModel");
+    return await userModel.verifyAllUsers();
   },
 };
 

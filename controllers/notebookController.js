@@ -81,20 +81,41 @@ const notebookController = {
     }
   },
 
-  // 2. GET /api/notebooks/system
+  // // 2. GET /api/notebooks/system
+  // async getSystemNotebooksForUser(req, res) {
+  //   try {
+  //     const filters = {
+  //       userId: req.user.id, // Lấy từ token
+  //       userCreated: false, // Chỉ lấy notebook được copy từ template (user_id != created_by)
+  //       status: "published", // User chỉ thấy sổ tay đã xuất bản
+  //       page: parseInt(req.query.page, 10) || 1,
+  //       limit: parseInt(req.query.limit, 10) || 10,
+  //       premium: req.query.premium || "", // Mặc định lấy tất cả
+  //       search: req.query.search || "",
+  //     };
+  //     const result = await notebookService.getNotebooksByFilter(filters);
+  //     res.status(200).json({ success: true, ...result });
+  //   } catch (error) {
+  //     res.status(500).json({ success: false, message: error.message });
+  //   }
+  // },
+
+    // 3. GET /api/admin/notebooks/system
   async getSystemNotebooksForUser(req, res) {
     try {
       const filters = {
-        userId: req.user.id, // Lấy từ token
-        userCreated: false, // Chỉ lấy notebook được copy từ template (user_id != created_by)
-        status: "published", // User chỉ thấy sổ tay đã xuất bản
+        userId: "NULL", // Chỉ lấy sổ tay hệ thống
         page: parseInt(req.query.page, 10) || 1,
         limit: parseInt(req.query.limit, 10) || 10,
-        premium: req.query.premium || "", // Mặc định lấy tất cả
         search: req.query.search || "",
+        status: "published",
+        premium: req.query.premium || "all",
       };
       const result = await notebookService.getNotebooksByFilter(filters);
-      res.status(200).json({ success: true, ...result });
+      res.status(200).json({
+        success: true,
+        data: result,
+      });
     } catch (error) {
       res.status(500).json({ success: false, message: error.message });
     }

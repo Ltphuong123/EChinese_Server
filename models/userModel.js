@@ -827,6 +827,33 @@ ${progress ? `<p>📈 <strong>Tiến độ:</strong> ${progress}</p>` : ""}
 
     return newTotalPoints;
   },
+
+  // Lấy danh sách tất cả admin và superadmin
+  getAllAdmins: async () => {
+    const queryText = `
+      SELECT id, username, name, email, role
+      FROM "Users"
+      WHERE role IN ('admin', 'super admin')
+      AND is_active = true;
+    `;
+    const result = await db.query(queryText);
+    return result.rows;
+  },
+
+  // Xác thực tất cả người dùng
+  verifyAllUsers: async () => {
+    const queryText = `
+      UPDATE "Users"
+      SET "isVerify" = true
+      WHERE "isVerify" = false
+      RETURNING id;
+    `;
+    const result = await db.query(queryText);
+    return {
+      count: result.rowCount,
+      userIds: result.rows.map(row => row.id)
+    };
+  },
 };
 
 module.exports = userModel;

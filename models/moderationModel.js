@@ -936,6 +936,15 @@ const moderationModel = {
   },
 
   /**
+   * Đếm số lượng báo cáo theo trạng thái
+   */
+  countReportsByStatus: async (status) => {
+    const query = `SELECT COUNT(*) as count FROM "Reports" WHERE status = $1;`;
+    const result = await db.query(query, [status]);
+    return parseInt(result.rows[0].count, 10);
+  },
+
+  /**
    * Lấy danh sách các giá trị constraint của target_type trong bảng Violations
    * Query từ information_schema để lấy constraint check
    */

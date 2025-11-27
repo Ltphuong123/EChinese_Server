@@ -245,6 +245,38 @@ const notificationController = {
     }
   },
 
+  // POST /notifications/revoke (Admin only)
+  revokeNotifications: async (req, res) => {
+    try {
+      const { ids } = req.body;
+      
+      // Validation
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Mảng ids là bắt buộc.' 
+        });
+      }
+
+      const result = await notificationService.revokeNotifications(ids);
+      
+      res.status(200).json({ 
+        success: true,
+        message: `Đã thu hồi ${result.count} thông báo thành công`,
+        data: {
+          revokedCount: result.count
+        }
+      });
+    } catch (error) {
+      console.error('Error revoking notifications:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Lỗi khi thu hồi thông báo', 
+        error: error.message 
+      });
+    }
+  },
+
   // POST /notifications/delete (Admin only)
   deleteNotifications: async (req, res) => {
     try {

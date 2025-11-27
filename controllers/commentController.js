@@ -55,9 +55,9 @@ const commentController = {
             content: {
               html: `<p><strong>${commenter?.name || 'Một người dùng'}</strong> đã bình luận vào bài viết <strong>"${post.title}"</strong> của bạn.</p>
 <p><em>Nội dung bình luận:</em> "${commentPreview}..."</p>
-${parentCommentId ? '<p><small>💬 Đây là một phản hồi trong chuỗi bình luận</small></p>' : ''}
+${parentCommentId ? '<p><small>Đây là một phản hồi trong chuỗi bình luận</small></p>' : ''}
 <hr>
-<p><small><strong>📌 Thông tin chi tiết:</strong></small></p>
+<p><small><strong>Thông tin chi tiết:</strong></small></p>
 <ul style="font-size: 0.9em;">
   <li><strong>Bài viết:</strong> ${post.title}</li>
   <li><strong>Người bình luận:</strong> ${commenter?.name || 'Người dùng'}</li>
@@ -268,17 +268,17 @@ ${parentCommentId ? '<p><small>💬 Đây là một phản hồi trong chuỗi b
         content: {
           html: `<p>Bình luận của bạn đã được quản trị viên khôi phục.</p>
 <p><strong>Lý do khôi phục:</strong> ${restoreReason}</p>
-${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong> vi phạm liên quan.</p>` : ''}
+${violationsCleared > 0 ? `<p>Đã xóa <strong>${violationsCleared}</strong> vi phạm liên quan.</p>` : ''}
 <p><em>Nội dung bình luận:</em> "${commentPreview}..."</p>
 <hr>
-<p><small><strong>📌 Thông tin chi tiết:</strong></small></p>
+<p><small><strong>Thông tin chi tiết:</strong></small></p>
 <ul style="font-size: 0.9em;">
   <li><strong>Khôi phục bởi:</strong> Quản trị viên</li>
   <li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li>
   <li><strong>Vi phạm đã xóa:</strong> ${violationsCleared}</li>
   <li><strong>Bài viết ID:</strong> ${comment.post_id}</li>
 </ul>
-<p><small>💚 Cảm ơn bạn đã đóng góp ý kiến cho cộng đồng!</small></p>`
+<p><small>Cảm ơn bạn đã đóng góp ý kiến cho cộng đồng!</small></p>`
         },
         redirect_type: 'post_comment',
         data: {
@@ -358,14 +358,14 @@ ${violationsCleared > 0 ? `<p>✅ Đã xóa <strong>${violationsCleared}</strong
 ${violatedRulesDetail.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${rulesText}</ul>` : ''}
 <p><em>Nội dung bình luận:</em> "${commentPreview}..."</p>
 <hr>
-<p><small><strong>📌 Thông tin chi tiết:</strong></small></p>
+<p><small><strong>Thông tin chi tiết:</strong></small></p>
 <ul style="font-size: 0.9em;">
   <li><strong>Gỡ bởi:</strong> Quản trị viên</li>
   <li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li>
   <li><strong>Bài viết ID:</strong> ${removedComment.post_id}</li>
   <li><strong>Số quy tắc vi phạm:</strong> ${violatedRulesDetail.length}</li>
 </ul>
-<p><small>⚖️ Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
+<p><small>Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
           },
           redirect_type: 'post_comment',
           data: {

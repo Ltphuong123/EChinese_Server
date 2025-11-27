@@ -102,6 +102,16 @@ const notificationService = {
     const count = await notificationModel.publishByIds(ids);
     return count > 0;
   },
+
+  /**
+   * Thu hồi thông báo đã gửi (đánh dấu is_push_sent = false)
+   * @param {Array<string>} ids - Mảng ID của các thông báo cần thu hồi
+   * @returns {object} { count: number }
+   */
+  revokeNotifications: async (ids) => {
+    const count = await notificationModel.revokeByIds(ids);
+    return { count };
+  },
   
   deleteNotifications: async (ids) => {
     const count = await notificationModel.deleteByIds(ids);

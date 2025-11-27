@@ -191,6 +191,14 @@ const autoModerationService = {
           `${i+1}. Loại: ${v.type}, Nhãn: ${v.label}, Độ tin cậy: ${(v.confidence * 100).toFixed(1)}%`
         ).join('\n');
 
+        // Chuyển severity sang tiếng Việt
+        const severityText = {
+          low: 'Thấp',
+          medium: 'Trung bình',
+          high: 'Cao',
+          critical: 'Nghiêm trọng'
+        }[severity] || severity;
+
         // Gửi thông báo chi tiết cho người dùng với auto push
         const notificationService = require('./notificationService');
         await notificationService.createNotification({
@@ -199,7 +207,7 @@ const autoModerationService = {
           type: 'violation',
           title: 'Bài viết của bạn đã bị gỡ tự động',
           content: {
-            html: `<p>Bài viết <strong>"${postData.title}"</strong> của bạn đã bị hệ thống AI tự động phát hiện và gỡ bỏ do vi phạm quy tắc cộng đồng.</p><p><strong>Lý do:</strong> ${removalReason}</p><p><strong>Độ nghiêm trọng:</strong> ${severity}</p><p><strong>Phát hiện bởi:</strong> AI tự động</p>${violatedRules.rows.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRules.rows.map(r => `<li><strong>${r.title}</strong> (${r.severity_default}): ${r.description}</li>`).join('')}</ul>` : ''}<p><strong>Chi tiết phát hiện:</strong></p><ul>${violations.map(v => `<li>Loại: ${v.type}, Nhãn: ${v.label}, Độ tin cậy: ${(v.confidence * 100).toFixed(1)}%</li>`).join('')}</ul><p><em>Nội dung bài viết:</em> "${contentPreview}..."</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Bài viết:</strong> ${postData.title}</li><li><strong>Phát hiện bởi:</strong> AI tự động</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Số vấn đề phát hiện:</strong> ${violations.length}</li></ul><p><small>⚖️ Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
+            html: `<p>Bài viết <strong>"${postData.title}"</strong> của bạn đã bị hệ thống AI tự động phát hiện và gỡ bỏ do vi phạm quy tắc cộng đồng.</p><p><strong>Lý do:</strong> ${removalReason}</p><p><strong>Độ nghiêm trọng:</strong> ${severityText}</p><p><strong>Phát hiện bởi:</strong> AI tự động</p>${violatedRules.rows.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRules.rows.map(r => `<li><strong>${r.title}</strong>: ${r.description}</li>`).join('')}</ul>` : ''}<p><em>Nội dung bài viết:</em> "${contentPreview}..."</p><hr><p><small><strong>Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Bài viết:</strong> ${postData.title}</li><li><strong>Phát hiện bởi:</strong> AI tự động</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li></ul><p><small>Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
           },
           redirect_type: 'post',
           data: {
@@ -320,6 +328,14 @@ const autoModerationService = {
           `${i+1}. Loại: ${v.type}, Nhãn: ${v.label}, Độ tin cậy: ${(v.confidence * 100).toFixed(1)}%`
         ).join('\n');
 
+        // Chuyển severity sang tiếng Việt
+        const severityText = {
+          low: 'Thấp',
+          medium: 'Trung bình',
+          high: 'Cao',
+          critical: 'Nghiêm trọng'
+        }[severity] || severity;
+
         // Gửi thông báo chi tiết cho người dùng với auto push
         const notificationService = require('./notificationService');
         await notificationService.createNotification({
@@ -328,7 +344,7 @@ const autoModerationService = {
           type: 'violation',
           title: 'Bình luận của bạn đã bị gỡ tự động',
           content: {
-            html: `<p>Bình luận của bạn đã bị hệ thống AI tự động phát hiện và gỡ bỏ do vi phạm quy tắc cộng đồng.</p><p><strong>Lý do:</strong> ${removalReason}</p><p><strong>Độ nghiêm trọng:</strong> ${severity}</p><p><strong>Phát hiện bởi:</strong> AI tự động</p>${violatedRules.rows.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRules.rows.map(r => `<li><strong>${r.title}</strong> (${r.severity_default}): ${r.description}</li>`).join('')}</ul>` : ''}<p><strong>Chi tiết phát hiện:</strong></p><ul>${violations.map(v => `<li>Loại: ${v.type}, Nhãn: ${v.label}, Độ tin cậy: ${(v.confidence * 100).toFixed(1)}%</li>`).join('')}</ul><p><em>Nội dung bình luận:</em> "${commentPreview}..."</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Bài viết ID:</strong> ${commentData.post_id}</li><li><strong>Phát hiện bởi:</strong> AI tự động</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li><li><strong>Số vấn đề phát hiện:</strong> ${violations.length}</li></ul><p><small>⚖️ Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
+            html: `<p>Bình luận của bạn đã bị hệ thống AI tự động phát hiện và gỡ bỏ do vi phạm quy tắc cộng đồng.</p><p><strong>Lý do:</strong> ${removalReason}</p><p><strong>Độ nghiêm trọng:</strong> ${severityText}</p><p><strong>Phát hiện bởi:</strong> AI tự động</p>${violatedRules.rows.length > 0 ? `<p><strong>Các quy tắc bị vi phạm:</strong></p><ul>${violatedRules.rows.map(r => `<li><strong>${r.title}</strong>: ${r.description}</li>`).join('')}</ul>` : ''}<p><em>Nội dung bình luận:</em> "${commentPreview}..."</p><hr><p><small><strong>Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Bài viết ID:</strong> ${commentData.post_id}</li><li><strong>Phát hiện bởi:</strong> AI tự động</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString('vi-VN')}</li></ul><p><small>Bạn có thể khiếu nại quyết định này nếu cho rằng đây là nhầm lẫn.</small></p>`
           },
           redirect_type: 'post_comment',
           data: {

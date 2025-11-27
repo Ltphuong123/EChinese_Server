@@ -110,6 +110,17 @@ const notificationModel = {
     return result.rowCount;
   },
 
+  /**
+   * Thu hồi thông báo (đánh dấu is_push_sent = false)
+   * @param {Array<string>} ids - Mảng ID của các thông báo cần thu hồi
+   * @returns {number} Số lượng thông báo đã thu hồi
+   */
+  revokeByIds: async (ids) => {
+    const queryText = `UPDATE "Notifications" SET is_push_sent = false WHERE id = ANY($1::uuid[]);`;
+    const result = await db.query(queryText, [ids]);
+    return result.rowCount;
+  },
+
   deleteByIds: async (ids) => {
     const queryText = `DELETE FROM "Notifications" WHERE id = ANY($1::uuid[]);`;
     const result = await db.query(queryText, [ids]);

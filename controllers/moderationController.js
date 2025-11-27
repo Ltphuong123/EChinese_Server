@@ -52,6 +52,53 @@ const moderationController = {
       };
 
       const newReport = await moderationService.createReport(reportData);
+
+      // Gửi thông báo cho tất cả admin và superadmin
+      try {
+        const userModel = require("../models/userModel");
+        const notificationService = require("../services/notificationService");
+        
+        const admins = await userModel.getAllAdmins();
+        
+        // Tạo nội dung thông báo
+        const targetTypeText = {
+          post: "bài viết",
+          comment: "bình luận",
+          user: "người dùng",
+          bug: "lỗi hệ thống",
+          other: "khác"
+        }[target_type] || target_type;
+
+        const notificationContent = {
+          html: `<p>Có một báo cáo mới cần xử lý.</p>
+<p><strong>Loại:</strong> ${targetTypeText}</p>
+<p><strong>Lý do:</strong> ${reason}</p>
+<p><strong>Thời gian:</strong> ${new Date().toLocaleString("vi-VN")}</p>`
+        };
+
+        // Gửi thông báo cho từng admin
+        for (const admin of admins) {
+          await notificationService.createNotification({
+            recipient_id: admin.id,
+            audience: "user",
+            type: "report",
+            title: `Báo cáo mới: ${targetTypeText}`,
+            content: notificationContent,
+            redirect_type: "report_detail",
+            data: {
+              id: newReport.id,
+              type: "report"
+            },
+            expires_at: null,
+            priority: 2,
+            from_system: true,
+          });
+        }
+      } catch (notifError) {
+        console.error("Lỗi khi gửi thông báo cho admin:", notifError);
+        // Không throw error để không ảnh hưởng đến việc tạo báo cáo
+      }
+
       res
         .status(201)
         .json({
@@ -512,6 +559,72 @@ const moderationController = {
       res.status(500).json({
         success: false,
         message: "Lỗi khi xóa báo cáo",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy số lượng báo cáo đang xử lý
+  getInProgressReportsCount: async (req, res) => {
+    try {
+      const count = await moderationService.getReportCountByStatus("in_progress");
+      
+      res.status(200).json({
+        success: true,
+        message: "Lấy số lượng báo cáo đang xử lý thành công",
+        data: {
+          status: "in_progress",
+          count: count
+        }
+      });
+    } catch (error) {
+      console.error("Error in getInProgressReportsCount:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy số lượng báo cáo",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy số lượng báo cáo chờ xử lý
+  getPendingReportsCount: async (req, res) => {
+    try {
+      const count = await moderationService.getReportCountByStatus("pending");
+      
+      res.status(200).json({
+        success: true,
+        message: "Lấy số lượng báo cáo chờ xử lý thành công",
+        data: {
+          status: "pending",
+          count: count
+        }
+      });
+    } catch (error) {
+      console.error("Error in getPendingReportsCount:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy số lượng báo cáo",
+        error: error.message,
+      });
+    }
+  },
+
+  // Xác thực tất cả người dùng
+  verifyAllUsers: async (req, res) => {
+    try {
+      const result = await moderationService.verifyAllUsers();
+
+      res.status(200).json({
+        success: true,
+        message: `Đã xác thực thành công ${result.count} người dùng`,
+        data: result
+      });
+    } catch (error) {
+      console.error("Error in verifyAllUsers:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi xác thực người dùng",
         error: error.message,
       });
     }

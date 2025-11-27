@@ -62,6 +62,12 @@ router.post(
 );
 
 router.post(
+    `${BASE_PATH}/revoke`,
+    [authMiddleware.verifyToken, authMiddleware.isAdmin],
+    notificationController.revokeNotifications
+);
+
+router.post(
     `${BASE_PATH}/delete`,
     [authMiddleware.verifyToken, authMiddleware.isAdmin],
     notificationController.deleteNotifications
