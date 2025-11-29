@@ -200,12 +200,22 @@ const notificationController = {
       // Tạo notification
       const newNotification = await notificationService.createNotification(payload, auto_push);
 
+      // Tự động đánh dấu đã đọc sau 1 ngày
+      setTimeout(async () => {
+        try {
+          await notificationService.autoMarkNotificationAsRead(newNotification.id);
+          console.log(`Auto-marked notification ${newNotification.id} as read after 1 day`);
+        } catch (error) {
+          console.error(`Failed to auto-mark notification ${newNotification.id} as read:`, error.message);
+        }
+      }, 86400000); // 1 ngày = 24 * 60 * 60 * 1000 = 86400000ms
+
       // Response
       res.status(201).json({
         success: true,
         message: auto_push 
-          ? 'Tạo và gửi thông báo thành công' 
-          : 'Tạo thông báo thành công (chưa gửi push)',
+          ? 'Tạo và gửi thông báo thành công (sẽ tự động đánh dấu đã đọc sau 1 ngày)' 
+          : 'Tạo thông báo thành công (chưa gửi push, sẽ tự động đánh dấu đã đọc sau 1 ngày)',
         data: {
           id: newNotification.id,
           recipient_id: newNotification.recipient_id,
@@ -217,7 +227,8 @@ const notificationController = {
           data: newNotification.data,
           priority: newNotification.priority,
           is_push_sent: newNotification.is_push_sent,
-          created_at: newNotification.created_at
+          created_at: newNotification.created_at,
+          auto_mark_read_after: '1 day'
         }
       });
 

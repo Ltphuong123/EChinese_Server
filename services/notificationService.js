@@ -218,6 +218,15 @@ const notificationService = {
     };
   },
 
+  /**
+   * Tự động đánh dấu thông báo đã đọc cho TẤT CẢ người nhận
+   * (Dùng cho auto-mark-read sau 20 giây)
+   */
+  autoMarkNotificationAsRead: async (notificationId) => {
+    const updatedCount = await notificationModel.markAllRecipientsAsRead(notificationId);
+    return updatedCount;
+  },
+
 };
 
 module.exports = notificationService;

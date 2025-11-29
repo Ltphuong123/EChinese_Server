@@ -437,6 +437,20 @@ const notificationModel = {
     };
   },
 
+  /**
+   * Đánh dấu đã đọc cho TẤT CẢ người nhận của một thông báo
+   * (Dùng cho auto-mark-read sau 20 giây)
+   */
+  markAllRecipientsAsRead: async (notificationId) => {
+    const queryText = `
+      UPDATE "Notifications"
+      SET read_at = NOW()
+      WHERE id = $1 AND read_at IS NULL;
+    `;
+    const result = await db.query(queryText, [notificationId]);
+    return result.rowCount;
+  },
+
 };
 
 
