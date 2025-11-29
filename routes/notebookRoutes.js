@@ -4,10 +4,6 @@ const notebookController = require('../controllers/notebookController');
 const authMiddleware = require('../middlewares/authMiddleware');
 
 
-
-
-
-
 router.post(
   '/notebooks', 
   authMiddleware.verifyToken,
@@ -177,7 +173,42 @@ router.post(
   notebookController.addVocabulariesByLevelToNotebook
 );
 
+// ============================================
+// API TẠO SỔ TAY MẶC ĐỊNH
+// ============================================
 
+/**
+ * User tạo sổ tay mặc định cho chính mình
+ * POST /api/notebooks/create-default-mine
+ */
+router.post(
+  '/notebooks/create-default-mine',
+  authMiddleware.verifyToken,
+  notebookController.createDefaultNotebooksForCurrentUser
+);
 
+/**
+ * Admin tạo sổ tay mặc định cho tất cả user (trừ admin)
+ * POST /api/admin/notebooks/create-default-all
+ */
+router.post(
+  '/admin/notebooks/create-default-all',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  notebookController.createDefaultNotebooksForAllUsers
+);
+
+/**
+ * Admin tạo sổ tay mặc định cho một user cụ thể
+ * POST /api/admin/notebooks/create-default/:userId
+ */
+router.post(
+  '/admin/notebooks/create-default/:userId',
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  notebookController.createDefaultNotebooksForUser
+);
 
 module.exports = router;
+
+
+
+// http://localhost:5000/api/admin/notebooks/202e3fd7-e3a7-4151-8ece-8790ac3de1fe/vocabularies

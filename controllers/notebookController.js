@@ -278,6 +278,7 @@ const notebookController = {
 
   addVocabulariesToNotebookAdmin: async (req, res) => {
     try {
+      const adminId = req.user.id; // Lấy ID của admin từ token
       const { notebookId } = req.params;
       const { vocabIds } = req.body;
 
@@ -291,7 +292,8 @@ const notebookController = {
 
       const result = await notebookService.addVocabulariesToNotebook(
         notebookId,
-        vocabIds
+        vocabIds,
+        adminId // Truyền admin ID để ghi log
       );
 
       res.status(200).json({
@@ -341,6 +343,7 @@ const notebookController = {
 
   removeVocabulariesFromNotebookAdmin: async (req, res) => {
     try {
+      const adminId = req.user.id; // Lấy ID của admin từ token
       const { notebookId } = req.params;
       const { vocabIds } = req.body;
 
@@ -354,7 +357,8 @@ const notebookController = {
 
       const result = await notebookService.removeVocabulariesFromNotebook(
         notebookId,
-        vocabIds
+        vocabIds,
+        adminId // Truyền admin ID để ghi log
       );
 
       res.status(200).json({
@@ -1211,6 +1215,72 @@ const notebookController = {
       });
     }
   },
+
+  // ============================================
+  // TẠO SỔ TAY MẶC ĐỊNH
+  // ============================================
+
+  // User tạo sổ tay mặc định cho chính mình
+  createDefaultNotebooksForCurrentUser: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const result = await notebookService.createDefaultNotebooksForUser(userId);
+
+      res.status(201).json({
+        success: true,
+        message: `Đã tạo thành công ${result.length} sổ tay mặc định`,
+        data: result
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi tạo sổ tay mặc định",
+        error: error.message,
+      });
+    }
+  },
+
+  // Admin tạo sổ tay mặc định cho tất cả user (trừ admin)
+  createDefaultNotebooksForAllUsers: async (req, res) => {
+    try {
+      const results = await notebookService.createDefaultNotebooksForAllUsers();
+
+      res.status(200).json({
+        success: true,
+        message: `Đã tạo sổ tay mặc định cho ${results.success.length} user. Bỏ qua ${results.skipped.length} user. Thất bại ${results.failed.length} user.`,
+        data: results
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi tạo sổ tay mặc định cho tất cả user",
+        error: error.message,
+      });
+    }
+  },
+
+  // Admin tạo sổ tay mặc định cho user cụ thể
+  createDefaultNotebooksForUser: async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const result = await notebookService.createDefaultNotebooksForUser(userId);
+
+      res.status(201).json({
+        success: true,
+        message: `Đã tạo thành công ${result.length} sổ tay mặc định cho user`,
+        data: result
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi tạo sổ tay mặc định cho user",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = notebookController;
+
+
+

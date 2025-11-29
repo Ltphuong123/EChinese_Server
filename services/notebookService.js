@@ -112,11 +112,28 @@ const notebookService = {
     return notebook;
   },
 
-  addVocabulariesToNotebook: async (notebookId, vocabIds) => {
+  addVocabulariesToNotebook: async (notebookId, vocabIds, performedBy = null) => {
     // Service có thể thêm logic kiểm tra xem notebook có tồn tại không trước khi gọi model,
     // nhưng để tối ưu, chúng ta có thể để transaction trong model xử lý việc này.
 
+    // 1. Kiểm tra xem notebook có phải là system notebook không
+    const notebook = await notebookModel.findById(notebookId);
+    const isSystemNotebook = notebook && notebook.user_id === null;
+
+    // 2. Thêm từ vựng
     const result = await notebookModel.addVocabularies(notebookId, vocabIds);
+
+    // 3. Nếu là system notebook, ghi log vào NotebookChangelog
+    if (isSystemNotebook && result.addedCount > 0) {
+      const notebookCopyModel = require("../models/notebookCopyModel");
+      await notebookCopyModel.logNotebookChanges(
+        notebookId,
+        vocabIds,
+        'added',
+        performedBy
+      );
+    }
+
     return result;
   },
 
@@ -130,8 +147,25 @@ const notebookService = {
     return notebookModel.addVocabulariesUser(notebookId, vocabIds, status);
   },
 
-  removeVocabulariesFromNotebook: async (notebookId, vocabIds) => {
+  removeVocabulariesFromNotebook: async (notebookId, vocabIds, performedBy = null) => {
+    // 1. Kiểm tra xem notebook có phải là system notebook không
+    const notebook = await notebookModel.findById(notebookId);
+    const isSystemNotebook = notebook && notebook.user_id === null;
+
+    // 2. Xóa từ vựng
     const result = await notebookModel.removeVocabularies(notebookId, vocabIds);
+
+    // 3. Nếu là system notebook, ghi log vào NotebookChangelog
+    if (isSystemNotebook && result.removedCount > 0) {
+      const notebookCopyModel = require("../models/notebookCopyModel");
+      await notebookCopyModel.logNotebookChanges(
+        notebookId,
+        vocabIds,
+        'removed',
+        performedBy
+      );
+    }
+
     return result;
   },
 

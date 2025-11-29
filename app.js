@@ -158,6 +158,8 @@ const aiModerationRoutes = require("./routes/aiModerationRoutes");
 
 const deviceTokenRoutes = require("./routes/deviceTokenRoutes");
 const simpleNotificationRoutes = require("./routes/simpleNotificationRoutes");
+const notebookCopyRoutes = require("./routes/notebookCopyRoutes");
+const notebookSyncRoutes = require("./routes/notebookSyncRoutes");
 
 app.use("/api", userRoutes);
 
@@ -194,6 +196,8 @@ app.use("/api", aiModerationRoutes);
 
 app.use("/api/users", deviceTokenRoutes);
 app.use("/api", simpleNotificationRoutes);
+app.use("/api", notebookCopyRoutes);
+app.use("/api", notebookSyncRoutes);
 
 // Cron job for checking expiring subscriptions daily at 9 AM
 const cron = require("node-cron");
@@ -215,3 +219,5 @@ cron.schedule("0 9 * * *", async () => {
 app.listen(port, () => {
   console.log(`Server chạy tại http://localhost:${port}`);
 });
+
+
