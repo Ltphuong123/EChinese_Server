@@ -160,6 +160,7 @@ const deviceTokenRoutes = require("./routes/deviceTokenRoutes");
 const simpleNotificationRoutes = require("./routes/simpleNotificationRoutes");
 const notebookCopyRoutes = require("./routes/notebookCopyRoutes");
 const notebookSyncRoutes = require("./routes/notebookSyncRoutes");
+const notebookDeleteRoutes = require("./routes/notebookDeleteRoutes");
 
 app.use("/api", userRoutes);
 
@@ -198,6 +199,7 @@ app.use("/api/users", deviceTokenRoutes);
 app.use("/api", simpleNotificationRoutes);
 app.use("/api", notebookCopyRoutes);
 app.use("/api", notebookSyncRoutes);
+app.use("/api", notebookDeleteRoutes);
 
 // Cron job for checking expiring subscriptions daily at 9 AM
 const cron = require("node-cron");

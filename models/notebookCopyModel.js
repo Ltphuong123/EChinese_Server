@@ -149,19 +149,22 @@ const notebookCopyModel = {
 
   /**
    * Kiểm tra user có quyền truy cập sổ tay premium không
+   * User phải có gói đăng ký KHÁC gói miễn phí (FREE_PLAN_ID)
    */
   async canUserAccessPremiumNotebook(userId) {
-    // Kiểm tra user có subscription active không
+    const FREE_PLAN_ID = process.env.FREE_PLAN_ID || 'cc8ee1e7-3ce7-4b60-9ea3-d8e840823514';
+    
+    // Kiểm tra user có subscription active VÀ không phải gói miễn phí
     const query = `
       SELECT us.id
       FROM "UserSubscriptions" us
-      JOIN "Subscriptions" s ON us.subscription_id = s.id
       WHERE us.user_id = $1 
         AND us.is_active = true
         AND (us.expiry_date IS NULL OR us.expiry_date > NOW())
+        AND us.subscription_id != $2
       LIMIT 1
     `;
-    const result = await db.query(query, [userId]);
+    const result = await db.query(query, [userId, FREE_PLAN_ID]);
     return result.rows.length > 0;
   },
 

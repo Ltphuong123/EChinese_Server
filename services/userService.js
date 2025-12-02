@@ -60,15 +60,19 @@ const userService = {
     } else {
       data.password_hash = null;
     }
+    
+    // Tự động verify khi đăng ký
+    data.isVerify = true;
+    
     const newUser = await userModel.createUser(data);
 
     // Copy template notebooks cho user mới
-    try {
-      await userService.copyTemplateNotebooksForUser(newUser.id);
-    } catch (error) {
-      console.error("Lỗi khi copy template notebooks:", error);
-      // Không throw để không ảnh hưởng tới việc tạo user
-    }
+    // try {
+    //   await userService.copyTemplateNotebooksForUser(newUser.id);
+    // } catch (error) {
+    //   console.error("Lỗi khi copy template notebooks:", error);
+    //   // Không throw để không ảnh hưởng tới việc tạo user
+    // }
 
     return { ...newUser };
   },
@@ -127,7 +131,7 @@ const userService = {
     if (!user) {
       // 2. Nếu chưa tồn tại, tạo user mới
       const newUserData = {
-        username: null,
+        username: name, // Dùng name làm username
         password_hash: null,
         email,
         name,
@@ -702,56 +706,56 @@ const userService = {
     return badge;
   },
 
-  // Copy template notebooks cho user mới
-  copyTemplateNotebooksForUser: async (userId) => {
-    try {
-      // Lấy tất cả template notebooks (user_id = null và status = published)
-      const templateNotebooks = await db.query(
-        `SELECT * FROM "Notebooks" WHERE user_id IS NULL AND status = 'published'`
-      );
+  // // Copy template notebooks cho user mới
+  // copyTemplateNotebooksForUser: async (userId) => {
+  //   try {
+  //     // Lấy tất cả template notebooks (user_id = null và status = published)
+  //     const templateNotebooks = await db.query(
+  //       `SELECT * FROM "Notebooks" WHERE user_id IS NULL AND status = 'published'`
+  //     );
 
-      for (const template of templateNotebooks.rows) {
-        // Tạo bản sao notebook cho user
-        const copiedNotebookResult = await db.query(
-          `INSERT INTO "Notebooks" (name, options, is_premium, status, user_id, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           RETURNING id`,
-          [
-            template.name,
-            template.options,
-            template.is_premium,
-            "published",
-            userId,
-            template.created_by,
-          ]
-        );
+  //     for (const template of templateNotebooks.rows) {
+  //       // Tạo bản sao notebook cho user
+  //       const copiedNotebookResult = await db.query(
+  //         `INSERT INTO "Notebooks" (name, options, is_premium, status, user_id, created_by)
+  //          VALUES ($1, $2, $3, $4, $5, $6)
+  //          RETURNING id`,
+  //         [
+  //           template.name,
+  //           template.options,
+  //           template.is_premium,
+  //           "published",
+  //           userId,
+  //           template.created_by,
+  //         ]
+  //       );
 
-        const copiedNotebookId = copiedNotebookResult.rows[0].id;
+  //       const copiedNotebookId = copiedNotebookResult.rows[0].id;
 
-        // Copy tất cả từ vựng từ template
-        await db.query(
-          `INSERT INTO "NotebookVocabItems" (notebook_id, vocab_id, status)
-           SELECT $1, vocab_id, 'chưa thuộc'
-           FROM "NotebookVocabItems"
-           WHERE notebook_id = $2`,
-          [copiedNotebookId, template.id]
-        );
+  //       // Copy tất cả từ vựng từ template
+  //       await db.query(
+  //         `INSERT INTO "NotebookVocabItems" (notebook_id, vocab_id, status)
+  //          SELECT $1, vocab_id, 'chưa thuộc'
+  //          FROM "NotebookVocabItems"
+  //          WHERE notebook_id = $2`,
+  //         [copiedNotebookId, template.id]
+  //       );
 
-        // Cập nhật vocab_count
-        await db.query(
-          `UPDATE "Notebooks"
-           SET vocab_count = (
-             SELECT COUNT(*) FROM "NotebookVocabItems" WHERE notebook_id = $1
-           )
-           WHERE id = $1`,
-          [copiedNotebookId]
-        );
-      }
-    } catch (error) {
-      console.error("Lỗi khi copy template notebooks:", error);
-      throw error;
-    }
-  },
+  //       // Cập nhật vocab_count
+  //       await db.query(
+  //         `UPDATE "Notebooks"
+  //          SET vocab_count = (
+  //            SELECT COUNT(*) FROM "NotebookVocabItems" WHERE notebook_id = $1
+  //          )
+  //          WHERE id = $1`,
+  //         [copiedNotebookId]
+  //       );
+  //     }
+  //   } catch (error) {
+  //     console.error("Lỗi khi copy template notebooks:", error);
+  //     throw error;
+  //   }
+  // },
 
   // Lấy thống kê hoạt động của user trong tuần hiện tại
   getWeeklyActivity: async (userId) => {

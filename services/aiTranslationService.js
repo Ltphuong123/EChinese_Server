@@ -2,16 +2,7 @@
 require("dotenv").config();
 const aiTranslationModel = require("../models/aiTranslationModel");
 const { translateWithExamples } = require("./aiService");
-
-
-async function getGeminiModel(modelName) {
-  const { GoogleGenerativeAI } = await import("@google/generative-ai");
-  const apiKey =
-    process.env.GEMINI_API_KEY || "AIzaSyBHzF0fdJvc8cKRDZDn3pfuGjBiO_Yb60Y";
-  if (!apiKey) throw new Error("Thiếu GEMINI_API_KEY");
-  const genAI = new GoogleGenerativeAI(apiKey);
-  return genAI.getGenerativeModel({ model: modelName });
-}
+const translate = require("google-translate-api-x");
 
 function detectLang(text) {
   if (!text) return "unknown";
@@ -71,116 +62,60 @@ function parseJson(raw) {
 }
 
 const aiTranslationService = {
+  // Dịch đơn giản sử dụng Google Translate API miễn phí (không dùng AI)
   translateText: async ({ text, direction, userId }) => {
     if (!text || !text.trim()) throw new Error("Thiếu nội dung cần dịch");
+    
     // Determine languages
     let sourceLang, targetLang;
     if (direction === "zh-vi") {
-      sourceLang = "zh";
+      sourceLang = "zh-CN";
       targetLang = "vi";
     } else if (direction === "vi-zh") {
       sourceLang = "vi";
-      targetLang = "zh";
+      targetLang = "zh-CN";
     } else if (!direction) {
       const detected = detectLang(text);
       if (detected === "zh") {
-        sourceLang = "zh";
+        sourceLang = "zh-CN";
         targetLang = "vi";
       } else {
         sourceLang = "vi";
-        targetLang = "zh";
+        targetLang = "zh-CN";
       }
     } else {
       throw new Error("direction không hợp lệ (zh-vi | vi-zh)");
     }
 
-    const candidates = [
-      process.env.GEMINI_MODEL || "gemini-2.0-flash",
-      "gemini-1.5-flash-latest",
-      "gemini-1.5-pro-latest",
-    ];
-    const prompt = buildPrompt(text, sourceLang, targetLang);
-    let lastErr;
-    for (const name of candidates) {
-      try {
-        const model = await getGeminiModel(name);
-        const result = await model.generateContent({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: "application/json" },
-        });
-        const raw = result.response.text();
-        let parsed = parseJson(raw);
-        // If array returned, pick first object with translated_text or aggregate
-        if (Array.isArray(parsed)) {
-          const firstValid = parsed.find(
-            (o) =>
-              o &&
-              typeof o === "object" &&
-              (o.translated_text ||
-                o.translation ||
-                o.translated ||
-                o.output ||
-                o.result)
-          );
-          if (firstValid) {
-            parsed = firstValid;
-          } else {
-            const combined = parsed
-              .map(
-                (o) =>
-                  (o &&
-                    (o.translated_text ||
-                      o.translation ||
-                      o.translated ||
-                      o.output ||
-                      o.result)) ||
-                  ""
-              )
-              .filter(Boolean)
-              .join("\n");
-            parsed = {
-              source_lang: sourceLang,
-              target_lang: targetLang,
-              source_text: text,
-              translated_text: combined,
-              notes: null,
-            };
-          }
-        }
-        if (!parsed.translated_text) {
-          const alt =
-            parsed.translation ||
-            parsed.translated ||
-            parsed.output ||
-            parsed.result;
-          if (alt && typeof alt === "string") parsed.translated_text = alt;
-        }
-        if (!parsed.translated_text || !parsed.translated_text.trim()) {
-          const rawPreview = raw.slice(0, 300).replace(/\s+/g, " ").trim();
-          throw new Error(
-            "Thiếu trường translated_text. Preview: " + rawPreview
-          );
-        }
-        const saved = await aiTranslationModel.create({
-          user_id: userId || null,
-          source_text: parsed.source_text || text,
-          translated_text: parsed.translated_text,
-          source_lang: parsed.source_lang || sourceLang,
-          target_lang: parsed.target_lang || targetLang,
-          model: name,
-        });
-        return { translation: saved };
-      } catch (err) {
-        const msg = err.message || "";
-        if (/not found|unsupported|404/i.test(msg)) {
-          lastErr = err;
-          continue;
-        }
-        throw err;
+    try {
+      // Sử dụng google-translate-api-x (miễn phí, không cần API key)
+      const result = await translate(text, { from: sourceLang, to: targetLang });
+      
+      const translatedText = result.text;
+      
+      if (!translatedText || !translatedText.trim()) {
+        throw new Error("Không nhận được kết quả dịch");
       }
+
+      // Lưu vào database
+      const saved = await aiTranslationModel.create({
+        user_id: userId || null,
+        source_text: text,
+        translated_text: translatedText,
+        source_lang: sourceLang === "zh-CN" ? "zh" : sourceLang,
+        target_lang: targetLang === "zh-CN" ? "zh" : targetLang,
+        model: "google-translate", // Đánh dấu là dùng Google Translate
+        metadata: {
+          ai: false, // Không phải AI
+          translation_type: "simple"
+        }
+      });
+      
+      return { translation: saved };
+    } catch (err) {
+      console.error("Lỗi dịch với Google Translate:", err.message);
+      throw new Error(`Lỗi dịch: ${err.message}`);
     }
-    if (lastErr) throw lastErr;
-    throw new Error("Không thể khởi tạo model dịch phù hợp");
   },
   getUserTranslations: async (userId, { page = 1, limit = 10 } = {}) => {
     const offset = (page - 1) * limit;
