@@ -217,6 +217,45 @@ const notebookCopyModel = {
   },
 
   /**
+   * Lấy random từ vựng chưa thuộc và không chắc của user để ôn tập
+   * @param {string} userId - ID của user
+   * @param {number} limit - Số lượng từ cần lấy (mặc định 50)
+   */
+  async getRandomVocabulariesForReview(userId, limit = 50) {
+    const query = `
+      SELECT DISTINCT ON (v.id)
+        v.id as vocab_id,
+        v.hanzi,
+        v.pinyin,
+        v.meaning,
+        v.notes,
+        v.level,
+        v.image_url,
+        nvi.status,
+        nvi.notebook_id,
+        COALESCE(
+          (SELECT json_agg(DISTINCT vwt.word_type) 
+           FROM "VocabularyWordType" vwt 
+           WHERE vwt.vocab_id = v.id AND vwt.word_type IS NOT NULL),
+          '[]'
+        ) as word_types
+      FROM "Notebooks" n
+      JOIN "NotebookVocabItems" nvi ON n.id = nvi.notebook_id
+      JOIN "Vocabulary" v ON nvi.vocab_id = v.id
+      WHERE n.user_id = $1
+        AND nvi.status IN ('chưa thuộc', 'không chắc')
+      ORDER BY v.id, RANDOM()
+      LIMIT $2
+    `;
+
+    const result = await db.query(query, [userId, limit]);
+    
+    // Shuffle kết quả để random thứ tự
+    const shuffled = result.rows.sort(() => Math.random() - 0.5);
+    return shuffled;
+  },
+
+  /**
    * Cập nhật trạng thái của một từ vựng trên nhiều sổ tay cùng lúc
    * @param {string} userId - ID của user
    * @param {string} vocabId - ID của từ vựng

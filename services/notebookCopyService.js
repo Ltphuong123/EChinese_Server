@@ -212,6 +212,15 @@ const notebookCopyService = {
   },
 
   /**
+   * Lấy random từ vựng chưa thuộc và không chắc để ôn tập
+   * @param {string} userId - ID của user
+   * @param {number} limit - Số lượng từ (mặc định 50)
+   */
+  async getRandomVocabulariesForReview(userId, limit = 50) {
+    return await notebookCopyModel.getRandomVocabulariesForReview(userId, limit);
+  },
+
+  /**
    * Cập nhật trạng thái của một từ vựng trên nhiều sổ tay
    * @param {string} userId - ID của user
    * @param {string} vocabId - ID của từ vựng

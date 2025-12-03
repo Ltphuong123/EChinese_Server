@@ -267,6 +267,41 @@ const notebookCopyController = {
   },
 
   /**
+   * Lấy random từ vựng chưa thuộc và không chắc để ôn tập
+   * GET /api/user/vocabularies/review
+   * 
+   * Query params:
+   * - limit: số lượng từ (optional, default: 50, max: 100)
+   */
+  getRandomVocabulariesForReview: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      let limit = parseInt(req.query.limit) || 50;
+      
+      // Giới hạn tối đa 100 từ
+      if (limit > 100) limit = 100;
+      if (limit < 1) limit = 1;
+
+      const vocabularies = await notebookCopyService.getRandomVocabulariesForReview(userId, limit);
+
+      res.status(200).json({
+        success: true,
+        message: `Lấy ${vocabularies.length} từ vựng để ôn tập thành công.`,
+        data: {
+          vocabularies,
+          total: vocabularies.length
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy từ vựng ôn tập",
+        error: error.message
+      });
+    }
+  },
+
+  /**
    * Cập nhật trạng thái của một từ vựng trên nhiều sổ tay
    * PUT /api/user/vocabularies/:vocabId/status
    * 

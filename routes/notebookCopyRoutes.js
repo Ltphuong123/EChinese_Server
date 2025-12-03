@@ -122,6 +122,38 @@ router.put(
 // ============================================
 
 /**
+ * Lấy random từ vựng chưa thuộc và không chắc để ôn tập
+ * GET /api/user/vocabularies/review
+ * 
+ * Query params:
+ * - limit: số lượng từ (optional, default: 50, max: 100)
+ * 
+ * Response: {
+ *   success: true,
+ *   message: "Lấy 50 từ vựng để ôn tập thành công.",
+ *   data: {
+ *     vocabularies: [
+ *       {
+ *         vocab_id: "uuid",
+ *         hanzi: "你好",
+ *         pinyin: "nǐ hǎo",
+ *         meaning: "Xin chào",
+ *         status: "chưa thuộc" | "không chắc",
+ *         notebook_id: "notebook-uuid",
+ *         word_types: ["Thán từ"]
+ *       }
+ *     ],
+ *     total: 50
+ *   }
+ * }
+ */
+router.get(
+  '/user/vocabularies/review',
+  authMiddleware.verifyToken,
+  notebookCopyController.getRandomVocabulariesForReview
+);
+
+/**
  * Lấy tất cả từ vựng của user từ các sổ tay, nhóm theo từ và trạng thái
  * GET /api/user/vocabularies
  * 
