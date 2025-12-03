@@ -213,5 +213,44 @@ router.put(
   notebookCopyController.updateVocabAcrossNotebooks
 );
 
+// ============================================
+// RANDOM UNLEARNED VOCABULARIES
+// ============================================
+
+/**
+ * Lấy random từ vựng chưa thuộc hoặc không chắc trong sổ tay
+ * GET /api/notebooks/:notebookId/vocabularies/random-unlearned
+ * 
+ * Query params:
+ * - limit: số lượng từ cần lấy (default: 50, max: 100)
+ * 
+ * Response: {
+ *   success: true,
+ *   message: "Lấy 50 từ vựng ngẫu nhiên thành công.",
+ *   data: {
+ *     vocabularies: [
+ *       {
+ *         vocab_id: "uuid",
+ *         hanzi: "你好",
+ *         pinyin: "nǐ hǎo",
+ *         meaning: "Xin chào",
+ *         notes: "...",
+ *         level: ["HSK1"],
+ *         image_url: "...",
+ *         status: "chưa thuộc",
+ *         word_types: ["Thán từ"]
+ *       }
+ *     ],
+ *     total: 150,      // Tổng số từ chưa thuộc/không chắc trong sổ tay
+ *     returned: 50     // Số từ trả về
+ *   }
+ * }
+ */
+router.get(
+  '/notebooks/:notebookId/vocabularies/random-unlearned',
+  authMiddleware.verifyToken,
+  notebookCopyController.getRandomUnlearnedVocabs
+);
+
 module.exports = router;
 

@@ -221,6 +221,21 @@ const notebookCopyService = {
   },
 
   /**
+   * Lấy random từ vựng chưa thuộc hoặc không chắc trong sổ tay
+   * @param {string} userId - ID của user
+   * @param {string} notebookId - ID của notebook
+   * @param {number} limit - Số lượng từ cần lấy (mặc định 50)
+   */
+  async getRandomUnlearnedVocabs(userId, notebookId, limit = 50) {
+    // Validation
+    if (limit < 1 || limit > 100) {
+      throw new Error("Số lượng từ phải từ 1 đến 100.");
+    }
+
+    return await notebookCopyModel.getRandomUnlearnedVocabs(notebookId, userId, limit);
+  },
+
+  /**
    * Cập nhật trạng thái của một từ vựng trên nhiều sổ tay
    * @param {string} userId - ID của user
    * @param {string} vocabId - ID của từ vựng

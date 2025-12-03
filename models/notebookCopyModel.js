@@ -444,6 +444,68 @@ const notebookCopyModel = {
     }
 
     return notebook;
+  },
+
+  /**
+   * Lấy random từ vựng chưa thuộc hoặc không chắc trong sổ tay của user
+   * @param {string} notebookId - ID của notebook
+   * @param {string} userId - ID của user
+   * @param {number} limit - Số lượng từ cần lấy (mặc định 50)
+   */
+  async getRandomUnlearnedVocabs(notebookId, userId, limit = 50) {
+    // 1. Kiểm tra notebook thuộc về user
+    const checkQuery = `
+      SELECT id FROM "Notebooks"
+      WHERE id = $1 AND user_id = $2
+    `;
+    const checkResult = await db.query(checkQuery, [notebookId, userId]);
+    
+    if (checkResult.rows.length === 0) {
+      throw new Error("Notebook không tồn tại hoặc bạn không có quyền truy cập.");
+    }
+
+    // 2. Lấy random từ vựng có status 'chưa thuộc' hoặc 'không chắc'
+    const query = `
+      SELECT 
+        v.id as vocab_id,
+        v.hanzi,
+        v.pinyin,
+        v.meaning,
+        v.notes,
+        v.level,
+        v.image_url,
+        nvi.status,
+        COALESCE(
+          json_agg(DISTINCT vwt.word_type) FILTER (WHERE vwt.word_type IS NOT NULL),
+          '[]'
+        ) as word_types
+      FROM "NotebookVocabItems" nvi
+      JOIN "Vocabulary" v ON nvi.vocab_id = v.id
+      LEFT JOIN "VocabularyWordType" vwt ON v.id = vwt.vocab_id
+      WHERE nvi.notebook_id = $1
+        AND nvi.status IN ('chưa thuộc', 'không chắc')
+      GROUP BY v.id, v.hanzi, v.pinyin, v.meaning, v.notes, v.level, v.image_url, nvi.status
+      ORDER BY RANDOM()
+      LIMIT $2
+    `;
+
+    const result = await db.query(query, [notebookId, limit]);
+    
+    // 3. Đếm tổng số từ chưa thuộc/không chắc
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM "NotebookVocabItems"
+      WHERE notebook_id = $1
+        AND status IN ('chưa thuộc', 'không chắc')
+    `;
+    const countResult = await db.query(countQuery, [notebookId]);
+    const totalUnlearned = parseInt(countResult.rows[0].total);
+
+    return {
+      vocabularies: result.rows,
+      total: totalUnlearned,
+      returned: result.rows.length
+    };
   }
 };
 

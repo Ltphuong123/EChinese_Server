@@ -302,6 +302,62 @@ const notebookCopyController = {
   },
 
   /**
+   * Lấy random từ vựng chưa thuộc hoặc không chắc trong sổ tay
+   * GET /api/notebooks/:notebookId/vocabularies/random-unlearned
+   * 
+   * Query params:
+   * - limit: số lượng từ cần lấy (default: 50, max: 100)
+   * 
+   * Response: {
+   *   success: true,
+   *   data: {
+   *     vocabularies: [...],
+   *     total: 150,      // Tổng số từ chưa thuộc/không chắc
+   *     returned: 50     // Số từ trả về
+   *   }
+   * }
+   */
+  getRandomUnlearnedVocabs: async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { notebookId } = req.params;
+      const limit = parseInt(req.query.limit) || 50;
+
+      const result = await notebookCopyService.getRandomUnlearnedVocabs(
+        userId,
+        notebookId,
+        limit
+      );
+
+      res.status(200).json({
+        success: true,
+        message: `Lấy ${result.returned} từ vựng ngẫu nhiên thành công.`,
+        data: result
+      });
+    } catch (error) {
+      if (error.message.includes("không tồn tại") || error.message.includes("không có quyền")) {
+        return res.status(404).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      if (error.message.includes("Số lượng từ")) {
+        return res.status(400).json({
+          success: false,
+          message: error.message
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy từ vựng ngẫu nhiên",
+        error: error.message
+      });
+    }
+  },
+
+  /**
    * Cập nhật trạng thái của một từ vựng trên nhiều sổ tay
    * PUT /api/user/vocabularies/:vocabId/status
    * 
