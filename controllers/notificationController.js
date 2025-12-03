@@ -208,7 +208,7 @@ const notificationController = {
         } catch (error) {
           console.error(`Failed to auto-mark notification ${newNotification.id} as read:`, error.message);
         }
-      }, 86400000); // 1 ngày = 24 * 60 * 60 * 1000 = 86400000ms
+      }, 600000); // 1 ngày = 24 * 60 * 60 * 1000 = 86400000ms
 
       // Response
       res.status(201).json({
