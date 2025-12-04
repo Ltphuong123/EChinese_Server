@@ -160,6 +160,13 @@ const attemptModel = {
         et.name AS exam_type_name,
         el.name AS exam_level_name,
         (
+          SELECT COUNT(*)
+          FROM "Questions" q
+          JOIN "Subsections" ss ON q.subsection_id = ss.id
+          JOIN "Sections" s ON ss.section_id = s.id
+          WHERE s.exam_id = e.id
+        ) AS total_questions,
+        (
           SELECT jsonb_agg(section_scores_agg)
           FROM (
             SELECT
