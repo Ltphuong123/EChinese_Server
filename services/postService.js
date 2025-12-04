@@ -480,6 +480,29 @@ const postService = {
   },
 
   /**
+   * Ghim hoặc bỏ ghim bài viết
+   * @param {string} postId - ID bài viết
+   * @param {boolean} isPinned - Trạng thái ghim mong muốn
+   * @returns {Object} Bài viết sau khi cập nhật
+   */
+  pinPost: async (postId, isPinned) => {
+    const db = require("../config/db");
+    const query = `
+      UPDATE "Posts"
+      SET is_pinned = $1
+      WHERE id = $2
+      RETURNING *;
+    `;
+    const result = await db.query(query, [isPinned, postId]);
+
+    if (result.rowCount === 0) {
+      throw new Error("Bài viết không tồn tại.");
+    }
+
+    return result.rows[0];
+  },
+
+  /**
    * Xóa vĩnh viễn TẤT CẢ bài đăng và dữ liệu liên quan trong hệ thống
    * ⚠️ CỰC KỲ NGUY HIỂM - CHỈ SUPER ADMIN MỚI CÓ QUYỀN
    */

@@ -1228,6 +1228,129 @@ const postController = {
       });
     }
   },
+
+  /**
+   * Ghim hoặc bỏ ghim bài viết (chỉ admin/super admin)
+   * PUT /community/posts/:postId/pin
+   */
+  togglePinPost: async (req, res) => {
+    try {
+      const { postId } = req.params;
+      const { is_pinned } = req.body;
+
+      // Validate is_pinned
+      if (typeof is_pinned !== "boolean") {
+        return res.status(400).json({
+          success: false,
+          message: "Dữ liệu không hợp lệ",
+          error: {
+            code: "VALIDATION_ERROR",
+            details: {
+              is_pinned: "Trường is_pinned là bắt buộc và phải là kiểu boolean",
+            },
+          },
+        });
+      }
+
+      // Kiểm tra bài viết tồn tại
+      const post = await postService.getPostById2(postId);
+      if (!post) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy bài viết",
+          error: {
+            code: "POST_NOT_FOUND",
+            details: `Bài viết với ID ${postId} không tồn tại`,
+          },
+        });
+      }
+
+      // Kiểm tra bài viết đã bị gỡ
+      if (post.status === "removed") {
+        return res.status(400).json({
+          success: false,
+          message: "Không thể ghim bài viết đã bị gỡ",
+          error: {
+            code: "POST_REMOVED",
+            details: "Bài viết này đã bị gỡ khỏi cộng đồng, không thể thực hiện ghim",
+          },
+        });
+      }
+
+      // Cập nhật trạng thái ghim
+      await postService.pinPost(postId, is_pinned);
+
+      // Lấy lại bài viết với đầy đủ thông tin
+      const freshPost = await postService.getPostById(postId);
+
+      // Chuẩn hóa content
+      let contentHtml = null,
+        contentText = null,
+        contentImages = [];
+      const rawContent = freshPost.content;
+      const stripTags = (html) => (html || "").replace(/<[^>]*>/g, "").trim();
+      if (rawContent && typeof rawContent === "object") {
+        contentHtml = rawContent.html || rawContent.content || null;
+        contentText = rawContent.text || stripTags(contentHtml);
+        if (Array.isArray(rawContent.images)) contentImages = rawContent.images;
+        else if (rawContent.image) contentImages = [rawContent.image];
+      } else if (typeof rawContent === "string") {
+        contentHtml = rawContent;
+        contentText = stripTags(rawContent);
+      }
+
+      const response = {
+        id: freshPost.id,
+        user_id: freshPost.user_id,
+        title: freshPost.title,
+        content: {
+          html: contentHtml,
+          text: contentText,
+          images: contentImages,
+        },
+        topic: freshPost.topic,
+        likes: freshPost.likes || 0,
+        views: freshPost.views || 0,
+        comment_count: freshPost.comment_count || 0,
+        status: freshPost.status,
+        is_pinned: freshPost.is_pinned,
+        is_approved: freshPost.is_approved,
+        auto_flagged: freshPost.auto_flagged,
+        created_at: freshPost.created_at,
+        deleted_at: freshPost.deleted_at || null,
+        deleted_reason: freshPost.deleted_reason || null,
+        deleted_by: freshPost.deleted_by || null,
+        user: freshPost.user || null,
+        badge: freshPost.badge || null,
+      };
+
+      const message = is_pinned
+        ? "Ghim bài viết thành công"
+        : "Bỏ ghim bài viết thành công";
+
+      return res.status(200).json({
+        success: true,
+        message,
+        data: response,
+      });
+    } catch (error) {
+      if (error.message.includes("không tồn tại")) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy bài viết",
+          error: {
+            code: "POST_NOT_FOUND",
+            details: error.message,
+          },
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi khi ghim/bỏ ghim bài viết",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = postController;

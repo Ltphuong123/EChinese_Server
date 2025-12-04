@@ -66,6 +66,13 @@ router.post(
   postController.moderatePost
 );
 
+// Ghim/bỏ ghim bài viết (chỉ admin/super admin)
+router.put(
+  `/community/posts/:postId/pin`,
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  postController.togglePinPost
+);
+
 // ⚠️ DANGER ZONE - Xóa TẤT CẢ bài đăng trong hệ thống (chỉ super admin)
 router.delete(
   `/community/posts/all/permanent`,
