@@ -1037,6 +1037,24 @@ const userService = {
 
     return results;
   },
+
+  // Quên mật khẩu - đặt lại mật khẩu mới là 12345
+  forgotPassword: async (email) => {
+    // Tìm user theo email
+    const user = await userModel.findUserByEmail(email);
+    if (!user) {
+      throw new Error("Email không tồn tại trong hệ thống.");
+    }
+
+    // Mật khẩu mới mặc định
+    const newPassword = "12345";
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Cập nhật mật khẩu mới
+    await userModel.updatePassword(user.id, newPasswordHash);
+
+    return { newPassword };
+  },
 };
 
 module.exports = userService;

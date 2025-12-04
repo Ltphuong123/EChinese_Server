@@ -38,6 +38,7 @@ router.post(
   userController.resetPassword
 );
 router.post("/auth/change-password", userController.changePassword);
+router.post("/auth/forgot-password", userController.forgotPassword);
 
 router.get(
   "/users/me/usage",

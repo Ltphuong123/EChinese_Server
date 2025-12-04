@@ -931,6 +931,38 @@ const userController = {
     }
   },
 
+  forgotPassword: async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: "Email là bắt buộc.",
+        });
+      }
+
+      const result = await userService.forgotPassword(email);
+
+      res.status(200).json({
+        success: true,
+        message: "Mật khẩu mới đã được đặt thành công.",
+        data: {
+          newPassword: result.newPassword,
+        },
+      });
+    } catch (error) {
+      if (error.message.includes("không tồn tại")) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi đặt lại mật khẩu",
+        error: error.message,
+      });
+    }
+  },
+
   unbanUser: async (req, res) => {
     try {
       const { userId } = req.params;
