@@ -201,6 +201,12 @@ router.post(
 );
 
 router.post(
+  "/admin/users/:userId/reset-password",
+  [authMiddleware.verifyToken, authMiddleware.isAdmin],
+  userController.resetUserPasswordAdmin
+);
+
+router.post(
   "/admin/users/:userId/add-points",
   [authMiddleware.verifyToken, authMiddleware.isAdmin],
   userController.addCommunityPoints

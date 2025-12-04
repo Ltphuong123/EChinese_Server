@@ -1055,6 +1055,24 @@ const userService = {
 
     return { newPassword };
   },
+
+  // Admin reset mật khẩu người dùng thành 12345
+  resetUserPasswordAdmin: async (userId) => {
+    // Kiểm tra user có tồn tại không
+    const user = await userModel.findUserById(userId);
+    if (!user) {
+      throw new Error("Người dùng không tồn tại.");
+    }
+
+    // Mật khẩu mới mặc định
+    const newPassword = "12345";
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Cập nhật mật khẩu mới
+    await userModel.updatePassword(userId, newPasswordHash);
+
+    return { newPassword };
+  },
 };
 
 module.exports = userService;

@@ -437,6 +437,31 @@ const userController = {
     }
   },
 
+  resetUserPasswordAdmin: async (req, res) => {
+    try {
+      const { userId } = req.params;
+
+      const result = await userService.resetUserPasswordAdmin(userId);
+
+      res.status(200).json({
+        success: true,
+        message: "Đặt lại mật khẩu thành công.",
+        data: {
+          newPassword: result.newPassword,
+        },
+      });
+    } catch (error) {
+      if (error.message.includes("không tồn tại")) {
+        return res.status(404).json({ success: false, message: error.message });
+      }
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi đặt lại mật khẩu",
+        error: error.message,
+      });
+    }
+  },
+
   addCommunityPoints: async (req, res) => {
     try {
       const { userId } = req.params;
