@@ -375,6 +375,11 @@ const moderationService = {
     const userModel = require("../models/userModel");
     return await userModel.verifyAllUsers();
   },
+
+  // Xóa tất cả dữ liệu moderation
+  deleteAllModerationData: async () => {
+    return await moderationModel.deleteAllModerationData();
+  },
 };
 
 module.exports = moderationService;

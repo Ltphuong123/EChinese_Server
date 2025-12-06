@@ -197,7 +197,36 @@ const paymentController = {
       });
     }
   },
-    
+
+  // Lấy trạng thái auto confirm
+  getAutoConfirmStatus: async (req, res) => {
+    try {
+      const result = paymentService.getAutoConfirmStatus();
+      res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi lấy trạng thái.', error: error.message });
+    }
+  },
+
+  // Bật/tắt auto confirm
+  setAutoConfirmStatus: async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'Trường enabled phải là boolean (true/false).' });
+      }
+
+      const result = paymentService.setAutoConfirmStatus(enabled);
+      res.status(200).json({ 
+        success: true, 
+        message: `Đã ${enabled ? 'bật' : 'tắt'} tự động xác nhận thanh toán.`,
+        data: result 
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Lỗi khi cập nhật trạng thái.', error: error.message });
+    }
+  },
 };
 
 module.exports = paymentController;

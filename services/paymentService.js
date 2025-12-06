@@ -7,6 +7,9 @@ const userSubscriptionModel = require('../models/userSubscriptionModel');
 const db = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
 
+// Biến lưu trạng thái tự động xác nhận thanh toán (có thể thay đổi runtime)
+let AUTO_CONFIRM_PAYMENT = process.env.AUTO_CONFIRM_PAYMENT === 'true' || true;
+
 /**
  * Hàm trợ giúp kích hoạt gói đăng ký sau khi thanh toán thành công
  */
@@ -78,9 +81,6 @@ const paymentService = {
   },
 
   createPayment: async (paymentData, user_id) => {
-    // Biến để bật/tắt tự động xác nhận thanh toán
-    // const AUTO_CONFIRM_PAYMENT = process.env.AUTO_CONFIRM_PAYMENT === 'true';
-    const AUTO_CONFIRM_PAYMENT = true;
     
     const client = await db.pool.connect();
     try {
@@ -259,6 +259,17 @@ const paymentService = {
     const deletedCount = await paymentModel.deleteAll();
     
     return { deletedCount };
+  },
+
+  // Lấy trạng thái auto confirm
+  getAutoConfirmStatus: () => {
+    return { autoConfirm: AUTO_CONFIRM_PAYMENT };
+  },
+
+  // Bật/tắt auto confirm
+  setAutoConfirmStatus: (enabled) => {
+    AUTO_CONFIRM_PAYMENT = enabled;
+    return { autoConfirm: AUTO_CONFIRM_PAYMENT };
   },
 };
 

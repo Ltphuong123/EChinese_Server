@@ -39,4 +39,10 @@ router.delete(
   paymentController.deleteAllPayments
 );
 
+// GET /api/monetization/payments/auto-confirm - Lấy trạng thái auto confirm
+router.get(`${basePath}/auto-confirm`, paymentController.getAutoConfirmStatus);
+
+// PUT /api/monetization/payments/auto-confirm - Bật/tắt auto confirm
+router.put(`${basePath}/auto-confirm`, paymentController.setAutoConfirmStatus);
+
 module.exports = router;

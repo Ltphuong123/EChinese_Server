@@ -629,6 +629,36 @@ const moderationController = {
       });
     }
   },
+
+  // Xóa tất cả dữ liệu moderation
+  deleteAllModerationData: async (req, res) => {
+    try {
+      const result = await moderationService.deleteAllModerationData();
+
+      res.status(200).json({
+        success: true,
+        message: "Đã xóa tất cả dữ liệu moderation thành công",
+        data: {
+          deleted: {
+            appeals: result.appeals,
+            violationRules: result.violationRules,
+            violations: result.violations,
+            reports: result.reports,
+            deletedPosts: result.deletedPosts,
+            deletedComments: result.deletedComments,
+          },
+          total: result.appeals + result.violationRules + result.violations + result.reports + result.deletedPosts + result.deletedComments,
+        },
+      });
+    } catch (error) {
+      console.error("Error in deleteAllModerationData:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi xóa dữ liệu moderation",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = moderationController;

@@ -990,6 +990,59 @@ const moderationModel = {
       note: "Các giá trị được phép cho target_type trong bảng Violations",
     };
   },
+
+  /**
+   * Xóa tất cả dữ liệu moderation: vi phạm, báo cáo, khiếu nại và đối tượng bị báo cáo
+   */
+  deleteAllModerationData: async () => {
+    const client = await db.pool.connect();
+    const stats = {
+      appeals: 0,
+      violationRules: 0,
+      violations: 0,
+      reports: 0,
+      deletedPosts: 0,
+      deletedComments: 0,
+    };
+
+    try {
+      await client.query("BEGIN");
+
+      // 1. Xóa tất cả Appeals (khiếu nại)
+      const appealsResult = await client.query(`DELETE FROM "Appeals" RETURNING id;`);
+      stats.appeals = appealsResult.rowCount;
+
+      // 2. Xóa tất cả ViolationRules (liên kết vi phạm - luật)
+      const violationRulesResult = await client.query(`DELETE FROM "ViolationRules" RETURNING id;`);
+      stats.violationRules = violationRulesResult.rowCount;
+
+      // 3. Xóa tất cả Violations (vi phạm)
+      const violationsResult = await client.query(`DELETE FROM "Violations" RETURNING id;`);
+      stats.violations = violationsResult.rowCount;
+
+      // 4. Xóa vĩnh viễn các Posts đã bị soft delete (deleted_at IS NOT NULL)
+      const postsResult = await client.query(`DELETE FROM "Posts" WHERE deleted_at IS NOT NULL RETURNING id;`);
+      stats.deletedPosts = postsResult.rowCount;
+
+      // 5. Xóa vĩnh viễn các Comments đã bị soft delete (deleted_at IS NOT NULL)
+      const commentsResult = await client.query(`DELETE FROM "Comments" WHERE deleted_at IS NOT NULL RETURNING id;`);
+      stats.deletedComments = commentsResult.rowCount;
+
+      // 6. Xóa tất cả Reports (báo cáo)
+      const reportsResult = await client.query(`DELETE FROM "Reports" RETURNING id;`);
+      stats.reports = reportsResult.rowCount;
+
+      await client.query("COMMIT");
+
+      return stats;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.error("Lỗi khi xóa tất cả dữ liệu moderation:", error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
 };
 
 module.exports = moderationModel;

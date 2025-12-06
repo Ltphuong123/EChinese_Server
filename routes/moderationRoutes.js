@@ -68,4 +68,10 @@ router.put(
   moderationController.verifyAllUsers
 );
 
+// Xóa tất cả dữ liệu moderation (vi phạm, báo cáo, khiếu nại, đối tượng bị xóa)
+router.delete(
+  `${ADMIN_BASE}/all`,
+  moderationController.deleteAllModerationData
+);
+
 module.exports = router;
