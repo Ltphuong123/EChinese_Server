@@ -4,6 +4,7 @@ const tipController = require("../controllers/tipController");
 const authMiddleware = require("../middlewares/authMiddleware");
 
 router.get("/user/tips", authMiddleware.verifyToken, tipController.getTipsUser);
+router.get("/user/daily-passages", authMiddleware.verifyToken, tipController.getDailyPassagesUser);
 
 router.post(
   "/admin/tips",

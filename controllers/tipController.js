@@ -11,8 +11,8 @@ const tipController = {
         search: req.query.search || "",
         topic: req.query.topic || "",
         level: req.query.level || "",
-        // Xử lý giá trị boolean từ query string
         is_pinned: req.query.is_pinned,
+        excludeTopic: "Mỗi ngày một đoạn văn", // Loại trừ topic này
       };
 
       const result = await tipService.getPaginatedTips(filters);
@@ -20,13 +20,39 @@ const tipController = {
       res.status(200).json({
         success: true,
         message: "Lấy danh sách Tips thành công.",
-        // Cấu trúc data và meta đã được định dạng sẵn từ service
         data: result,
       });
     } catch (error) {
       res.status(500).json({
         success: false,
         message: "Lỗi khi lấy danh sách Tips",
+        error: error.message,
+      });
+    }
+  },
+
+  getDailyPassagesUser: async (req, res) => {
+    try {
+      const filters = {
+        page: parseInt(req.query.page, 10) || 1,
+        limit: parseInt(req.query.limit, 10) || 99999999,
+        search: req.query.search || "",
+        topic: "Mỗi ngày một đoạn văn", // Chỉ lấy topic này
+        level: req.query.level || "",
+        is_pinned: req.query.is_pinned,
+      };
+
+      const result = await tipService.getPaginatedTips(filters);
+
+      res.status(200).json({
+        success: true,
+        message: "Lấy danh sách Mỗi ngày một đoạn văn thành công.",
+        data: result,
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách Mỗi ngày một đoạn văn",
         error: error.message,
       });
     }
