@@ -227,6 +227,83 @@ const postService = {
     return newViewsCount;
   },
 
+  toggleView: async (postId, userId) => {
+    // Kiểm tra xem bài viết có tồn tại không
+    const postExists = await postModel.findById(postId);
+    if (!postExists) {
+      throw new Error("Bài viết không tồn tại.");
+    }
+
+    // Lấy thông tin chủ bài viết
+    const postOwnerId = postExists.user_id;
+
+    // Kiểm tra xem người dùng đã xem bài viết này chưa
+    const existingView = await postModel.findView(postId, userId);
+
+    let action;
+    if (existingView) {
+      // Nếu đã xem -> Xóa view (unview)
+      await postModel.removeView(postId, userId);
+      action = "unviewed";
+
+      // 💔 TRỪ ĐIỂM KHI UNVIEW (nếu không phải tự xem)
+      if (userId !== postOwnerId) {
+        try {
+          const userModel = require("../models/userModel");
+          await userModel.addCommunityPoints(
+            postOwnerId,
+            -COMMUNITY_POINTS.POST_VIEWED
+          );
+          console.log(
+            `➖ User ${postOwnerId} bị trừ ${COMMUNITY_POINTS.POST_VIEWED} điểm do unview`
+          );
+        } catch (error) {
+          console.error("❌ Lỗi khi trừ điểm unview:", error);
+        }
+      }
+    } else {
+      // Nếu chưa xem -> Thêm view
+      await postModel.addView(postId, userId);
+      action = "viewed";
+
+      // 🎁 CỘNG ĐIỂM CHO CHỦ BÀI VIẾT (không cộng nếu tự xem)
+      if (userId !== postOwnerId) {
+        try {
+          const userModel = require("../models/userModel");
+          await userModel.addCommunityPoints(
+            postOwnerId,
+            COMMUNITY_POINTS.POST_VIEWED
+          );
+          console.log(
+            `✅ User ${postOwnerId} nhận ${COMMUNITY_POINTS.POST_VIEWED} điểm từ view`
+          );
+        } catch (error) {
+          console.error("❌ Lỗi khi cộng điểm view:", error);
+        }
+
+        // 📊 CẬP NHẬT TIẾN ĐỘ ACHIEVEMENT (tổng số view nhận được)
+        try {
+          const achievementService = require("./achievementService");
+          await achievementService.updateProgress(
+            postOwnerId,
+            "post_views_received",
+            1
+          );
+        } catch (error) {
+          console.error(
+            "❌ Lỗi khi cập nhật achievement post_views_received:",
+            error
+          );
+        }
+      }
+    }
+
+    // Cập nhật lại số lượng view trong bảng Posts
+    const newViewsCount = await postModel.updateViewsCount(postId);
+
+    return { action, views: newViewsCount };
+  },
+
   // softDeletePost: async (postId, userId) => {
   //   // Gọi model với `userId` để đảm bảo chỉ chủ sở hữu mới xóa được
   //   const deletedCount = await postModel.softDelete(

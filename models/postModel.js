@@ -316,6 +316,23 @@ const postModel = {
   },
 
   // --- CÁC HÀM MỚI CHO VIEW ---
+  findView: async (postId, userId) => {
+    const queryText = `SELECT id FROM "PostViews" WHERE post_id = $1 AND user_id = $2;`;
+    const result = await db.query(queryText, [postId, userId]);
+    return result.rows[0];
+  },
+
+  addView: async (postId, userId) => {
+    const queryText = `INSERT INTO "PostViews" (post_id, user_id) VALUES ($1, $2);`;
+    await db.query(queryText, [postId, userId]);
+  },
+
+  removeView: async (postId, userId) => {
+    const queryText = `DELETE FROM "PostViews" WHERE post_id = $1 AND user_id = $2;`;
+    await db.query(queryText, [postId, userId]);
+  },
+
+  // Legacy - giữ lại để tương thích
   addViewRecord: async (postId, userId) => {
     // userId có thể là null nếu là khách
     const queryText = `INSERT INTO "PostViews" (post_id, user_id) VALUES ($1, $2);`;

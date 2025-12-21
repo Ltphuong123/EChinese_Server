@@ -214,7 +214,7 @@ const postController = {
           badge: post.badge || null,
           isLiked: interaction.isLiked,
           isCommented: interaction.isCommented,
-          isViewed: interaction.isViewed,
+          isViewed: post.isViewed || false,
         };
       });
 
@@ -943,16 +943,76 @@ const postController = {
   recordPostView: async (req, res) => {
     try {
       const { postId } = req.params;
-      // Lấy userId nếu người dùng đã đăng nhập, không bắt buộc
-      const userId = req.user ? req.user.id : null;
+      const userId = req.user.id; // Lấy từ token
 
-      const newViewCount = await postService.recordView(postId, userId);
+      // Lấy thông tin bài viết để biết chủ bài viết
+      const post = await postService.getPostById(postId);
+      if (!post) {
+        return res.status(404).json({
+          success: false,
+          message: "Bài viết không tồn tại.",
+        });
+      }
+
+      const result = await postService.toggleView(postId, userId);
+
+      // Gửi thông báo khi có người xem (không phải tự xem)
+      if (result.action === "viewed" && userId !== post.user_id) {
+        const userModel = require("../models/userModel");
+
+        // Lấy thông tin người xem
+        const viewer = await userModel.findUserById(userId);
+        const viewerName = viewer?.name || "Một người dùng";
+
+        // Tạo preview của nội dung bài viết
+        const contentPreview =
+          typeof post.content === "string"
+            ? post.content.substring(0, 100)
+            : (post.content?.text || post.content?.html || "").substring(
+                0,
+                100
+              );
+
+        const notificationService = require("../services/notificationService");
+
+        await notificationService.createNotification(
+          {
+            recipient_id: post.user_id,
+            audience: "user",
+            type: "community",
+            title: "Có người xem bài viết của bạn",
+            content: {
+              html: `<p><strong>${viewerName}</strong> đã xem bài viết <strong>"${
+                post.title
+              }"</strong> của bạn.</p><p>👁️ Tổng số lượt xem: <strong>${
+                result.views
+              }</strong></p><p><em>Nội dung bài viết:</em> "${contentPreview}..."</p><hr><p><small><strong>📌 Thông tin chi tiết:</strong></small></p><ul style="font-size: 0.9em;"><li><strong>Bài viết:</strong> ${
+                post.title
+              }</li><li><strong>Người xem:</strong> ${viewerName}</li><li><strong>Thời gian:</strong> ${new Date().toLocaleString(
+                "vi-VN"
+              )}</li><li><strong>Tổng lượt xem:</strong> ${
+                result.views
+              }</li></ul>`,
+            },
+            redirect_type: "post",
+            data: {
+              id: postId,
+              type: "post",
+            },
+          },
+          true
+        ); // auto push = true
+      }
 
       res.status(200).json({
         success: true,
-        message: "Ghi nhận lượt xem thành công.",
+        message:
+          result.action === "viewed"
+            ? "Đã xem bài viết."
+            : "Đã bỏ xem bài viết.",
         data: {
-          views: newViewCount,
+          action: result.action,
+          views: result.views,
         },
       });
     } catch (error) {
@@ -961,7 +1021,7 @@ const postController = {
       }
       res.status(500).json({
         success: false,
-        message: "Lỗi khi ghi nhận lượt xem",
+        message: "Lỗi khi thực hiện thao tác",
         error: error.message,
       });
     }

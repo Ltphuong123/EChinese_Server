@@ -1,0 +1,579 @@
+// DBEChinese - Database Diagram
+// Mở https://dbdiagram.io/d và paste nội dung này vào
+
+// ==========================================
+// USER & AUTH
+// ==========================================
+
+Table BadgeLevels {
+  id uuid [pk]
+  level int [unique, not null]
+  name varchar(50) [not null]
+  min_points int [default: 0]
+  icon text
+  is_active boolean [default: true]
+}
+
+Table Users {
+  id uuid [pk]
+  username varchar(50) [unique]
+  password_hash varchar(255)
+  name varchar(50) [not null]
+  avatar_url text
+  email varchar(255) [unique]
+  provider varchar(20)
+  role varchar(10) [default: 'user']
+  is_active boolean [default: true]
+  community_points int [default: 0]
+  badge_level int [ref: > BadgeLevels.level]
+  level varchar(3) [not null]
+  language varchar(10) [not null]
+  created_at timestamptz
+  last_login timestamptz
+}
+
+Table UserSessions {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  login_at timestamptz [not null]
+  logout_at timestamptz
+  device varchar(50)
+  ip_address varchar(50)
+}
+
+Table UserDailyActivity {
+  user_id uuid [pk, ref: > Users.id]
+  date date [pk]
+  minutes_online int [default: 0]
+  login_count int [default: 0]
+}
+
+Table UserStreaks {
+  user_id uuid [pk, ref: > Users.id]
+  current_streak int [default: 0]
+  longest_streak int [default: 0]
+  last_login_date date
+}
+
+Table RefreshTokens {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  token text [unique, not null]
+  expires_at timestamptz [not null]
+}
+
+// ==========================================
+// ACHIEVEMENTS
+// ==========================================
+
+Table Achievements {
+  id uuid [pk]
+  name varchar(100) [unique, not null]
+  description text [not null]
+  criteria jsonb [not null]
+  icon text
+  points int [default: 0]
+  is_active boolean [default: true]
+}
+
+Table UserAchievements {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  achievement_id uuid [ref: > Achievements.id]
+  achieved_at timestamptz
+  progress jsonb
+
+  indexes {
+    (user_id, achievement_id) [unique]
+  }
+}
+
+// ==========================================
+// SUBSCRIPTION & PAYMENT
+// ==========================================
+
+Table Subscriptions {
+  id uuid [pk]
+  name varchar(100) [unique, not null]
+  description json
+  daily_quota_ai_lesson int [default: 0]
+  daily_quota_translate int [default: 0]
+  price decimal(10,2) [default: 0]
+  duration_months int
+  is_active boolean [default: true]
+}
+
+Table Payments {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  subscription_id uuid [ref: > Subscriptions.id]
+  amount decimal(10,2) [not null]
+  currency varchar(3) [default: 'VND']
+  status varchar(20) [default: 'pending']
+  payment_method varchar(50) [not null]
+  payment_channel varchar(20) [default: 'auto']
+  gateway_transaction_id varchar(255) [unique, not null]
+  transaction_date timestamptz
+}
+
+Table UserSubscriptions {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  subscription_id uuid [ref: > Subscriptions.id]
+  start_date timestamptz
+  expiry_date timestamptz
+  is_active boolean [default: true]
+  auto_renew boolean [default: false]
+  last_payment_id uuid [ref: > Payments.id]
+}
+
+Table Refunds {
+  id uuid [pk]
+  payment_id uuid [ref: > Payments.id]
+  user_id uuid [ref: > Users.id]
+  refund_amount decimal(10,2) [not null]
+  refund_method varchar(50)
+  reason text
+  status varchar(20) [default: 'pending']
+}
+
+// ==========================================
+// COMMUNITY
+// ==========================================
+
+Table Posts {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  title varchar(100) [not null]
+  content json [not null]
+  topic varchar(50) [not null]
+  likes int [default: 0]
+  views int [default: 0]
+  status varchar(20) [default: 'published']
+  is_approved boolean [default: true]
+  is_pinned boolean [default: false]
+  created_at timestamptz
+}
+
+Table Comments {
+  id uuid [pk]
+  post_id uuid [ref: > Posts.id]
+  user_id uuid [ref: > Users.id]
+  content json [not null]
+  parent_comment_id uuid [ref: > Comments.id]
+  created_at timestamptz
+}
+
+Table PostLikes {
+  id uuid [pk]
+  post_id uuid [ref: > Posts.id]
+  user_id uuid [ref: > Users.id]
+
+  indexes {
+    (post_id, user_id) [unique]
+  }
+}
+
+Table PostViews {
+  id uuid [pk]
+  post_id uuid [ref: > Posts.id]
+  user_id uuid [ref: > Users.id]
+  viewed_at timestamptz
+}
+
+// ==========================================
+// MODERATION
+// ==========================================
+
+Table CommunityRules {
+  id uuid [pk]
+  title varchar(100) [unique, not null]
+  description text [not null]
+  severity_default varchar(10) [not null]
+  is_active boolean [default: true]
+}
+
+Table Violations {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  target_type varchar(20) [not null]
+  target_id uuid [not null]
+  severity varchar(10) [not null]
+  detected_by varchar(20) [not null]
+  handled boolean [default: false]
+  created_at timestamptz
+}
+
+Table ViolationRules {
+  id uuid [pk]
+  violation_id uuid [ref: > Violations.id]
+  rule_id uuid [ref: > CommunityRules.id]
+}
+
+Table Appeals {
+  id uuid [pk]
+  violation_id uuid [ref: > Violations.id]
+  user_id uuid [ref: > Users.id]
+  reason text [not null]
+  status varchar(20) [default: 'pending']
+  created_at timestamptz
+}
+
+Table Reports {
+  id uuid [pk]
+  reporter_id uuid [ref: > Users.id]
+  target_type varchar(20) [not null]
+  target_id uuid
+  reason varchar(255) [not null]
+  status varchar(20) [default: 'pending']
+}
+
+Table ModerationLogs {
+  id uuid [pk]
+  target_type varchar(20) [not null]
+  target_id uuid [not null]
+  action varchar(30) [not null]
+  performed_by uuid [ref: > Users.id]
+  created_at timestamptz
+}
+
+
+// ==========================================
+// EXAM STRUCTURE
+// ==========================================
+
+Table Exam_Types {
+  id uuid [pk]
+  name varchar(50) [unique, not null]
+  description text
+  is_active boolean [default: true]
+  is_deleted boolean [default: false]
+}
+
+Table Exam_Levels {
+  id uuid [pk]
+  exam_type_id uuid [ref: > Exam_Types.id]
+  name varchar(50) [not null]
+  order int [default: 0]
+  is_deleted boolean [default: false]
+}
+
+Table Exams {
+  id uuid [pk]
+  exam_type_id uuid [ref: > Exam_Types.id]
+  exam_level_id uuid [ref: > Exam_Levels.id]
+  name varchar(255) [not null]
+  description json
+  instructions text
+  total_time_minutes int [default: 0]
+  total_questions int [default: 0]
+  passing_score_total int
+  is_published boolean [default: false]
+  created_by uuid [ref: > Users.id]
+}
+
+Table Sections {
+  id uuid [pk]
+  exam_id uuid [ref: > Exams.id]
+  name varchar(50) [not null]
+  order int [default: 0]
+  time_minutes int [default: 0]
+  passing_score int
+  audio_url varchar(255)
+}
+
+Table Subsections {
+  id uuid [pk]
+  section_id uuid [ref: > Sections.id]
+  name varchar(50) [not null]
+  order int [default: 0]
+  audio_url varchar(255)
+}
+
+Table Question_Types {
+  id uuid [pk]
+  name varchar(50) [unique, not null]
+  description text
+  num_options int [default: 0]
+  has_prompt boolean [default: false]
+}
+
+Table Questions {
+  id uuid [pk]
+  subsection_id uuid [ref: > Subsections.id]
+  question_type_id uuid [ref: > Question_Types.id]
+  order int [default: 0]
+  content text
+  image_url varchar(255)
+  audio_url varchar(255)
+  correct_answer text
+  points int [default: 1]
+}
+
+Table Options {
+  id uuid [pk]
+  question_id uuid [ref: > Questions.id]
+  label varchar(10)
+  content text
+  image_url varchar(255)
+  is_correct boolean [default: false]
+  order int [default: 0]
+}
+
+Table Prompts {
+  id uuid [pk]
+  subsection_id uuid [ref: > Subsections.id]
+  content json
+  image json
+  audio_url varchar(255)
+  order int [default: 0]
+}
+
+Table Prompt_Questions {
+  prompt_id uuid [pk, ref: > Prompts.id]
+  question_id uuid [pk, ref: > Questions.id]
+}
+
+Table Correct_Answers {
+  id uuid [pk]
+  question_id uuid [ref: > Questions.id]
+  answer text [not null]
+  explanation text
+}
+
+Table Explanations {
+  id uuid [pk]
+  question_id uuid [ref: > Questions.id]
+  content text [not null]
+}
+
+// ==========================================
+// USER EXAM ATTEMPTS
+// ==========================================
+
+Table User_Exam_Attempts {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  exam_id uuid [ref: > Exams.id]
+  start_time timestamptz
+  end_time timestamptz
+  score_total decimal(5,2)
+  is_passed boolean [default: false]
+  attempt_number int [default: 1]
+}
+
+Table User_Section_Scores {
+  id uuid [pk]
+  attempt_id uuid [ref: > User_Exam_Attempts.id]
+  section_id uuid [ref: > Sections.id]
+  score decimal(5,2) [default: 0]
+  is_passed boolean [default: false]
+}
+
+Table User_Answers {
+  id uuid [pk]
+  attempt_id uuid [ref: > User_Exam_Attempts.id]
+  question_id uuid [ref: > Questions.id]
+  user_response text
+  audio_url varchar(255)
+  is_correct boolean
+  score decimal(5,2) [default: 0]
+}
+
+Table User_Rankings {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  exam_type_id uuid [ref: > Exam_Types.id]
+  exam_level_id uuid [ref: > Exam_Levels.id]
+  period varchar(10) [not null]
+  max_score int [default: 0]
+  rank int [default: 0]
+}
+
+// ==========================================
+// VOCABULARY
+// ==========================================
+
+Table Vocabulary {
+  id uuid [pk]
+  hanzi varchar(50) [not null]
+  pinyin varchar(50) [not null]
+  meaning text [not null]
+  notes text
+  level "text[]" [not null]
+  image_url text
+
+  indexes {
+    (hanzi, pinyin) [unique]
+  }
+}
+
+Table WordType {
+  code varchar(50) [pk]
+}
+
+Table VocabularyWordType {
+  vocab_id uuid [pk, ref: > Vocabulary.id]
+  word_type varchar(50) [pk, ref: > WordType.code]
+}
+
+Table Notebooks {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  name varchar(100) [not null]
+  vocab_count int [default: 0]
+  options json [not null]
+  is_premium boolean [default: false]
+  status varchar(50) [not null]
+}
+
+Table NotebookVocabItems {
+  notebook_id uuid [pk, ref: > Notebooks.id]
+  vocab_id uuid [pk, ref: > Vocabulary.id]
+  status varchar(20) [not null]
+  added_at timestamptz
+}
+
+// ==========================================
+// AI & MISC
+// ==========================================
+
+Table Tips {
+  id uuid [pk]
+  topic varchar(50) [not null]
+  level varchar(10) [not null]
+  content jsonb [not null]
+  answer text
+  is_pinned boolean [default: false]
+  created_by uuid [ref: > Users.id]
+}
+
+Table AILessons {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  theme varchar(100) [not null]
+  level varchar(10) [not null]
+  content json [not null]
+  created_at timestamptz
+}
+
+Table TranslationHistory {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  original_text text [not null]
+  original_lang varchar(10) [not null]
+  translated_text text [not null]
+  translated_lang varchar(10) [not null]
+  is_ai boolean [default: false]
+  created_at timestamptz
+}
+
+Table UserUsage {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  feature varchar(50) [not null]
+  daily_count int [default: 0]
+  last_reset timestamptz
+}
+
+Table Notifications {
+  id uuid [pk]
+  recipient_id uuid [ref: > Users.id]
+  audience varchar(20) [not null]
+  type varchar(50) [not null]
+  title varchar(200) [not null]
+  content json [not null]
+  read_at timestamptz
+  is_push_sent boolean [default: false]
+  created_at timestamptz
+  priority int [default: 0]
+}
+
+Table AdminLogs {
+  id uuid [pk]
+  user_id uuid [ref: > Users.id]
+  action_type varchar(50) [not null]
+  target_id uuid
+  description text
+  created_at timestamptz
+}
+
+// ==========================================
+// TABLE GROUPS (for visual organization)
+// ==========================================
+
+TableGroup UserAuth {
+  Users
+  BadgeLevels
+  UserSessions
+  UserDailyActivity
+  UserStreaks
+  RefreshTokens
+}
+
+TableGroup AchievementSystem {
+  Achievements
+  UserAchievements
+}
+
+TableGroup SubscriptionPayment {
+  Subscriptions
+  Payments
+  UserSubscriptions
+  Refunds
+}
+
+TableGroup Community {
+  Posts
+  Comments
+  PostLikes
+  PostViews
+}
+
+TableGroup Moderation {
+  CommunityRules
+  Violations
+  ViolationRules
+  Appeals
+  Reports
+  ModerationLogs
+}
+
+TableGroup ExamSystem {
+  Exam_Types
+  Exam_Levels
+  Exams
+  Sections
+  Subsections
+  Question_Types
+  Questions
+  Options
+  Prompts
+  Prompt_Questions
+  Correct_Answers
+  Explanations
+}
+
+TableGroup UserExamData {
+  User_Exam_Attempts
+  User_Section_Scores
+  User_Answers
+  User_Rankings
+}
+
+TableGroup VocabularySystem {
+  Vocabulary
+  WordType
+  VocabularyWordType
+  Notebooks
+  NotebookVocabItems
+}
+
+TableGroup AIAndMisc {
+  Tips
+  AILessons
+  TranslationHistory
+  UserUsage
+  Notifications
+  AdminLogs
+}

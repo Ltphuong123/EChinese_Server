@@ -8,6 +8,7 @@ const COMMUNITY_POINTS = {
   
   // Hoạt động tương tác
   POST_LIKED: 1,             // Bài viết được like (người nhận)
+  POST_VIEWED: 1,            // Bài viết được xem (người nhận)
   COMMENT_LIKED: 1,          // Bình luận được like (người nhận) - TODO: chưa implement
   
   // Hoạt động đặc biệt
