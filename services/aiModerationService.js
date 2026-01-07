@@ -1,6 +1,8 @@
 // file: services/aiModerationService.js
 
 const axios = require('axios');
+const FormData = require('form-data');
+const sharp = require('sharp');
 require('dotenv').config();
 
 const HF_TOKEN = process.env.HF_TOKEN;
@@ -140,51 +142,148 @@ const aiModerationService = {
 
       console.log('Detecting NSFW for image:', imageUrl);
 
-      const result = await aiModerationService.callGradioAPI(
-        IMAGE_MODERATION_API_URL,
-        [imageUrl]
+      // Step 1: Download ảnh từ URL
+      const imageResponse = await axios.get(imageUrl, {
+        responseType: 'arraybuffer',
+        timeout: 30000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+
+      let imageBuffer = Buffer.from(imageResponse.data);
+      const contentType = imageResponse.headers['content-type'] || 'image/jpeg';
+      
+      // Convert ảnh sang JPG nếu không phải định dạng được hỗ trợ (avif, webp, etc.)
+      const unsupportedFormats = ['avif', 'webp', 'heic', 'heif', 'tiff'];
+      const detectedFormat = contentType.split('/')[1] || '';
+      
+      if (unsupportedFormats.includes(detectedFormat.toLowerCase())) {
+        console.log(`Converting ${detectedFormat} to JPEG...`);
+        imageBuffer = await sharp(imageBuffer)
+          .jpeg({ quality: 90 })
+          .toBuffer();
+      }
+
+      // Step 2: Upload ảnh lên Gradio (dùng /gradio_api/upload)
+      const formData = new FormData();
+      formData.append('files', imageBuffer, {
+        filename: 'image.jpg',
+        contentType: 'image/jpeg'
+      });
+
+      const headers = {
+        ...formData.getHeaders()
+      };
+      if (HF_TOKEN) {
+        headers['Authorization'] = `Bearer ${HF_TOKEN}`;
+      }
+
+      const uploadResponse = await axios.post(
+        `${IMAGE_MODERATION_API_URL}/gradio_api/upload?upload_id=${Date.now()}`,
+        formData,
+        {
+          headers,
+          timeout: 60000
+        }
       );
+
+      if (!uploadResponse.data || !uploadResponse.data[0]) {
+        throw new Error('Failed to upload image to Gradio');
+      }
+
+      const uploadedFilePath = uploadResponse.data[0];
+      console.log('Uploaded file path:', uploadedFilePath);
+
+      // Step 3: Gọi predict API (dùng /gradio_api/call/predict)
+      const callHeaders = {
+        'Content-Type': 'application/json'
+      };
+      if (HF_TOKEN) {
+        callHeaders['Authorization'] = `Bearer ${HF_TOKEN}`;
+      }
+
+      const callResponse = await axios.post(
+        `${IMAGE_MODERATION_API_URL}/gradio_api/call/predict`,
+        {
+          data: [{ path: uploadedFilePath }]
+        },
+        {
+          headers: callHeaders,
+          timeout: 60000
+        }
+      );
+
+      if (!callResponse.data || !callResponse.data.event_id) {
+        throw new Error('Failed to call predict API');
+      }
+
+      const eventId = callResponse.data.event_id;
+      console.log('Event ID:', eventId);
+
+      // Step 4: Lấy kết quả từ event stream
+      const resultResponse = await axios.get(
+        `${IMAGE_MODERATION_API_URL}/gradio_api/call/predict/${eventId}`,
+        {
+          headers: callHeaders,
+          timeout: 60000,
+          responseType: 'text'
+        }
+      );
+
+      // Parse SSE response
+      const lines = resultResponse.data.split('\n');
+      let result = null;
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const jsonData = JSON.parse(line.substring(6));
+            if (jsonData && Array.isArray(jsonData) && jsonData.length > 0) {
+              result = jsonData[0];
+              break;
+            }
+          } catch (e) {
+            // Continue parsing
+          }
+        }
+      }
 
       if (!result) {
         throw new Error('No result from AI model');
       }
 
-      // Phân tích kết quả
-      const label = result.predicted_label || 'unknown';
+      console.log('NSFW detection result:', result);
+
+      // Phân tích kết quả - format: { predicted_label, predicted_confidence, probabilities }
+      const label = result.predicted_label || result.label || 'unknown';
       const confidence = result.predicted_confidence || 0;
+      const probabilities = result.probabilities || {};
       
       // Các label bị coi là NSFW
-      const nsfwLabels = ['hentai', 'porn'];
+      const nsfwLabels = ['hentai', 'porn', 'sexy'];
       const isNSFW = nsfwLabels.includes(label.toLowerCase());
 
       return {
         isNSFW,
         label,
         confidence,
-        probabilities: result.probabilities || {},
+        probabilities,
         rawResult: result
       };
 
     } catch (error) {
       console.error('Error in detectImageNSFW:', error.message);
       
-      // Fallback: Return mock data for testing
-      console.warn('Using mock data for image moderation');
-      const mockNSFW = imageUrl.toLowerCase().includes('anime') || 
-                      imageUrl.toLowerCase().includes('hentai');
-      
+      // Fallback: Return safe result khi có lỗi (không block user)
+      console.warn('Image moderation failed, returning safe result');
       return {
-        isNSFW: mockNSFW,
-        label: mockNSFW ? 'hentai' : 'neutral',
-        confidence: mockNSFW ? 0.92 : 0.98,
-        probabilities: {
-          neutral: mockNSFW ? 0.02 : 0.98,
-          drawings: mockNSFW ? 0.05 : 0.01,
-          sexy: mockNSFW ? 0.01 : 0.005,
-          porn: 0.0,
-          hentai: mockNSFW ? 0.92 : 0.005
-        },
-        rawResult: { mock: true, error: error.message }
+        isNSFW: false,
+        label: 'unknown',
+        confidence: 0,
+        probabilities: {},
+        rawResult: { error: error.message },
+        error: error.message
       };
     }
   },

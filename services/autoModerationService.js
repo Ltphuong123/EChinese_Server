@@ -53,7 +53,7 @@ const autoModerationService = {
           const titleResult = await aiModerationService.detectTextViolation(postData.title);
           
           // Nếu vi phạm title
-          if (titleResult.isViolation && titleResult.confidence > 0.7) {
+          if (titleResult.isViolation && titleResult.confidence > 0.65) {
             shouldRemove = true;
             removalReason = `Vi phạm tiêu đề: ${titleResult.label}`;
             
@@ -61,7 +61,7 @@ const autoModerationService = {
             const rule = await autoModerationService.findOrCreateRule(
               titleResult.label,
               `Nội dung vi phạm được phát hiện tự động bởi AI`,
-              titleResult.confidence > 0.9 ? 'high' : 'medium'
+               'high' 
             );
 
             violations.push({
@@ -87,7 +87,7 @@ const autoModerationService = {
             const textResult = await aiModerationService.detectTextViolation(textContent);
             
             // Nếu vi phạm văn bản
-            if (textResult.isViolation && textResult.confidence > 0.7) {
+            if (textResult.isViolation && textResult.confidence > 0.65) {
               shouldRemove = true;
               // Nếu đã có lỗi title, thêm vào; nếu chưa thì set mới
               if (removalReason) {
@@ -100,7 +100,7 @@ const autoModerationService = {
               const rule = await autoModerationService.findOrCreateRule(
                 textResult.label,
                 `Nội dung vi phạm được phát hiện tự động bởi AI`,
-                textResult.confidence > 0.9 ? 'high' : 'medium'
+                 'high'
               );
 
               violations.push({
@@ -117,13 +117,23 @@ const autoModerationService = {
       }
 
       // 3. Kiểm duyệt ảnh
-      if (postData.images && Array.isArray(postData.images) && postData.images.length > 0) {
-        for (const imageUrl of postData.images) {
+      // Lấy images từ postData.images hoặc postData.content.images
+      let images = postData.images;
+      if (!images && postData.content) {
+        if (Array.isArray(postData.content.images)) {
+          images = postData.content.images;
+        } else if (typeof postData.content === 'object' && postData.content.images) {
+          images = postData.content.images;
+        }
+      }
+      
+      if (images && Array.isArray(images) && images.length > 0) {
+        for (const imageUrl of images) {
           try {
             const imageResult = await aiModerationService.detectImageNSFW(imageUrl);
             
             // Nếu ảnh NSFW
-            if (!imageResult.isNSFW ) {
+            if (imageResult.isNSFW) {
               shouldRemove = true;
               removalReason = `Ảnh không phù hợp: ${imageResult.label}`;
               
@@ -260,7 +270,7 @@ const autoModerationService = {
             const textResult = await aiModerationService.detectTextViolation(textContent);
             
             // Nếu vi phạm văn bản
-            if (textResult.isViolation && textResult.confidence > 0.7) {
+            if (textResult.isViolation && textResult.confidence > 0.65) {
               shouldRemove = true;
               removalReason = `Vi phạm nội dung: ${textResult.label}`;
               
@@ -268,7 +278,7 @@ const autoModerationService = {
               const rule = await autoModerationService.findOrCreateRule(
                 textResult.label,
                 `Nội dung vi phạm được phát hiện tự động bởi AI`,
-                textResult.confidence > 0.9 ? 'high' : 'medium'
+                 'high'
               );
 
               violations.push({
